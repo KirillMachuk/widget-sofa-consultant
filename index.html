@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <title>Тест виджета v5.0.0</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  </head>
+  <body style="background:#fff;min-height:100vh">
+    <h1 style="visibility:hidden">Диван Oslo v5.0.0</h1>
+    <script>
+      (function(){
+        var s=document.createElement('script');
+        s.src='./widget.js?v=5.0.0';
+        s.defer=true;
+        s.dataset.prompt='./Промпт.json';
+        s.dataset.catalog='./Каталог.json';
+        s.dataset.gas='https://script.google.com/macros/s/AKfycbyJg7_2DnyoROYCl_TrH4G7jzHTUD8MJnVy7Suf62o4m7zOA9nzPqKSP_pmUKXFaV3T7w/exec';
+        document.head.appendChild(s);
+      })();
+    </script>
+  </body>
+  </html>
+
+

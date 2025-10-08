@@ -1,0 +1,28 @@
+{
+  "name": "widget",
+  "version": "5.0.0",
+  "description": "Интерактивный виджет-бот для консультации по диванам с интеграцией в Google Sheets",
+  "private": true,
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "build": "echo 'No build step required'",
+    "start": "echo 'Starting server'",
+    "deploy": "gh-pages -d .",
+    "predeploy": "npm run build"
+  },
+  "homepage": "https://ваш-username.github.io/ваш-репозиторий",
+  "devDependencies": {
+    "gh-pages": "^6.0.0"
+  },
+  "keywords": [
+    "widget",
+    "chatbot",
+    "openai",
+    "google-sheets",
+    "lead-generation"
+  ],
+  "author": "Ваше имя",
+  "license": "MIT"
+}

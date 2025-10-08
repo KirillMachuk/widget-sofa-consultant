@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Примеры интеграции виджета</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .example {
+            background: #f5f5f5;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 8px;
+            border-left: 4px solid #6C5CE7;
+        }
+        code {
+            background: #e8e8e8;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        pre {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Примеры интеграции виджета</h1>
+    
+    <div class="warning">
+        <strong>⚠️ Важно:</strong> Замените <code>ваш-username</code> и <code>ваш-репозиторий</code> на ваши реальные данные GitHub.
+    </div>
+
+    <div class="example">
+        <h2>1. Базовая интеграция (GitHub Pages)</h2>
+        <p>Добавьте этот код в <code>&lt;head&gt;</code> вашего сайта:</p>
+        <pre><code>&lt;script&gt;
+  (function(){
+    var s=document.createElement('script');
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.defer=true;
+    s.dataset.prompt='https://ваш-username.github.io/ваш-репозиторий/Промпт.json';
+    s.dataset.catalog='https://ваш-username.github.io/ваш-репозиторий/Каталог.json';
+    s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
+    document.head.appendChild(s);
+  })();
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="example">
+        <h2>2. Интеграция с Vercel</h2>
+        <p>Если вы развернули проект на Vercel:</p>
+        <pre><code>&lt;script&gt;
+  (function(){
+    var s=document.createElement('script');
+    s.src='https://ваш-проект.vercel.app/widget.js?v=5.0.0';
+    s.defer=true;
+    s.dataset.prompt='https://ваш-проект.vercel.app/Промпт.json';
+    s.dataset.catalog='https://ваш-проект.vercel.app/Каталог.json';
+    s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
+    document.head.appendChild(s);
+  })();
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="example">
+        <h2>3. Локальная интеграция</h2>
+        <p>Если вы разместили файлы на своем сервере:</p>
+        <pre><code>&lt;script&gt;
+  (function(){
+    var s=document.createElement('script');
+    s.src='./widget.js?v=5.0.0';
+    s.defer=true;
+    s.dataset.prompt='./Промпт.json';
+    s.dataset.catalog='./Каталог.json';
+    s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
+    document.head.appendChild(s);
+  })();
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="example">
+        <h2>4. Интеграция с кастомными настройками</h2>
+        <p>Для настройки цветов и поведения виджета:</p>
+        <pre><code>&lt;script&gt;
+  (function(){
+    var s=document.createElement('script');
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.defer=true;
+    s.dataset.prompt='https://ваш-username.github.io/ваш-репозиторий/Промпт.json';
+    s.dataset.catalog='https://ваш-username.github.io/ваш-репозиторий/Каталог.json';
+    s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
+    s.dataset.api='https://ваш-домен.com/api/chat'; // Кастомный API endpoint
+    document.head.appendChild(s);
+  })();
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="example">
+        <h2>5. Интеграция с встроенными данными</h2>
+        <p>Если вы хотите встроить промпт и каталог прямо в код:</p>
+        <pre><code>&lt;script&gt;
+  (function(){
+    var s=document.createElement('script');
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.defer=true;
+    s.dataset.promptContent='{"role_and_task": "Ваш промпт..."}';
+    s.dataset.catalogContent='{"offers": [{"name": "Товар 1"}]}';
+    s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
+    document.head.appendChild(s);
+  })();
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="example">
+        <h2>6. Интеграция для WordPress</h2>
+        <p>Для WordPress добавьте код в functions.php или используйте плагин для кастомного HTML:</p>
+        <pre><code>// В functions.php
+function add_widget_script() {
+    if (!is_admin()) {
+        echo '&lt;script&gt;
+          (function(){
+            var s=document.createElement("script");
+            s.src="https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0";
+            s.defer=true;
+            s.dataset.prompt="https://ваш-username.github.io/ваш-репозиторий/Промпт.json";
+            s.dataset.catalog="https://ваш-username.github.io/ваш-репозиторий/Каталог.json";
+            s.dataset.gas="https://script.google.com/macros/s/ВАШ-GAS-URL/exec";
+            document.head.appendChild(s);
+          })();
+        &lt;/script&gt;';
+    }
+}
+add_action('wp_head', 'add_widget_script');</code></pre>
+    </div>
+
+    <div class="example">
+        <h2>7. Интеграция для Tilda</h2>
+        <p>Для Tilda добавьте код в настройках сайта → HTML-код для вставки в &lt;head&gt;:</p>
+        <pre><code>&lt;script&gt;
+  (function(){
+    var s=document.createElement('script');
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.defer=true;
+    s.dataset.prompt='https://ваш-username.github.io/ваш-репозиторий/Промпт.json';
+    s.dataset.catalog='https://ваш-username.github.io/ваш-репозиторий/Каталог.json';
+    s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
+    document.head.appendChild(s);
+  })();
+&lt;/script&gt;</code></pre>
+    </div>
+
+    <div class="example">
+        <h2>8. Проверка работы виджета</h2>
+        <p>После интеграции проверьте:</p>
+        <ul>
+            <li>Откройте консоль браузера (F12) и убедитесь, что нет ошибок</li>
+            <li>Просмотрите 2+ страницы сайта</li>
+            <li>Дождитесь появления виджета (обычно через 1-2 минуты)</li>
+            <li>Протестируйте чат-бота</li>
+            <li>Проверьте сохранение лидов в Google Sheets</li>
+        </ul>
+    </div>
+
+    <div class="warning">
+        <strong>💡 Совет:</strong> После каждого обновления виджета не забудьте изменить версию в URL (например, с v=5.0.0 на v=5.0.1) для принудительного обновления кэша браузера.
+    </div>
+</body>
+</html>
