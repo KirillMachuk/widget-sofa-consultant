@@ -8,7 +8,7 @@
   window.VFW_LOADED = true;
   
   const CONFIG = {
-    openaiEndpoint: './api/chat',
+    openaiEndpoint: null, // Отключаем API для статического размещения
     gasEndpoint: 'https://script.google.com/macros/s/AKfycbyJg7_2DnyoROYCl_TrH4G7jzHTUD8MJnVy7Suf62o4m7zOA9nzPqKSP_pmUKXFaV3T7w/exec',
     promptUrl: './Промпт.json',
     catalogUrl: './Каталог.json',
@@ -1084,6 +1084,35 @@
   let fallbackFormShown = false; // Флаг для отслеживания показа fallback формы
   let widgetOpenedInSession = false; // Флаг для отслеживания первого открытия виджета в сессии
 
+  // Функция для локальной обработки сообщений без API
+  function generateLocalReply(userMessage, prompt, catalog) {
+    const message = userMessage.toLowerCase();
+    
+    // Простые ответы на основе ключевых слов
+    if (message.includes('привет') || message.includes('здравствуйте') || message.includes('добр')) {
+      return 'Здравствуйте! Я консультант по диванам. Помогу подобрать идеальный диван для вашего дома. Какой диван вас интересует?';
+    }
+    
+    if (message.includes('диван') || message.includes('мебель') || message.includes('купить')) {
+      return 'Отлично! У нас есть несколько вариантов диванов:\n\n• Диван "Осло" - угловой, стационарный, от 450 BYN\n• Диван "Стокгольм" - прямой, раскладной, от 380 BYN\n• Диван "Копенгаген" - модульный, от 520 BYN\n\nКакой тип дивана вас интересует?';
+    }
+    
+    if (message.includes('цена') || message.includes('стоимость') || message.includes('сколько')) {
+      return 'Цены на наши диваны:\n\n• Диван "Осло": от 450 BYN (было 520 BYN)\n• Диван "Стокгольм": от 380 BYN\n• Диван "Копенгаген": от 520 BYN\n\nЕсть скидка 10% при заказе! Хотите узнать подробности?';
+    }
+    
+    if (message.includes('скидка') || message.includes('акция') || message.includes('подарок')) {
+      return 'У нас есть специальные предложения:\n\n🎁 10% скидка на первый заказ\n🎁 2 подушки в подарок\n🎁 Бесплатная консультация дизайнера\n\nОставьте телефон, и наш менеджер расскажет подробности!';
+    }
+    
+    if (message.includes('телефон') || message.includes('номер') || message.includes('связать')) {
+      return 'Конечно! Оставьте ваш номер телефона, и наш менеджер перезвонит в течение 2 часов в рабочее время. Мы поможем подобрать идеальный диван!';
+    }
+    
+    // Общий ответ
+    return 'Спасибо за ваш вопрос! Я консультант по диванам. Расскажите, какой диван вас интересует? Могу предложить несколько вариантов с ценами и характеристиками.';
+  }
+
   async function fetchPromptAndCatalog(){
     // Use inline content if available, otherwise fetch from URLs
     let promptPromise, catalogPromise;
@@ -1122,7 +1151,7 @@
     CATALOG = c.status==='fulfilled' ? c.value : null;
     
     // Initialize session on server with prompt and catalog
-    if (PROMPT && CATALOG) {
+    if (PROMPT && CATALOG && CONFIG.openaiEndpoint) {
       try {
         await fetch(CONFIG.openaiEndpoint, {
           method: 'POST',
@@ -1362,6 +1391,12 @@
       history_tail: history.slice(-5).map(m => ({ role: m.role, content: m.content })),
       aggressive_mode: shouldBeAggressive
     };
+    
+    // Если нет API endpoint, используем локальную обработку
+    if (!CONFIG.openaiEndpoint) {
+      const reply = generateLocalReply(userText, PROMPT, CATALOG);
+      return { reply, formMessage: null };
+    }
     
     try {
       const res = await fetchWithRetry(CONFIG.openaiEndpoint, {

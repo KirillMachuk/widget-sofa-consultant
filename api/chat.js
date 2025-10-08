@@ -37,13 +37,14 @@ async function handler(req, res){
       const sys = buildSystemPrompt(session.prompt, session.catalog, session.locale, aggressive_mode);
       // Dev fallback: if no API key, return a mock reply so the widget works locally
       if (!process.env.OPENAI_API_KEY){
+        console.log('No OpenAI API key found, using fallback mode');
         const lastUser = (Array.isArray(messages)?messages:[]).filter(m=>m.role==='user').slice(-1)[0]?.content || '';
         const mock = lastUser
-          ? `Понял: «${lastUser.slice(0, 140)}». Я работаю в режиме демо без ключа API. Каталог подключен, можете протестировать интерфейс.`
-          : 'Здравствуйте! Я работаю в режиме демо без ключа API. Задайте вопрос про диваны.';
+          ? `Понял ваш запрос: «${lastUser.slice(0, 140)}». Я консультант по диванам. Расскажите, какой диван вас интересует?`
+          : 'Здравствуйте! Я консультант по диванам. Помогу подобрать идеальный диван для вашего дома. Какой диван вас интересует?';
         return res.status(200).json({ reply: mock });
       }
-      const model = 'gpt-5-mini';
+      const model = 'gpt-4o-mini';
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24)
@@ -80,7 +81,10 @@ async function handler(req, res){
       if (!r.ok){
         const t = await r.text();
         const reason = (t || '').slice(0, 500);
-        const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш специалист перезвонит вам.';
+        console.error('OpenAI API Error:', r.status, reason);
+        
+        // Более дружелюбный fallback
+        const fallbackText = 'Привет! Я консультант по диванам. К сожалению, сейчас у меня технические проблемы, но я могу помочь вам подобрать диван. Расскажите, какой диван вас интересует?';
         return res.status(200).json({ reply: fallbackText, debug: { status: r.status, modelTried: model, reason } });
       }
       const data = await r.json();
