@@ -1165,7 +1165,6 @@
           })
         });
       } catch (e) {
-        console.warn('Failed to initialize session:', e);
       }
     }
   }

@@ -37,7 +37,6 @@ async function handler(req, res){
       const sys = buildSystemPrompt(session.prompt, session.catalog, session.locale, aggressive_mode);
       // Dev fallback: if no API key, return a mock reply so the widget works locally
       if (!process.env.OPENAI_API_KEY){
-        console.log('No OpenAI API key found, using fallback mode');
         const lastUser = (Array.isArray(messages)?messages:[]).filter(m=>m.role==='user').slice(-1)[0]?.content || '';
         const mock = lastUser
           ? `Понял ваш запрос: «${lastUser.slice(0, 140)}». Я консультант по диванам. Расскажите, какой диван вас интересует?`
@@ -81,7 +80,6 @@ async function handler(req, res){
       if (!r.ok){
         const t = await r.text();
         const reason = (t || '').slice(0, 500);
-        console.error('OpenAI API Error:', r.status, reason);
         
         // Более дружелюбный fallback
         const fallbackText = 'Привет! Я консультант по диванам. К сожалению, сейчас у меня технические проблемы, но я могу помочь вам подобрать диван. Расскажите, какой диван вас интересует?';
