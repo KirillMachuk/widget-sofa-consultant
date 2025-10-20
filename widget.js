@@ -8,7 +8,7 @@
   window.VFW_LOADED = true;
   
   const CONFIG = {
-    openaiEndpoint: null, // Отключаем API для статического размещения
+    openaiEndpoint: './api/chat',
     gasEndpoint: 'https://script.google.com/macros/s/AKfycbyJg7_2DnyoROYCl_TrH4G7jzHTUD8MJnVy7Suf62o4m7zOA9nzPqKSP_pmUKXFaV3T7w/exec',
     promptUrl: './Промпт.json',
     catalogUrl: './Каталог.json',
