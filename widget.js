@@ -1133,17 +1133,38 @@
     if (CONFIG.catalogContent) {
       catalogPromise = Promise.resolve(parseCatalogContent(CONFIG.catalogContent));
     } else {
-      catalogPromise = CONFIG.catalogUrl ? fetch(CONFIG.catalogUrl, {
-        cache: 'no-cache',
-        headers: {
+      // Используем API каталога вместо статического файла
+      catalogPromise = fetch(CONFIG.openaiEndpoint.replace('/chat', '/catalog'), {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
           'Cache-Control': 'no-cache, no-store, must-revalidate',
           'Pragma': 'no-cache',
           'Expires': '0'
+        },
+        body: JSON.stringify({
+          action: 'stats' // Получаем базовую информацию о каталоге
+        })
+      }).then(async r => {
+        if (!r.ok) {
+          console.warn('Failed to load catalog from API, using empty catalog');
+          return null;
         }
-      }).then(async r=>{
-        const txt = await r.text();
-        return parseCatalogContent(txt);
-      }) : Promise.resolve(null);
+        const data = await r.json();
+        if (!data.success) {
+          console.warn('Catalog API returned error:', data);
+          return null;
+        }
+        return {
+          offers: [],  // Оставляем пустым, товары будут загружаться динамически
+          categories: data.categories || {},
+          totalCount: data.totalOffers || 0,
+          timestamp: data.lastUpdate || new Date().toISOString()
+        };
+      }).catch(e => {
+        console.error('Failed to load catalog:', e);
+        return null;
+      });
     }
     
     const [p, c] = await Promise.allSettled([promptPromise, catalogPromise]);
