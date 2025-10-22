@@ -1175,21 +1175,19 @@
     
     // Initialize session on server with prompt and catalog
     if (PROMPT && CATALOG && CONFIG.openaiEndpoint) {
-      try {
-        await fetch(CONFIG.openaiEndpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'init',
-            session_id: SESSION_ID,
-            prompt: PROMPT,
-            catalog: CATALOG,
-            locale: 'ru'
-          })
-        });
-      } catch (e) {
-        console.error('Failed to initialize session:', e);
-      }
+      fetch(CONFIG.openaiEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'init',
+          session_id: SESSION_ID,
+          prompt: PROMPT,
+          catalog: CATALOG,
+          locale: 'ru'
+        })
+      }).catch(e => {
+        console.warn('Failed to initialize session:', e);
+      });
     }
   }
   
@@ -1518,13 +1516,20 @@
   }
 
   // Обработчики событий
-  els.btn.addEventListener('click', ()=>{
+  els.btn.addEventListener('click', async ()=>{
     if (els.panel.getAttribute('data-open')==='1'){ closePanel(); return; }
     openPanel();
     hideHints();
     startHintsCooldown();
     // Сбрасываем флаг exit-intent при открытии панели
     exitIntentTriggered = false;
+    
+    // Ждем загрузку данных если они еще не загрузились
+    if (!PROMPT || !CATALOG) {
+      const typingRow = showTyping();
+      await fetchPromptAndCatalog();
+      hideTyping(typingRow);
+    }
     
     // Показываем приветствие только при первом открытии виджета в сессии
     if (!widgetOpenedInSession) {
@@ -2006,12 +2011,47 @@
   }
 
 
+  // Опциональная предзагрузка каталога в 18:00 Минск
+  function schedulePreload() {
+    const now = new Date();
+    const minsk = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Minsk' }));
+    const target = new Date(minsk);
+    target.setHours(18, 0, 0, 0);
+    
+    if (minsk > target) {
+      target.setDate(target.getDate() + 1); // Завтра в 18:00
+    }
+    
+    const delay = target - minsk;
+    setTimeout(() => {
+      console.log('Preloading catalog at 18:00 Minsk time');
+      fetchPromptAndCatalog().catch(e => {
+        console.warn('Failed to preload catalog:', e);
+      });
+      // Повторять каждый день
+      setInterval(() => {
+        fetchPromptAndCatalog().catch(e => {
+          console.warn('Failed to preload catalog:', e);
+        });
+      }, 24 * 60 * 60 * 1000);
+    }, delay);
+  }
+
   // Инициализация
   (async function init(){
     checkWidgetVersion();
-    await fetchPromptAndCatalog();
+    
+    // Подключаем триггеры СРАЗУ
     schedulePageCountTrigger();
     watchSpaRouting();
     setupExitIntent();
+    
+    // Загружаем данные в фоне
+    fetchPromptAndCatalog().catch(e => {
+      console.warn('Failed to load prompt/catalog:', e);
+    });
+    
+    // Настраиваем предзагрузку в 18:00 Минск
+    schedulePreload();
   })();
 })();
