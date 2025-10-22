@@ -1165,6 +1165,7 @@
           })
         });
       } catch (e) {
+        console.error('Failed to initialize session:', e);
       }
     }
   }
@@ -1415,6 +1416,39 @@
       }
       
       if (!res.ok){
+        // Если ошибка 400 и сессия не инициализирована - пробуем инициализировать
+        if (res.status === 400) {
+          const errorData = await res.json().catch(() => ({}));
+          if (errorData.error && errorData.error.includes('Session not initialized')) {
+            console.log('Session not initialized, trying to reinitialize...');
+            // Пробуем инициализировать сессию еще раз
+            await fetchPromptAndCatalog();
+            // Повторяем запрос
+            const retryRes = await fetchWithRetry(CONFIG.openaiEndpoint, {
+              method:'POST',
+              headers:{ 
+                'Content-Type':'application/json',
+                'Accept': 'application/json'
+              },
+              body: JSON.stringify(payload)
+            });
+            
+            if (retryRes.ok) {
+              const retryData = await retryRes.json();
+              const text = retryData.reply || 'Здравствуйте! Я консультант по диванам. Чем могу помочь?';
+              history.push({ role:'assistant', content:text, ts: nowIso() });
+              saveHistory(history);
+              
+              if (retryData.formMessage) {
+                history.push({ role:'assistant', content:retryData.formMessage, ts: nowIso() });
+                saveHistory(history);
+              }
+              
+              return { text, formMessage: retryData.formMessage, needsForm: retryData.needsForm };
+            }
+          }
+        }
+        
         // Сервер вернул ошибку HTTP
         const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
         
