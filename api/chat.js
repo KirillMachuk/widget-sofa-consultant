@@ -1,6 +1,9 @@
 // Simple in-memory cache for sessions
 const sessionCache = new Map();
 
+// Import catalog module
+const catalogHandler = require('./catalog');
+
 async function handler(req, res){
   // Add CORS headers for external domains
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -34,7 +37,32 @@ async function handler(req, res){
         { role: 'user', content: user_message }
       ];
       
-      const sys = buildSystemPrompt(session.prompt, session.catalog, session.locale, aggressive_mode);
+      // Get relevant products from catalog
+      let relevantProducts = '';
+      try {
+        const catalogResponse = await fetch(`${req.protocol}://${req.get('host')}/api/catalog`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'search',
+            query: user_message,
+            filters: { limit: 20 }
+          })
+        });
+        
+        if (catalogResponse.ok) {
+          const catalogData = await catalogResponse.json();
+          if (catalogData.success && catalogData.formattedForGPT) {
+            relevantProducts = catalogData.formattedForGPT;
+            console.log('Найдено товаров:', catalogData.totalFound);
+          }
+        }
+      } catch (error) {
+        console.error('Ошибка получения каталога:', error);
+        // Продолжаем без каталога
+      }
+      
+      const sys = buildSystemPrompt(session.prompt, relevantProducts, session.locale, aggressive_mode);
       // Dev fallback: if no API key, return a mock reply so the widget works locally
       if (!process.env.OPENAI_API_KEY){
         const lastUser = (Array.isArray(messages)?messages:[]).filter(m=>m.role==='user').slice(-1)[0]?.content || '';
@@ -229,7 +257,7 @@ ${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
   return null;
 }
 
-function buildSystemPrompt(prompt, catalog, locale, aggressiveMode = false){
+function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = false){
   const base = prompt?.main_instructions ? prompt : null;
   let about = base ? [
     `Роль: ${prompt.role_and_task}`,
@@ -247,19 +275,12 @@ function buildSystemPrompt(prompt, catalog, locale, aggressiveMode = false){
   }
   
   // Add strict offer rules
-  about += '\n\nКРИТИЧЕСКИ ВАЖНО: Предлагай только ОДНУ акцию за раз. НЕ комбинируй скидки с подарками. При запросе серых диванов - внимательно проверяй каталог и предлагай только реально существующие модели.';
+  about += '\n\nКРИТИЧЕСКИ ВАЖНО: Предлагай только ОДНУ акцию за раз. НЕ комбинируй скидки с подарками. При запросе товаров - внимательно проверяй каталог и предлагай только реально существующие модели.';
   
   // Add catalog limitation instruction
   about += '\n\nКАТАЛОГ: В каталоге есть полная информация о товарах включая цвета, механизмы, описания. При запросе товаров из каталога предлагай максимум 3 самых релевантных варианта. Не перегружай сообщение длинными списками. НЕ используй жирный шрифт (**текст**) - заменяй на обычный текст. При запросе по цвету/стилю - фильтруй каталог по критериям и предлагай только подходящие варианты.';
   
-  const offers = Array.isArray(catalog?.offers) ? catalog.offers.map(o=> {
-    let info = `- ${o.name} — ${o.price} ${o.currency||''} | ${o.description||''}`;
-    if (o.mechanism) info += ` | Механизм: ${o.mechanism}`;
-    if (o.colors) info += ` | Цвета: ${o.colors}`;
-    info += ` (${o.url||''})`;
-    return info;
-  }).slice(0, 50).join('\n') : '';
-  const fence = offers ? `Ассортимент (только эти позиции, в каталоге есть полная информация о цветах и механизмах):\n${offers}\n` : '';
+  const fence = relevantProducts ? `Релевантные товары из каталога:\n${relevantProducts}\n` : '';
   return [
     about,
     'Отвечай только по каталогу и этому промпту. Если вопрос вне — мягко откажись.',
