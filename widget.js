@@ -1429,10 +1429,7 @@
       if (data?.reply && data.reply.includes('система временно недоступна')) {
         const errorMessage = data.reply;
         
-        history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
-        saveHistory(history);
-        addMsg('bot', errorMessage);
-        
+        // НЕ добавляем сообщение здесь - оно будет добавлено в submitUser
         return { text: errorMessage, needsForm: data.needsForm || true, formType: data.formType || 'gift' };
       }
       
@@ -1455,26 +1452,11 @@
         // Добавляем сообщение о проблеме
         const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
         
-        // Сохраняем в историю
-        history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
-        saveHistory(history);
-        addMsg('bot', errorMessage);
-        
-        // Показываем форму с подарком
-        setTimeout(() => {
-          renderForm('Выберите подарок и оставьте контакты!', [
-            { type: 'offer' },
-            { id: 'name', placeholder: 'Имя', required: true },
-            { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-          ], 'Получить подарок');
-        }, 1000);
-        
+        // НЕ добавляем сообщение здесь - оно будет добавлено в submitUser
         return { text: errorMessage, needsForm: true, formType: 'gift' };
       } else {
         // Если форма уже была показана, показываем обычное сообщение
         const fallbackText = 'Система временно недоступна. Попробуйте позже.';
-        history.push({ role:'assistant', content:fallbackText, ts: nowIso() });
-        saveHistory(history);
         return fallbackText;
       }
     }
