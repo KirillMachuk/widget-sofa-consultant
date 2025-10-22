@@ -39,6 +39,7 @@ async function handler(req, res){
       
       // Get relevant products from catalog
       let relevantProducts = '';
+      let catalogAvailable = false;
       try {
         const catalogResponse = await fetch(`${req.protocol}://${req.get('host')}/api/catalog`, {
           method: 'POST',
@@ -52,14 +53,21 @@ async function handler(req, res){
         
         if (catalogResponse.ok) {
           const catalogData = await catalogResponse.json();
-          if (catalogData.success && catalogData.formattedForGPT) {
+          if (catalogData.success && catalogData.formattedForGPT && catalogData.totalFound > 0) {
             relevantProducts = catalogData.formattedForGPT;
+            catalogAvailable = true;
             console.log('Найдено товаров:', catalogData.totalFound);
+          } else {
+            console.log('Каталог пустой или недоступен');
+            relevantProducts = 'КАТАЛОГ_ПУСТОЙ';
           }
+        } else {
+          console.log('Ошибка каталога:', catalogResponse.status);
+          relevantProducts = 'КАТАЛОГ_ОШИБКА';
         }
       } catch (error) {
         console.error('Ошибка получения каталога:', error);
-        // Продолжаем без каталога
+        relevantProducts = 'КАТАЛОГ_ОШИБКА';
       }
       
       const sys = buildSystemPrompt(session.prompt, relevantProducts, session.locale, aggressive_mode);
@@ -288,7 +296,15 @@ function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = fa
   // Add aggressive catalog usage instructions
   about += '\n\nВАЖНО ПРИ РАБОТЕ С КАТАЛОГОМ:\n- Из каталога показаны только релевантные товары - выбери 2-3 лучших\n- ВСЕГДА предлагай конкретные товары с названием, ценой и ссылкой\n- Если товаров мало - предложи все что есть\n- Если товаров 0 - предложи консультацию дизайнера для индивидуального подбора\n- При поиске товаров используй каталог агрессивно - ищи похожие категории, синонимы, смежные товары\n- КРИТИЧЕСКИ ВАЖНО: Если в каталоге 0 результатов - это ошибка поиска, попробуй другие термины или предложи дизайнера';
   
-  const fence = relevantProducts ? `Релевантные товары из каталога:\n${relevantProducts}\n` : '';
+  let fence = '';
+  if (relevantProducts === 'КАТАЛОГ_ПУСТОЙ') {
+    fence = 'КАТАЛОГ ПУСТОЙ: В каталоге нет подходящих товаров. НЕ ПРИДУМЫВАЙ товары! Скажи что сейчас нет в наличии и предложи консультацию дизайнера.';
+  } else if (relevantProducts === 'КАТАЛОГ_ОШИБКА') {
+    fence = 'КАТАЛОГ НЕДОСТУПЕН: Каталог временно недоступен. НЕ ПРИДУМЫВАЙ товары! Предложи консультацию дизайнера для подбора.';
+  } else if (relevantProducts) {
+    fence = `Релевантные товары из каталога:\n${relevantProducts}\n`;
+  }
+  
   return [
     about,
     'Отвечай только по каталогу и этому промпту. Если вопрос вне — мягко откажись.',
