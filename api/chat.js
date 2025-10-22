@@ -71,7 +71,7 @@ async function handler(req, res){
           : 'Здравствуйте! Я консультант по диванам. Помогу подобрать идеальный диван для вашего дома. Какой диван вас интересует?';
         return res.status(200).json({ reply: mock });
       }
-      const model = 'gpt-4o-mini';
+      const model = 'gpt-5-mini';
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24)
