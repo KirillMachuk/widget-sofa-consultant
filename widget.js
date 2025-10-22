@@ -1625,6 +1625,7 @@
     // Увеличиваем счетчик сообщений пользователя после последней формы
     if (lastFormShownAt > 0) {
       userMessagesAfterLastForm++;
+      console.log('User message sent, counter increased:', userMessagesAfterLastForm);
     }
     
     // Если пользователь отправил сообщение, а форма была предложена, значит он её проигнорировал
@@ -1660,8 +1661,10 @@
           addMsg('bot', response.formMessage);
           
           // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+          console.log('Form pause check:', { lastFormShownAt, userMessagesAfterLastForm });
           if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
             // Пауза не прошла - не показываем форму, только сообщение бота
+            console.log('Form paused - not showing form');
             return;
           }
           
@@ -1745,7 +1748,9 @@
     }
     
     // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+    console.log('maybeOfferPhoneFlow pause check:', { lastFormShownAt, userMessagesAfterLastForm });
     if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+      console.log('maybeOfferPhoneFlow paused - not showing form');
       return; // Не показываем форму слишком часто
     }
     
@@ -1789,6 +1794,7 @@
   }
 
   function renderForm(title, fields, submitText, pretext) {
+    console.log('renderForm called:', { title, lastFormShownAt, userMessagesAfterLastForm });
     const wrap = document.createElement('div'); 
     wrap.className='vfw-msg bot';
     
