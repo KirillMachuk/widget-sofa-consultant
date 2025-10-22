@@ -41,7 +41,11 @@ async function handler(req, res){
       let relevantProducts = '';
       let catalogAvailable = false;
       try {
-        const catalogResponse = await fetch(`${req.protocol}://${req.get('host')}/api/catalog`, {
+        const catalogUrl = `${req.protocol}://${req.get('host')}/api/catalog`;
+        console.log('🔍 Запрос к каталогу:', catalogUrl);
+        console.log('🔍 Запрос:', user_message);
+        
+        const catalogResponse = await fetch(catalogUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -51,22 +55,31 @@ async function handler(req, res){
           })
         });
         
+        console.log('📡 Ответ каталога:', catalogResponse.status, catalogResponse.statusText);
+        
         if (catalogResponse.ok) {
           const catalogData = await catalogResponse.json();
+          console.log('📊 Данные каталога:', {
+            success: catalogData.success,
+            totalFound: catalogData.totalFound,
+            hasFormattedForGPT: !!catalogData.formattedForGPT,
+            formattedLength: catalogData.formattedForGPT ? catalogData.formattedForGPT.length : 0
+          });
+          
           if (catalogData.success && catalogData.formattedForGPT && catalogData.totalFound > 0) {
             relevantProducts = catalogData.formattedForGPT;
             catalogAvailable = true;
-            console.log('Найдено товаров:', catalogData.totalFound);
+            console.log('✅ Найдено товаров:', catalogData.totalFound);
           } else {
-            console.log('Каталог пустой или недоступен');
+            console.log('❌ Каталог пустой или недоступен');
             relevantProducts = 'КАТАЛОГ_ПУСТОЙ';
           }
         } else {
-          console.log('Ошибка каталога:', catalogResponse.status);
+          console.log('❌ Ошибка каталога:', catalogResponse.status);
           relevantProducts = 'КАТАЛОГ_ОШИБКА';
         }
       } catch (error) {
-        console.error('Ошибка получения каталога:', error);
+        console.error('❌ Ошибка получения каталога:', error);
         relevantProducts = 'КАТАЛОГ_ОШИБКА';
       }
       
