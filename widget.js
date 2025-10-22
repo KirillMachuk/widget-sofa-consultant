@@ -887,84 +887,6 @@
     }, 100);
   }
   
-  // Кнопки выбора типа мебели
-  function addFurnitureButtons() {
-    const buttons = [
-      { text: 'Диваны', icon: '🛋️' },
-      { text: 'Кровати', icon: '🛏️' },
-      { text: 'Шкафы', icon: '🚪' },
-      { text: 'Кухни', icon: '🍽️' }
-    ];
-    
-    // Create container for horizontal layout
-    const container = document.createElement('div');
-    container.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 8px 36px;justify-content:flex-start';
-    
-    buttons.forEach(buttonData => {
-      const button = document.createElement('button');
-      button.className = 'furniture-btn';
-      button.dataset.text = buttonData.text;
-      button.style.cssText = `
-        padding:10px 16px;
-        border:none;
-        border-radius:14px;
-        background:#e3f2fd;
-        color:#1976d2;
-        cursor:pointer;
-        font-size:14px;
-        font-weight:500;
-        transition:all 0.2s ease;
-        white-space:nowrap;
-        flex-shrink:0;
-        min-height:44px;
-      `;
-      button.innerHTML = `${buttonData.icon} ${buttonData.text}`;
-      
-      // Hover effects
-      button.addEventListener('mouseenter', () => {
-        button.style.background = '#bbdefb';
-        button.style.color = '#0d47a1';
-        button.style.transform = 'translateY(-1px)';
-      });
-      
-      button.addEventListener('mouseleave', () => {
-        button.style.background = '#e3f2fd';
-        button.style.color = '#1976d2';
-        button.style.transform = 'translateY(0)';
-      });
-      
-      // Click handler
-      button.addEventListener('click', () => {
-        container.remove(); // Remove all furniture buttons
-        
-        // Отправляем сообщение пользователя с выбранным типом мебели
-        const userMessage = `Мне нужны ${buttonData.text.toLowerCase()}`;
-        addMsg('user', userMessage);
-        
-        // Показываем индикатор печати и обрабатываем запрос
-        const typingRow = showTyping();
-        
-        setTimeout(() => {
-          hideTyping(typingRow);
-          // Здесь будет вызов API для получения релевантных товаров
-          addMsg('bot', `Отлично! Покажу вам ${buttonData.text.toLowerCase()}. Расскажите, какие параметры важны: размер, цвет, цена?`);
-        }, 1500);
-      });
-      
-      container.appendChild(button);
-    });
-    
-    els.body.appendChild(container);
-    
-    // Smart scrolling for furniture buttons
-    setTimeout(() => {
-      const isAtBottom = els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 10;
-      if (isAtBottom) {
-        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
-  }
-  
   function addConsultationButtons() {
     const buttons = [
       { text: 'Здесь в чате', icon: '💬' },
@@ -1040,8 +962,8 @@
   function addQuickButtons() {
     const buttons = [
       { text: 'Хочу подарок', icon: '🎁' },
-      { text: 'Консультация дизайнера', icon: '💬' },
-      { text: 'Нужна мебель', icon: '🛋️' }
+      { text: 'Записаться в шоурум', icon: '🏪' },
+      { text: 'Нужна консультация', icon: '💬' }
     ];
     
     // Create container for horizontal layout
@@ -1092,17 +1014,17 @@
             { id: 'name', placeholder: 'Имя', required: true },
             { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
           ], 'Получить подарок');
-        } else if (buttonData.text === 'Консультация дизайнера') {
-          // Для консультации дизайнера - сообщение + форма
-          addMsg('bot', 'Отлично! Дизайнер перезвонит и проконсультирует по всем вопросам. Оставьте ваши контакты:');
+        } else if (buttonData.text === 'Записаться в шоурум') {
+          // Для записи в шоурум - сообщение + форма
+          addMsg('bot', 'Подскажите пожалуйста в каком городе находитесь и ваш номер телефона, передам дизайнеру в шоу-руме и он с вами свяжется');
           setTimeout(() => {
-            renderConsultationForm();
+            renderShowroomForm();
           }, 1000);
-        } else if (buttonData.text === 'Нужна мебель') {
-          // Для подбора мебели - показываем кнопки выбора
-          addMsg('bot', 'Отлично! Какой тип мебели вас интересует?');
+        } else if (buttonData.text === 'Нужна консультация') {
+          // Для консультации - показываем кнопки выбора
+          addMsg('bot', 'Конечно! Как вам удобнее получить консультацию?');
           setTimeout(() => {
-            addFurnitureButtons();
+            addConsultationButtons();
           }, 500);
         }
       });
