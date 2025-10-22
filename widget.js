@@ -1418,10 +1418,7 @@
         // Сервер вернул ошибку HTTP
         const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
         
-        history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
-        saveHistory(history);
-        addMsg('bot', errorMessage);
-        
+        // НЕ добавляем сообщение здесь - оно будет добавлено в submitUser
         return { text: errorMessage, needsForm: true, formType: 'gift' };
       }
       
