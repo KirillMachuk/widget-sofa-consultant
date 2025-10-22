@@ -37,46 +37,60 @@ async function handler(req, res){
         { role: 'user', content: user_message }
       ];
       
-      // Get relevant products from catalog
+      // Get relevant products from catalog - direct integration
       let relevantProducts = '';
       let catalogAvailable = false;
       try {
-        const catalogUrl = `${req.protocol}://${req.get('host')}/api/catalog`;
-        console.log('🔍 Запрос к каталогу:', catalogUrl);
-        console.log('🔍 Запрос:', user_message);
+        console.log('🔍 Прямой запрос к каталогу для:', user_message);
         
-        const catalogResponse = await fetch(catalogUrl, {
+        // Прямой вызов каталога без HTTP запроса
+        const catalogHandler = require('./catalog');
+        
+        // Создаем mock request/response для каталога
+        const catalogReq = {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
+          body: {
             action: 'search',
             query: user_message,
             filters: { limit: 20 }
-          })
-        });
-        
-        console.log('📡 Ответ каталога:', catalogResponse.status, catalogResponse.statusText);
-        
-        if (catalogResponse.ok) {
-          const catalogData = await catalogResponse.json();
-          console.log('📊 Данные каталога:', {
-            success: catalogData.success,
-            totalFound: catalogData.totalFound,
-            hasFormattedForGPT: !!catalogData.formattedForGPT,
-            formattedLength: catalogData.formattedForGPT ? catalogData.formattedForGPT.length : 0
-          });
-          
-          if (catalogData.success && catalogData.formattedForGPT && catalogData.totalFound > 0) {
-            relevantProducts = catalogData.formattedForGPT;
-            catalogAvailable = true;
-            console.log('✅ Найдено товаров:', catalogData.totalFound);
-          } else {
-            console.log('❌ Каталог пустой или недоступен');
-            relevantProducts = 'КАТАЛОГ_ПУСТОЙ';
           }
+        };
+        
+        let catalogData = null;
+        const catalogRes = {
+          setHeader: () => {},
+          status: (code) => ({
+            json: (data) => {
+              catalogData = data;
+              console.log('📊 Прямые данные каталога:', {
+                success: data.success,
+                totalFound: data.totalFound,
+                hasFormattedForGPT: !!data.formattedForGPT,
+                formattedLength: data.formattedForGPT ? data.formattedForGPT.length : 0
+              });
+            },
+            end: () => {}
+          }),
+          json: (data) => {
+            catalogData = data;
+            console.log('📊 Прямые данные каталога (200):', {
+              success: data.success,
+              totalFound: data.totalFound,
+              hasFormattedForGPT: !!data.formattedForGPT,
+              formattedLength: data.formattedForGPT ? data.formattedForGPT.length : 0
+            });
+          }
+        };
+        
+        await catalogHandler(catalogReq, catalogRes);
+        
+        if (catalogData && catalogData.success && catalogData.formattedForGPT && catalogData.totalFound > 0) {
+          relevantProducts = catalogData.formattedForGPT;
+          catalogAvailable = true;
+          console.log('✅ Найдено товаров:', catalogData.totalFound);
         } else {
-          console.log('❌ Ошибка каталога:', catalogResponse.status);
-          relevantProducts = 'КАТАЛОГ_ОШИБКА';
+          console.log('❌ Каталог пустой или недоступен');
+          relevantProducts = 'КАТАЛОГ_ПУСТОЙ';
         }
       } catch (error) {
         console.error('❌ Ошибка получения каталога:', error);
