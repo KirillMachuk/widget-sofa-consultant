@@ -151,9 +151,23 @@ async function handler(req, res){
       const data = await r.json();
       let reply = data.choices?.[0]?.message?.content || '';
       
-      // Ограничиваем длину ответа до 500 символов ПЕРЕД форматированием
-      if (reply.length > 500) {
-        reply = reply.substring(0, 500) + '...';
+      // Ограничиваем длину ответа до 800 символов с умной обрезкой
+      if (reply.length > 800) {
+        // Обрезаем по последней точке перед лимитом
+        const truncated = reply.substring(0, 800);
+        const lastPeriod = truncated.lastIndexOf('.');
+        const lastNewline = truncated.lastIndexOf('\n');
+        
+        // Берем позицию последней точки или переноса строки
+        const cutPosition = Math.max(lastPeriod, lastNewline);
+        
+        if (cutPosition > 600) {
+          // Если есть хорошая точка обрезки (не слишком рано)
+          reply = truncated.substring(0, cutPosition + 1);
+        } else {
+          // Если нет - обрезаем жестко но добавляем троеточие
+          reply = truncated + '...';
+        }
       }
       
       // Принудительное форматирование - каждое предложение с новой строки
