@@ -110,8 +110,8 @@ async function handler(req, res){
         const reason = (t || '').slice(0, 500);
         
         // Более дружелюбный fallback
-        const fallbackText = 'Привет! Я консультант по диванам. К сожалению, сейчас у меня технические проблемы, но я могу помочь вам подобрать диван. Расскажите, какой диван вас интересует?';
-        return res.status(200).json({ reply: fallbackText, debug: { status: r.status, modelTried: model, reason } });
+        const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
+        return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift', debug: { status: r.status, modelTried: model, reason } });
       }
       const data = await r.json();
       let reply = data.choices?.[0]?.message?.content || '';
@@ -147,8 +147,8 @@ async function handler(req, res){
     // No valid action found
     return res.status(400).json({ error: 'Invalid request format' });
   }catch(e){
-    const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш специалист перезвонит вам.';
-    return res.status(200).json({ reply: fallbackText });
+    const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
+    return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift' });
   }
 }
 

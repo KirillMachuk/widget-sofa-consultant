@@ -1419,17 +1419,21 @@
         // Показываем fallback форму при ошибках сервера
         if (!fallbackFormShown) {
           fallbackFormShown = true; // Устанавливаем флаг сразу
-          const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш специалист перезвонит вам.';
+          const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
           
           history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
           saveHistory(history);
           addMsg('bot', errorMessage);
           
           setTimeout(() => {
-            renderFallbackForm();
+            renderForm('Выберите подарок и оставьте контакты!', [
+              { type: 'offer' },
+              { id: 'name', placeholder: 'Имя', required: true },
+              { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
+            ], 'Получить подарок');
           }, 1000);
           
-          return errorMessage;
+          return { text: errorMessage, needsForm: true, formType: 'gift' };
         } else {
           const fallbackText = 'Система временно недоступна. Попробуйте позже.';
           history.push({ role:'assistant', content:fallbackText, ts: nowIso() });
@@ -1456,19 +1460,23 @@
       if (!fallbackFormShown) {
         fallbackFormShown = true; // Устанавливаем флаг сразу
         // Добавляем сообщение о проблеме
-        const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш специалист перезвонит вам.';
+        const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
         
         // Сохраняем в историю
         history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
         saveHistory(history);
         addMsg('bot', errorMessage);
         
-        // Показываем fallback форму
+        // Показываем форму с подарком
         setTimeout(() => {
-          renderFallbackForm();
+          renderForm('Выберите подарок и оставьте контакты!', [
+            { type: 'offer' },
+            { id: 'name', placeholder: 'Имя', required: true },
+            { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
+          ], 'Получить подарок');
         }, 1000);
         
-        return errorMessage;
+        return { text: errorMessage, needsForm: true, formType: 'gift' };
       } else {
         // Если форма уже была показана, показываем обычное сообщение
         const fallbackText = 'Система временно недоступна. Попробуйте позже.';
@@ -1625,6 +1633,13 @@
               { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
             ], 'Получить подарок');
           }
+        } else if (response.needsForm && response.formType === 'gift') {
+          // Показываем форму с подарком при ошибке AI
+          renderForm('Выберите подарок и оставьте контакты!', [
+            { type: 'offer' },
+            { id: 'name', placeholder: 'Имя', required: true },
+            { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
+          ], 'Получить подарок');
         } else if (response.needsForm) {
           // Показываем стандартную форму
           maybeOfferPhoneFlow(response.text);
