@@ -1009,7 +1009,7 @@
         
         if (buttonData.text === 'Хочу подарок') {
           // Для кнопки "Хочу подарок" сразу показываем форму
-          renderForm('Выберите подарок при заказе от 1500 BYN и оставьте контакты!', [
+          renderForm('Выберите подарок и оставьте контакты!', [
             { type: 'offer' },
             { id: 'name', placeholder: 'Имя', required: true },
             { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
@@ -1523,7 +1523,7 @@
       // Восстанавливаем форму если она была предложена
       const lastBotMessage = loadHistory().filter(m => m.role === 'assistant').slice(-1)[0];
       if (lastBotMessage && shouldShowForm(lastBotMessage.content)) {
-        renderForm('Выберите подарок при заказе от 1500 BYN и оставьте контакты!', [
+        renderForm('Выберите подарок и оставьте контакты!', [
           { type: 'offer' },
           { id: 'name', placeholder: 'Имя', required: true },
           { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
@@ -1695,9 +1695,9 @@
     
     if (matchedTriggers.length > 0 || hasForceWords){
       
-      // Всегда показываем форму с выбором подарка при заказе от 1500 BYN
+      // Всегда показываем форму с выбором подарка
       const pretexts = [
-        'Закрепить подарок при заказе от 1500 BYN и оставить данные?',
+        'Закрепить подарок и оставить данные?',
         'Выберите подарок и оставьте контакты?',
         'Записать данные для получения подарка?',
         'Сохранить контакты для акции?'
@@ -1718,7 +1718,7 @@
     const fieldsHtml = fields.map(field => {
       if (field.type === 'offer') {
         return `
-          <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок при заказе от 1500 BYN:</div>
+          <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок:</div>
           <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
             <button class="offer-btn" data-offer="Журнальный стол" style="padding:12px 16px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:left;transition:all 0.2s;min-height:44px;font-size:16px">
               <div style="font-weight:600;color:#333">🎁 Журнальный стол</div>
