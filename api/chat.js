@@ -16,7 +16,7 @@ async function handler(req, res){
   
   if (req.method !== 'POST') return res.status(405).end();
   try{
-    const { action, session_id, user_message, history_tail, prompt, catalog, locale, aggressive_mode } = req.body || {};
+    const { action, session_id, user_message, history_tail, prompt, catalog, locale, aggressive_mode, user_messages_after_last_form } = req.body || {};
     
     // Handle session initialization (first request with prompt/catalog)
     if (action === 'init' && prompt && catalog) {
@@ -130,7 +130,7 @@ async function handler(req, res){
         .trim();
       
       // Проверяем, нужно ли генерировать персонализированное сообщение с формой
-      const shouldGenerateFormMessage = checkIfNeedsFormMessage(reply, messages);
+      const shouldGenerateFormMessage = checkIfNeedsFormMessage(reply, messages, user_messages_after_last_form);
       let formMessage = null;
       
       if (shouldGenerateFormMessage) {
@@ -153,7 +153,12 @@ async function handler(req, res){
 }
 
 // Проверяем, нужно ли генерировать персонализированное сообщение с формой
-function checkIfNeedsFormMessage(reply, messages) {
+function checkIfNeedsFormMessage(reply, messages, userMessagesAfterLastForm = 0) {
+  // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+  if (userMessagesAfterLastForm > 0 && userMessagesAfterLastForm < 3) {
+    return false; // Не показываем форму слишком часто
+  }
+  
   // Специальная проверка на запрос записи в шоурум
   const showroomKeywords = ['шоурум', 'шоу-рум', 'шоуруме', 'записаться в шоурум', 'запись в шоурум', 'посмотреть в шоуруме', 'приехать в шоурум'];
   const hasShowroomRequest = showroomKeywords.some(keyword => reply.toLowerCase().includes(keyword));

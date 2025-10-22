@@ -1083,6 +1083,8 @@
   const submittedLeads = new Set();
   let fallbackFormShown = false; // Флаг для отслеживания показа fallback формы
   let widgetOpenedInSession = false; // Флаг для отслеживания первого открытия виджета в сессии
+  let lastFormShownAt = 0; // Время последнего показа формы
+  let userMessagesAfterLastForm = 0; // Количество сообщений пользователя после последней формы
 
   // Функция для локальной обработки сообщений без API
   function generateLocalReply(userMessage, prompt, catalog) {
@@ -1410,7 +1412,8 @@
       session_id: SESSION_ID,
       user_message: userText,
       history_tail: history.slice(-5).map(m => ({ role: m.role, content: m.content })),
-      aggressive_mode: shouldBeAggressive
+      aggressive_mode: shouldBeAggressive,
+      user_messages_after_last_form: userMessagesAfterLastForm
     };
     
     // Если нет API endpoint, используем локальную обработку
@@ -1613,6 +1616,11 @@
     
     addMsg('user', v);
     
+    // Увеличиваем счетчик сообщений пользователя после последней формы
+    if (lastFormShownAt > 0) {
+      userMessagesAfterLastForm++;
+    }
+    
     // Если пользователь отправил сообщение, а форма была предложена, значит он её проигнорировал
     if (document.querySelector('#vfwName') || document.querySelector('#vfwPhone') || document.querySelector('#vfwPhoneQuick')) {
       // Удаляем форму
@@ -1718,6 +1726,11 @@
       return; // Не предлагаем форму пока бот не ответил на вопросы
     }
     
+    // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+    if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+      return; // Не показываем форму слишком часто
+    }
+    
     // Специальная проверка на запрос записи в шоурум
     const showroomKeywords = ['шоурум', 'шоу-рум', 'шоуруме', 'записаться в шоурум', 'запись в шоурум', 'посмотреть в шоуруме', 'приехать в шоурум'];
     const hasShowroomRequest = showroomKeywords.some(keyword => botReply.toLowerCase().includes(keyword));
@@ -1753,12 +1766,14 @@
         { id: 'name', placeholder: 'Имя', required: true },
         { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
       ], 'Получить подарок');
+      
     }
   }
 
   function renderForm(title, fields, submitText, pretext) {
     const wrap = document.createElement('div'); 
     wrap.className='vfw-msg bot';
+    
     
     const fieldsHtml = fields.map(field => {
       if (field.type === 'offer') {
