@@ -1415,31 +1415,25 @@
       }
       
       if (!res.ok){
+        // Сервер вернул ошибку HTTP
+        const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
         
-        // Показываем fallback форму при ошибках сервера
-        if (!fallbackFormShown) {
-          fallbackFormShown = true; // Устанавливаем флаг сразу
-          const errorMessage = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
-          
-          history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
-          saveHistory(history);
-          addMsg('bot', errorMessage);
-          
-          setTimeout(() => {
-            renderForm('Выберите подарок и оставьте контакты!', [
-              { type: 'offer' },
-              { id: 'name', placeholder: 'Имя', required: true },
-              { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-            ], 'Получить подарок');
-          }, 1000);
-          
-          return { text: errorMessage, needsForm: true, formType: 'gift' };
-        } else {
-          const fallbackText = 'Система временно недоступна. Попробуйте позже.';
-          history.push({ role:'assistant', content:fallbackText, ts: nowIso() });
-          saveHistory(history);
-          return fallbackText;
-        }
+        history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
+        saveHistory(history);
+        addMsg('bot', errorMessage);
+        
+        return { text: errorMessage, needsForm: true, formType: 'gift' };
+      }
+      
+      // Проверяем, если сервер вернул сообщение об ошибке (даже со статусом 200)
+      if (data?.reply && data.reply.includes('система временно недоступна')) {
+        const errorMessage = data.reply;
+        
+        history.push({ role:'assistant', content:errorMessage, ts: nowIso() });
+        saveHistory(history);
+        addMsg('bot', errorMessage);
+        
+        return { text: errorMessage, needsForm: data.needsForm || true, formType: data.formType || 'gift' };
       }
       
       const text = data.reply || 'Здравствуйте! Я консультант по диванам. Чем могу помочь?';
@@ -1455,7 +1449,6 @@
       return { text, formMessage: data.formMessage, needsForm: data.needsForm };
       
     } catch (error) {
-      
       // Показываем fallback форму только если она еще не была показана в этой сессии
       if (!fallbackFormShown) {
         fallbackFormShown = true; // Устанавливаем флаг сразу
@@ -1634,12 +1627,15 @@
             ], 'Получить подарок');
           }
         } else if (response.needsForm && response.formType === 'gift') {
-          // Показываем форму с подарком при ошибке AI
-          renderForm('Выберите подарок и оставьте контакты!', [
-            { type: 'offer' },
-            { id: 'name', placeholder: 'Имя', required: true },
-            { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-          ], 'Получить подарок');
+          // Показываем форму с подарком при ошибке AI (только если она еще не была показана)
+          if (!fallbackFormShown) {
+            fallbackFormShown = true;
+            renderForm('Выберите подарок и оставьте контакты!', [
+              { type: 'offer' },
+              { id: 'name', placeholder: 'Имя', required: true },
+              { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
+            ], 'Получить подарок');
+          }
         } else if (response.needsForm) {
           // Показываем стандартную форму
           maybeOfferPhoneFlow(response.text);
