@@ -259,6 +259,8 @@ function detectCategory(query) {
     'шкаф': ['шкаф', 'гардероб', 'купе'],
     'стол': ['стол', 'столик', 'обеденн'],
     'стул': ['стул', 'стуль', 'табурет'],
+    'кресло': ['кресл', 'подвесн', 'качел', 'кокон', 'подвесное кресло', 'подвесное', 'качели'],
+    'пуф': ['пуф', 'банкет', 'оттоман', 'банкетка'],
     'тумба': ['тумб', 'комод'],
     'прихожая': ['прихож', 'вешалк'],
   };
@@ -300,16 +302,37 @@ function filterOffers(catalog, query, filters = {}) {
     filtered = filtered.filter(offer => offer.price <= filters.maxPrice);
   }
   
-  // Фильтр по ключевым словам в названии и описании
-  const queryWords = query.toLowerCase().split(' ').filter(w => w.length > 2);
+  // Нормализация запроса - убираем короткие слова и разбиваем на части
+  const queryWords = query.toLowerCase()
+    .split(/[\s,.-]+/)
+    .filter(w => w.length > 2)
+    .map(word => {
+      // Частичное совпадение - берем корень слова
+      if (word.length > 4) {
+        return word.substring(0, word.length - 2); // "подвесное" -> "подвес"
+      }
+      return word;
+    });
+  
   if (queryWords.length > 0) {
     filtered = filtered.map(offer => {
       let relevanceScore = 0;
-      const searchText = `${offer.name} ${offer.description} ${JSON.stringify(offer.params)}`.toLowerCase();
+      const nameText = (offer.name || '').toLowerCase();
+      const descText = (offer.description || '').toLowerCase();
+      const paramsText = JSON.stringify(offer.params || {}).toLowerCase();
       
       queryWords.forEach(word => {
-        if (searchText.includes(word)) {
-          relevanceScore++;
+        // Совпадение в названии = 3 балла
+        if (nameText.includes(word)) {
+          relevanceScore += 3;
+        }
+        // Совпадение в параметрах = 2 балла
+        if (paramsText.includes(word)) {
+          relevanceScore += 2;
+        }
+        // Совпадение в описании = 1 балл
+        if (descText.includes(word)) {
+          relevanceScore += 1;
         }
       });
       
@@ -318,8 +341,31 @@ function filterOffers(catalog, query, filters = {}) {
       .sort((a, b) => b.relevanceScore - a.relevanceScore);
   }
   
+  // Fallback: если по категории ничего не найдено, ищем по всем товарам
+  if (filtered.length === 0 && detectedCategory) {
+    console.log('Fallback поиск по всем товарам');
+    const allOffers = [...catalog.offers];
+    if (queryWords.length > 0) {
+      filtered = allOffers.map(offer => {
+        let relevanceScore = 0;
+        const nameText = (offer.name || '').toLowerCase();
+        const descText = (offer.description || '').toLowerCase();
+        const paramsText = JSON.stringify(offer.params || {}).toLowerCase();
+        
+        queryWords.forEach(word => {
+          if (nameText.includes(word)) relevanceScore += 3;
+          if (paramsText.includes(word)) relevanceScore += 2;
+          if (descText.includes(word)) relevanceScore += 1;
+        });
+        
+        return { ...offer, relevanceScore };
+      }).filter(offer => offer.relevanceScore > 0)
+        .sort((a, b) => b.relevanceScore - a.relevanceScore);
+    }
+  }
+  
   // Ограничиваем количество результатов
-  const maxResults = filters.limit || 30;
+  const maxResults = filters.limit || 50;
   return filtered.slice(0, maxResults);
 }
 
