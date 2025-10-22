@@ -1561,8 +1561,8 @@
       // Восстанавливаем форму если она была предложена
       const lastBotMessage = loadHistory().filter(m => m.role === 'assistant').slice(-1)[0];
       if (lastBotMessage && shouldShowForm(lastBotMessage.content)) {
-        // Проверяем паузу между показами форм (минимум 2 реплики клиента)
-        if (lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
+        // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+        if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
           // Пауза не прошла - не показываем форму
           return;
         }
@@ -1660,9 +1660,9 @@
         if (response.formMessage) {
           addMsg('bot', response.formMessage);
           
-          // Проверяем паузу между показами форм (минимум 2 реплики клиента)
+          // Проверяем паузу между показами форм (минимум 3 реплики клиента)
           console.log('Form pause check:', { lastFormShownAt, userMessagesAfterLastForm });
-          if (lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
+          if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
             // Пауза не прошла - не показываем форму, только сообщение бота
             console.log('Form paused - not showing form');
             return;
@@ -1686,8 +1686,8 @@
         } else if (response.needsForm && response.formType === 'gift') {
           // Показываем форму с подарком при ошибке AI (только если она еще не была показана)
           if (!fallbackFormShown) {
-            // Проверяем паузу между показами форм (минимум 2 реплики клиента)
-            if (lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
+            // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+            if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
               // Пауза не прошла - не показываем форму
               return;
             }
@@ -1747,9 +1747,9 @@
       return; // Не предлагаем форму пока бот не ответил на вопросы
     }
     
-    // Проверяем паузу между показами форм (минимум 2 реплики клиента)
+    // Проверяем паузу между показами форм (минимум 3 реплики клиента)
     console.log('maybeOfferPhoneFlow pause check:', { lastFormShownAt, userMessagesAfterLastForm });
-    if (lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
+    if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
       console.log('maybeOfferPhoneFlow paused - not showing form');
       return; // Не показываем форму слишком часто
     }
