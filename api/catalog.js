@@ -274,6 +274,74 @@ function detectCategory(query) {
   return null;
 }
 
+// Извлечение размеров из запроса
+function extractDimensions(query) {
+  const dimensions = [];
+  
+  // Паттерны: "200*95*95", "200x95x95", "200 на 95 на 95", "200 95 95"
+  const patterns = [
+    /(\d+)[*x×]\s*(\d+)[*x×]\s*(\d+)/g,  // 200*95*95, 200x95x95
+    /(\d+)\s*на\s*(\d+)\s*на\s*(\d+)/g,   // 200 на 95 на 95
+    /(\d+)\s+(\d+)\s+(\d+)/g,             // 200 95 95
+    /(\d+)\s*[x×]\s*(\d+)\s*[x×]\s*(\d+)/g // 200 x 95 x 95
+  ];
+  
+  patterns.forEach(pattern => {
+    let match;
+    while ((match = pattern.exec(query)) !== null) {
+      const dims = [parseInt(match[1]), parseInt(match[2]), parseInt(match[3])];
+      if (dims.every(d => d > 0 && d < 10000)) { // разумные размеры
+        dimensions.push(dims);
+      }
+    }
+  });
+  
+  return dimensions;
+}
+
+// Проверка совпадения размеров с допуском
+function checkDimensionMatch(offerDimensions, queryDimensions, tolerance = 10) {
+  if (!offerDimensions || offerDimensions.length === 0) return false;
+  if (!queryDimensions || queryDimensions.length === 0) return false;
+  
+  return queryDimensions.some(queryDims => {
+    return offerDimensions.some(offerDims => {
+      if (offerDims.length !== queryDims.length) return false;
+      
+      return offerDims.every((dim, i) => {
+        const diff = Math.abs(dim - queryDims[i]);
+        return diff <= tolerance;
+      });
+    });
+  });
+}
+
+// Извлечение размеров из параметров товара
+function extractOfferDimensions(offer) {
+  const dimensions = [];
+  
+  if (!offer.params) return dimensions;
+  
+  // Параметры с размерами
+  const sizeParams = ['Размеры', 'Габариты ГхДхВ, см', 'Размер', 'Габариты кровати'];
+  
+  sizeParams.forEach(paramName => {
+    const value = offer.params[paramName];
+    if (!value) return;
+    
+    // Извлекаем числа из строки размеров
+    const numbers = value.match(/\d+/g);
+    if (numbers && numbers.length >= 2) {
+      const dims = numbers.map(n => parseInt(n)).filter(n => n > 0 && n < 10000);
+      if (dims.length >= 2) {
+        dimensions.push(dims);
+      }
+    }
+  });
+  
+  return dimensions;
+}
+
 // Фильтрация товаров по запросу
 function filterOffers(catalog, query, filters = {}) {
   let filtered = [...catalog.offers];
@@ -302,11 +370,18 @@ function filterOffers(catalog, query, filters = {}) {
     filtered = filtered.filter(offer => offer.price <= filters.maxPrice);
   }
   
-  // Нормализация запроса - убираем короткие слова и разбиваем на части
+  // Извлекаем размеры из запроса
+  const queryDimensions = extractDimensions(query);
+  
+  // Улучшенная нормализация запроса
   const queryWords = query.toLowerCase()
     .split(/[\s,.-]+/)
-    .filter(w => w.length > 2)
+    .filter(w => w.length > 2 || /^\d+$/.test(w)) // Сохраняем числа
     .map(word => {
+      // Для чисел не обрезаем
+      if (/^\d+$/.test(word)) {
+        return word;
+      }
       // Частичное совпадение - берем корень слова
       if (word.length > 4) {
         return word.substring(0, word.length - 2); // "подвесное" -> "подвес"
@@ -314,13 +389,38 @@ function filterOffers(catalog, query, filters = {}) {
       return word;
     });
   
-  if (queryWords.length > 0) {
+  // Сохраняем полные слова для точного поиска
+  const fullQueryWords = query.toLowerCase()
+    .split(/[\s,.-]+/)
+    .filter(w => w.length > 0);
+  
+  if (queryWords.length > 0 || queryDimensions.length > 0) {
     filtered = filtered.map(offer => {
       let relevanceScore = 0;
       const nameText = (offer.name || '').toLowerCase();
       const descText = (offer.description || '').toLowerCase();
       const paramsText = JSON.stringify(offer.params || {}).toLowerCase();
       
+      // 1. Точное совпадение тканей/материалов (максимальный балл)
+      if (offer.params) {
+        const fabricParams = ['Ткань', 'Обивка', 'Материал'];
+        fabricParams.forEach(paramName => {
+          const paramValue = (offer.params[paramName] || '').toLowerCase();
+          if (paramValue && fullQueryWords.some(word => paramValue.includes(word))) {
+            relevanceScore += 10; // Максимальный балл за точное совпадение ткани
+          }
+        });
+      }
+      
+      // 2. Поиск по размерам
+      if (queryDimensions.length > 0) {
+        const offerDimensions = extractOfferDimensions(offer);
+        if (checkDimensionMatch(offerDimensions, queryDimensions)) {
+          relevanceScore += 5; // Высокий балл за совпадение размеров
+        }
+      }
+      
+      // 3. Обычный поиск по ключевым словам
       queryWords.forEach(word => {
         // Совпадение в названии = 3 балла
         if (nameText.includes(word)) {
@@ -336,6 +436,15 @@ function filterOffers(catalog, query, filters = {}) {
         }
       });
       
+      // 4. Дополнительный поиск по полным словам (для точных совпадений)
+      fullQueryWords.forEach(word => {
+        if (word.length > 2) {
+          if (nameText.includes(word)) {
+            relevanceScore += 1; // Дополнительный балл за полное совпадение
+          }
+        }
+      });
+      
       return { ...offer, relevanceScore };
     }).filter(offer => offer.relevanceScore > 0)
       .sort((a, b) => b.relevanceScore - a.relevanceScore);
@@ -345,17 +454,45 @@ function filterOffers(catalog, query, filters = {}) {
   if (filtered.length === 0 && detectedCategory) {
     console.log('Fallback поиск по всем товарам');
     const allOffers = [...catalog.offers];
-    if (queryWords.length > 0) {
+    if (queryWords.length > 0 || queryDimensions.length > 0) {
       filtered = allOffers.map(offer => {
         let relevanceScore = 0;
         const nameText = (offer.name || '').toLowerCase();
         const descText = (offer.description || '').toLowerCase();
         const paramsText = JSON.stringify(offer.params || {}).toLowerCase();
         
+        // Применяем ту же логику поиска что и выше
+        // 1. Точное совпадение тканей/материалов
+        if (offer.params) {
+          const fabricParams = ['Ткань', 'Обивка', 'Материал'];
+          fabricParams.forEach(paramName => {
+            const paramValue = (offer.params[paramName] || '').toLowerCase();
+            if (paramValue && fullQueryWords.some(word => paramValue.includes(word))) {
+              relevanceScore += 10;
+            }
+          });
+        }
+        
+        // 2. Поиск по размерам
+        if (queryDimensions.length > 0) {
+          const offerDimensions = extractOfferDimensions(offer);
+          if (checkDimensionMatch(offerDimensions, queryDimensions)) {
+            relevanceScore += 5;
+          }
+        }
+        
+        // 3. Обычный поиск по ключевым словам
         queryWords.forEach(word => {
           if (nameText.includes(word)) relevanceScore += 3;
           if (paramsText.includes(word)) relevanceScore += 2;
           if (descText.includes(word)) relevanceScore += 1;
+        });
+        
+        // 4. Дополнительный поиск по полным словам
+        fullQueryWords.forEach(word => {
+          if (word.length > 2 && nameText.includes(word)) {
+            relevanceScore += 1;
+          }
         });
         
         return { ...offer, relevanceScore };
@@ -385,23 +522,42 @@ function formatOffersForGPT(offers) {
     // Добавляем ключевые параметры
     const importantParams = [];
     if (offer.params) {
-      // Для кроватей - размеры
+      // Ткань/обивка (приоритет)
+      if (offer.params['Ткань']) {
+        importantParams.push(`Ткань: ${offer.params['Ткань']}`);
+      }
+      if (offer.params['Обивка']) {
+        importantParams.push(`Обивка: ${offer.params['Обивка']}`);
+      }
+      
+      // Размеры (приоритет)
+      if (offer.params['Размеры']) {
+        importantParams.push(`Размеры: ${offer.params['Размеры']}`);
+      }
+      if (offer.params['Габариты ГхДхВ, см']) {
+        importantParams.push(`Габариты: ${offer.params['Габариты ГхДхВ, см']}`);
+      }
+      if (offer.params['Размер']) {
+        importantParams.push(`Размер: ${offer.params['Размер']}`);
+      }
       if (offer.params['Габариты кровати']) {
-        importantParams.push(`Размер: ${offer.params['Габариты кровати']}`);
+        importantParams.push(`Размер кровати: ${offer.params['Габариты кровати']}`);
       }
-      if (offer.params['Высота спального места от пола']) {
-        importantParams.push(`Высота: ${offer.params['Высота спального места от пола']}`);
-      }
-      // Для диванов - механизмы
+      
+      // Механизмы и конфигурация
       if (offer.params['Механизм трансформации']) {
         importantParams.push(`Механизм: ${offer.params['Механизм трансформации']}`);
       }
       if (offer.params['Конфигурация']) {
         importantParams.push(`Конфигурация: ${offer.params['Конфигурация']}`);
       }
-      // Материалы
+      
+      // Другие важные параметры
       if (offer.params['Материал']) {
         importantParams.push(`Материал: ${offer.params['Материал']}`);
+      }
+      if (offer.params['Высота спального места от пола']) {
+        importantParams.push(`Высота: ${offer.params['Высота спального места от пола']}`);
       }
     }
     
