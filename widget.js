@@ -1561,6 +1561,12 @@
       // Восстанавливаем форму если она была предложена
       const lastBotMessage = loadHistory().filter(m => m.role === 'assistant').slice(-1)[0];
       if (lastBotMessage && shouldShowForm(lastBotMessage.content)) {
+        // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+        if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+          // Пауза не прошла - не показываем форму
+          return;
+        }
+        
         renderForm('Выберите подарок и оставьте контакты!', [
           { type: 'offer' },
           { id: 'name', placeholder: 'Имя', required: true },
@@ -1653,6 +1659,12 @@
         if (response.formMessage) {
           addMsg('bot', response.formMessage);
           
+          // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+          if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+            // Пауза не прошла - не показываем форму, только сообщение бота
+            return;
+          }
+          
           // Проверяем, это запрос на шоурум или обычная форма
           const showroomKeywords = ['шоурум', 'шоу-рум', 'шоуруме', 'дизайнеру в шоу-руме'];
           const isShowroomRequest = showroomKeywords.some(keyword => response.formMessage.toLowerCase().includes(keyword));
@@ -1671,6 +1683,12 @@
         } else if (response.needsForm && response.formType === 'gift') {
           // Показываем форму с подарком при ошибке AI (только если она еще не была показана)
           if (!fallbackFormShown) {
+            // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+            if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+              // Пауза не прошла - не показываем форму
+              return;
+            }
+            
             fallbackFormShown = true;
             renderForm('Выберите подарок и оставьте контакты!', [
               { type: 'offer' },
