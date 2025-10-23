@@ -1524,25 +1524,29 @@
     // Сбрасываем флаг exit-intent при открытии панели
     exitIntentTriggered = false;
     
-    // Ждем загрузку данных если они еще не загрузились
-    if (!PROMPT || !CATALOG) {
-      const typingRow = showTyping();
-      await fetchPromptAndCatalog();
-      hideTyping(typingRow);
-    }
-    
-    // Показываем приветствие только при первом открытии виджета в сессии
+    // Показываем приветствие СРАЗУ без ожидания загрузки данных
     if (!widgetOpenedInSession) {
       widgetOpenedInSession = true;
       // Сбрасываем флаг fallback формы при начале новой сессии
       fallbackFormShown = false;
+      
+      // Показываем приветствие мгновенно
       addMsg('bot', 'Здравствуйте! Я консультант по мебели. Чем могу помочь?');
+      
       // Сохраняем приветственное сообщение в историю
       const history = loadHistory();
       history.push({ role: 'assistant', content: 'Здравствуйте! Я консультант по мебели. Чем могу помочь?', ts: nowIso() });
       saveHistory(history);
-      // Добавляем быстрые кнопки действий
-      setTimeout(() => addQuickButtons(), 500);
+      
+      // Добавляем быстрые кнопки действий мгновенно
+      setTimeout(() => addQuickButtons(), 100);
+      
+      // Загружаем данные в фоне, если они еще не загружены
+      if (!PROMPT || !CATALOG) {
+        fetchPromptAndCatalog().catch(e => {
+          console.warn('Failed to load prompt/catalog:', e);
+        });
+      }
     } else {
       // Восстанавливаем историю чата
       els.body.innerHTML='';
