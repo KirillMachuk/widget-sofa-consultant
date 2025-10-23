@@ -1806,7 +1806,7 @@
     const forceFormWords = ['закреплю', 'спецпредложение', 'скидка', '10%', 'специальная', 'подарок', 'выберите', 'выбор', 'диван', 'цена', 'стоимость', 'подходит', 'нравится', 'интересно'];
     const hasForceWords = forceFormWords.some(word => botReply.toLowerCase().includes(word));
     
-    if (matchedTriggers.length > 0 || hasForceWords){
+    if (isDirectRequest || matchedTriggers.length > 0 || hasForceWords){
       
       // Всегда показываем форму с выбором подарка
       const pretexts = [
