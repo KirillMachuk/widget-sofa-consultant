@@ -1750,11 +1750,13 @@
   
   // Прямые просьбы заполнить форму (обход паузы)
   const DIRECT_FORM_REQUESTS = [
-    /форм[ауеы]/i,  // любое склонение слова "форма"
+    /форм/i,  // любое упоминание слова "форма"
     /записать|запишу|записаться/i,
     /забронировать|закрепить/i,
     /оставь|оставить|дайте/i,
-    /контакт|телефон|номер/i
+    /контакт|телефон|номер/i,
+    /оформлени/i,  // "оформления", "оформление"
+    /отправ/i  // "отправил", "отправить"
   ];
   
   function shouldShowForm(message) {
@@ -1781,6 +1783,7 @@
     
     // Обходим паузу для прямых просьб заполнить форму
     const isDirectRequest = isDirectFormRequest(botReply);
+    console.log('Direct request check:', { botReply, isDirectRequest, bypassFormPause, lastFormShownAt, userMessagesAfterLastForm });
     if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
       console.log('maybeOfferPhoneFlow paused - not showing form');
       return; // Не показываем форму слишком часто
