@@ -1575,7 +1575,8 @@
       const lastBotMessage = loadHistory().filter(m => m.role === 'assistant').slice(-1)[0];
       if (lastBotMessage && shouldShowForm(lastBotMessage.content)) {
         // Проверяем паузу между показами форм (минимум 3 реплики клиента)
-        if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+        const isDirectRequest = isDirectFormRequest(lastBotMessage.content);
+        if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
           // Пауза не прошла - не показываем форму
           return;
         }
@@ -1675,7 +1676,8 @@
           
           // Проверяем паузу между показами форм (минимум 3 реплики клиента)
           console.log('Form pause check:', { lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
-          if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+          const isDirectRequest = isDirectFormRequest(response.formMessage);
+          if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
             // Пауза не прошла - не показываем форму, только сообщение бота
             console.log('Form paused - not showing form');
             return;
@@ -1700,7 +1702,8 @@
           // Показываем форму с подарком при ошибке AI (только если она еще не была показана)
           if (!fallbackFormShown) {
             // Проверяем паузу между показами форм (минимум 3 реплики клиента)
-            if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+            const isDirectRequest = isDirectFormRequest(response.text);
+            if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
               // Пауза не прошла - не показываем форму
               return;
             }
@@ -1745,8 +1748,20 @@
     /(10%|скидка|специальная)/i
   ];
   
+  // Прямые просьбы заполнить форму (обход паузы)
+  const DIRECT_FORM_REQUESTS = [
+    /(хотите заполнить форму|заполните форму|заполнить форму)/i,
+    /(забронировать и закрепить|закрепить товар)/i,
+    /(оставьте контакты|оставить контакты)/i,
+    /(заполните данные|оставьте данные)/i
+  ];
+  
   function shouldShowForm(message) {
     return FORM_TRIGGERS.some(regex => regex.test(message));
+  }
+  
+  function isDirectFormRequest(message) {
+    return DIRECT_FORM_REQUESTS.some(regex => regex.test(message));
   }
 
   
@@ -1762,7 +1777,10 @@
     
     // Проверяем паузу между показами форм (минимум 3 реплики клиента)
     console.log('maybeOfferPhoneFlow pause check:', { lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
-    if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+    
+    // Обходим паузу для прямых просьб заполнить форму
+    const isDirectRequest = isDirectFormRequest(botReply);
+    if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
       console.log('maybeOfferPhoneFlow paused - not showing form');
       return; // Не показываем форму слишком часто
     }
