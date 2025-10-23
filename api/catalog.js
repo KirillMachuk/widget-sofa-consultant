@@ -299,6 +299,180 @@ function extractDimensions(query) {
   return dimensions;
 }
 
+// Извлечение ценового диапазона из запроса
+function extractPriceRange(query) {
+  const queryLower = query.toLowerCase();
+  const priceRange = { minPrice: null, maxPrice: null };
+  
+  // Паттерны для цен
+  const patterns = [
+    // "до 1000", "до 1000 рублей", "дешевле 1000"
+    /(?:до|дешевле|не дороже|максимум)\s*(\d+)/g,
+    // "от 500", "от 500 рублей", "дороже 500"
+    /(?:от|дороже|минимум)\s*(\d+)/g,
+    // "от 500 до 1500", "в пределах 500-1500", "500-1500"
+    /(?:от\s*(\d+)\s*до\s*(\d+)|в пределах\s*(\d+)-(\d+)|(\d+)-(\d+))/g,
+    // "в бюджете 1500-2000"
+    /в бюджете\s*(\d+)-(\d+)/g
+  ];
+  
+  // Обработка паттернов
+  patterns.forEach((pattern, index) => {
+    let match;
+    while ((match = pattern.exec(queryLower)) !== null) {
+      if (index === 0) { // "до X"
+        priceRange.maxPrice = parseInt(match[1]);
+      } else if (index === 1) { // "от X"
+        priceRange.minPrice = parseInt(match[1]);
+      } else if (index === 2) { // "от X до Y"
+        if (match[1] && match[2]) {
+          priceRange.minPrice = parseInt(match[1]);
+          priceRange.maxPrice = parseInt(match[2]);
+        } else if (match[3] && match[4]) {
+          priceRange.minPrice = parseInt(match[3]);
+          priceRange.maxPrice = parseInt(match[4]);
+        } else if (match[5] && match[6]) {
+          priceRange.minPrice = parseInt(match[5]);
+          priceRange.maxPrice = parseInt(match[6]);
+        }
+      } else if (index === 3) { // "в бюджете X-Y"
+        priceRange.minPrice = parseInt(match[1]);
+        priceRange.maxPrice = parseInt(match[2]);
+      }
+    }
+  });
+  
+  // Синонимы для ценовых категорий
+  if (queryLower.includes('дешевый') || queryLower.includes('недорогой') || queryLower.includes('бюджетный')) {
+    priceRange.maxPrice = 1000;
+  }
+  if (queryLower.includes('дорогой') || queryLower.includes('премиум') || queryLower.includes('элитный')) {
+    priceRange.minPrice = 3000;
+  }
+  
+  return priceRange;
+}
+
+// Извлечение размеров спального места
+function extractSleepingPlace(query) {
+  const queryLower = query.toLowerCase();
+  const sleepingPlaces = [];
+  
+  // Паттерны для спального места
+  const patterns = [
+    /спальное место\s*(\d+)\s*на\s*(\d+)/g,
+    /спальное место\s*(\d+)\s*x\s*(\d+)/g,
+    /спальное место\s*(\d+)\s*×\s*(\d+)/g,
+    /(\d+)\s*на\s*(\d+)\s*спальное место/g,
+    /(\d+)\s*x\s*(\d+)\s*спальное место/g
+  ];
+  
+  patterns.forEach(pattern => {
+    let match;
+    while ((match = pattern.exec(queryLower)) !== null) {
+      const width = parseInt(match[1]);
+      const length = parseInt(match[2]);
+      if (width > 0 && length > 0 && width < 300 && length < 300) {
+        sleepingPlaces.push([width, length]);
+      }
+    }
+  });
+  
+  // Специальные фразы
+  if (queryLower.includes('для сна двоих') || queryLower.includes('двуспальная')) {
+    sleepingPlaces.push([160, 200]); // Минимальные размеры для двоих
+  }
+  if (queryLower.includes('односпальная') || queryLower.includes('для одного')) {
+    sleepingPlaces.push([90, 200]); // Стандартные размеры для одного
+  }
+  
+  return sleepingPlaces;
+}
+
+// Определение комнаты/назначения
+function detectRoom(query) {
+  const queryLower = query.toLowerCase();
+  
+  const roomKeywords = {
+    'гостиная': ['гостиная', 'зал', 'зал для гостей', 'гостиная комната'],
+    'спальня': ['спальня', 'спальная', 'спальная комната', 'для сна'],
+    'кухня': ['кухня', 'кухонная', 'кухонный', 'для кухни'],
+    'детская': ['детская', 'детская комната', 'для детей', 'ребенок'],
+    'прихожая': ['прихожая', 'коридор', 'входная', 'для прихожей'],
+    'офис': ['офис', 'рабочее место', 'кабинет', 'для работы']
+  };
+  
+  for (const [room, keywords] of Object.entries(roomKeywords)) {
+    if (keywords.some(keyword => queryLower.includes(keyword))) {
+      return room;
+    }
+  }
+  
+  return null;
+}
+
+// Словарь синонимов цветов
+function getColorSynonyms(color) {
+  const colorLower = color.toLowerCase();
+  
+  const colorSynonyms = {
+    'темный': ['черный', 'графит', 'антрацит', 'венге', 'темно-коричневый', 'темно-серый', 'угольный'],
+    'светлый': ['белый', 'кремовый', 'бежевый', 'молочный', 'айвори', 'светло-серый', 'светло-коричневый'],
+    'яркий': ['красный', 'синий', 'желтый', 'зеленый', 'оранжевый', 'фиолетовый', 'розовый'],
+    'нейтральный': ['серый', 'коричневый', 'бежевый', 'тауп', 'графит', 'сталь']
+  };
+  
+  for (const [category, synonyms] of Object.entries(colorSynonyms)) {
+    if (synonyms.some(synonym => colorLower.includes(synonym))) {
+      return synonyms;
+    }
+  }
+  
+  return [color];
+}
+
+// Словарь синонимов механизмов
+function getMechanismSynonyms(mechanism) {
+  const mechanismLower = mechanism.toLowerCase();
+  
+  if (mechanismLower.includes('раскладной') || mechanismLower.includes('раскладывающийся')) {
+    return ['еврокнижка', 'книжка', 'аккордеон', 'выкатной', 'пантограф', 'дельфин', 'клик-кляк'];
+  }
+  
+  if (mechanismLower.includes('не раскладной') || mechanismLower.includes('стационарный') || mechanismLower.includes('без механизма')) {
+    return ['нет', 'трансформации: отсутствует', 'механизм трансформации (раскладки) - нет'];
+  }
+  
+  return [mechanism];
+}
+
+// Извлечение требований к нагрузке
+function extractMaxLoad(query) {
+  const queryLower = query.toLowerCase();
+  
+  // Паттерны для нагрузки
+  const patterns = [
+    /максимальная нагрузка\s*(\d+)/g,
+    /нагрузка\s*(\d+)/g,
+    /выдержит\s*(\d+)/g,
+    /большой вес\s*(\d+)/g
+  ];
+  
+  for (const pattern of patterns) {
+    const match = pattern.exec(queryLower);
+    if (match) {
+      return parseInt(match[1]);
+    }
+  }
+  
+  // Специальные фразы
+  if (queryLower.includes('большой вес') || queryLower.includes('тяжелый')) {
+    return 150; // Минимальная нагрузка для "большого веса"
+  }
+  
+  return null;
+}
+
 // Проверка совпадения размеров с допуском
 function checkDimensionMatch(offerDimensions, queryDimensions, tolerance = 10) {
   if (!offerDimensions || offerDimensions.length === 0) return false;
@@ -362,7 +536,14 @@ function filterOffers(catalog, query, filters = {}) {
     );
   }
   
-  // Фильтр по ценовому диапазону
+  // Извлекаем все параметры из запроса
+  const queryDimensions = extractDimensions(query);
+  const priceRange = extractPriceRange(query);
+  const sleepingPlaces = extractSleepingPlace(query);
+  const detectedRoom = detectRoom(query);
+  const maxLoad = extractMaxLoad(query);
+  
+  // Фильтр по ценовому диапазону (из filters)
   if (filters.minPrice !== undefined) {
     filtered = filtered.filter(offer => offer.price >= filters.minPrice);
   }
@@ -370,8 +551,13 @@ function filterOffers(catalog, query, filters = {}) {
     filtered = filtered.filter(offer => offer.price <= filters.maxPrice);
   }
   
-  // Извлекаем размеры из запроса
-  const queryDimensions = extractDimensions(query);
+  // Фильтр по ценовому диапазону (из запроса)
+  if (priceRange.minPrice !== null) {
+    filtered = filtered.filter(offer => offer.price >= priceRange.minPrice);
+  }
+  if (priceRange.maxPrice !== null) {
+    filtered = filtered.filter(offer => offer.price <= priceRange.maxPrice);
+  }
   
   // Улучшенная нормализация запроса
   const queryWords = query.toLowerCase()
@@ -394,7 +580,7 @@ function filterOffers(catalog, query, filters = {}) {
     .split(/[\s,.-]+/)
     .filter(w => w.length > 0);
   
-  if (queryWords.length > 0 || queryDimensions.length > 0) {
+  if (queryWords.length > 0 || queryDimensions.length > 0 || priceRange.minPrice || priceRange.maxPrice || sleepingPlaces.length > 0 || detectedRoom || maxLoad) {
     filtered = filtered.map(offer => {
       let relevanceScore = 0;
       const nameText = (offer.name || '').toLowerCase();
@@ -412,15 +598,138 @@ function filterOffers(catalog, query, filters = {}) {
         });
       }
       
-      // 2. Поиск по размерам
-      if (queryDimensions.length > 0) {
-        const offerDimensions = extractOfferDimensions(offer);
-        if (checkDimensionMatch(offerDimensions, queryDimensions)) {
-          relevanceScore += 5; // Высокий балл за совпадение размеров
+      // 2. Поиск по цвету с синонимами (+8 баллов)
+      if (offer.params && offer.params['Цвет']) {
+        const offerColor = offer.params['Цвет'].toLowerCase();
+        fullQueryWords.forEach(word => {
+          const colorSynonyms = getColorSynonyms(word);
+          if (colorSynonyms.some(synonym => offerColor.includes(synonym.toLowerCase()))) {
+            relevanceScore += 8;
+          }
+        });
+      }
+      
+      // 3. Поиск по механизму с синонимами (+7 баллов)
+      if (offer.params) {
+        const mechanismParams = ['Механизм трансформации', 'Механизм'];
+        mechanismParams.forEach(paramName => {
+          const paramValue = (offer.params[paramName] || '').toLowerCase();
+          fullQueryWords.forEach(word => {
+            const mechanismSynonyms = getMechanismSynonyms(word);
+            if (mechanismSynonyms.some(synonym => paramValue.includes(synonym.toLowerCase()))) {
+              relevanceScore += 7;
+            }
+          });
+        });
+      }
+      
+      // 4. Поиск по спальному месту (+6 баллов)
+      if (sleepingPlaces.length > 0 && offer.params && offer.params['Спальное место, см']) {
+        const sleepingPlaceValue = offer.params['Спальное место, см'];
+        const numbers = sleepingPlaceValue.match(/\d+/g);
+        if (numbers && numbers.length >= 2) {
+          const offerPlace = [parseInt(numbers[0]), parseInt(numbers[1])];
+          sleepingPlaces.forEach(queryPlace => {
+            if (Math.abs(offerPlace[0] - queryPlace[0]) <= 5 && Math.abs(offerPlace[1] - queryPlace[1]) <= 5) {
+              relevanceScore += 6;
+            }
+          });
         }
       }
       
-      // 3. Обычный поиск по ключевым словам
+      // 5. Поиск по конфигурации (+6 баллов)
+      if (offer.params && offer.params['Конфигурация']) {
+        const configValue = offer.params['Конфигурация'].toLowerCase();
+        fullQueryWords.forEach(word => {
+          if (word.includes('угловой') && configValue.includes('угловой')) {
+            relevanceScore += 6;
+          } else if (word.includes('прямой') && configValue.includes('прямой')) {
+            relevanceScore += 6;
+          } else if (word.includes('модульный') && configValue.includes('модуль')) {
+            relevanceScore += 6;
+          }
+        });
+      }
+      
+      // 6. Поиск по функциям (+5 баллов)
+      if (offer.params) {
+        const functionParams = {
+          'ящик': 'Ящик для белья',
+          'подъемный': 'Подъемный механизм',
+          'ортопедическое': 'Ортопедческое основание'
+        };
+        
+        Object.entries(functionParams).forEach(([keyword, paramName]) => {
+          if (fullQueryWords.some(word => word.includes(keyword)) && offer.params[paramName]) {
+            relevanceScore += 5;
+          }
+        });
+      }
+      
+      // 7. Поиск по назначению/комнате (+5 баллов)
+      if (detectedRoom) {
+        const roomCategories = {
+          'гостиная': ['диван', 'стол', 'кресло', 'тумба'],
+          'спальня': ['кровать', 'шкаф', 'комод', 'тумба'],
+          'кухня': ['кухня', 'стол', 'стул'],
+          'детская': ['кровать', 'шкаф', 'стол'],
+          'прихожая': ['прихожая', 'вешалка', 'тумба']
+        };
+        
+        const expectedCategories = roomCategories[detectedRoom] || [];
+        if (expectedCategories.some(cat => offer.category && offer.category.toLowerCase().includes(cat))) {
+          relevanceScore += 5;
+        }
+      }
+      
+      // 8. Поиск по размерам (+5 баллов)
+      if (queryDimensions.length > 0) {
+        const offerDimensions = extractOfferDimensions(offer);
+        if (checkDimensionMatch(offerDimensions, queryDimensions)) {
+          relevanceScore += 5;
+        }
+      }
+      
+      // 9. Поиск со скидкой (+4 балла)
+      if (offer.oldPrice && offer.oldPrice > offer.price) {
+        if (fullQueryWords.some(word => ['скидка', 'акция', 'распродажа', 'уценка'].includes(word))) {
+          relevanceScore += 4;
+        }
+      }
+      
+      // 10. Поиск по материалу каркаса (+4 балла)
+      if (offer.params && offer.params['Материал каркаса']) {
+        const frameMaterial = offer.params['Материал каркаса'].toLowerCase();
+        fullQueryWords.forEach(word => {
+          if (word.includes('дерево') && (frameMaterial.includes('брус') || frameMaterial.includes('фанера') || frameMaterial.includes('массив'))) {
+            relevanceScore += 4;
+          } else if (word.includes('металл') && (frameMaterial.includes('металл') || frameMaterial.includes('сталь'))) {
+            relevanceScore += 4;
+          }
+        });
+      }
+      
+      // 11. Поиск по нагрузке (+4 балла)
+      if (maxLoad && offer.params && offer.params['Максимальная нагрузка']) {
+        const offerLoad = parseInt(offer.params['Максимальная нагрузка']);
+        if (offerLoad >= maxLoad) {
+          relevanceScore += 4;
+        }
+      }
+      
+      // 12. Поиск по жесткости (+4 балла)
+      if (offer.params && offer.params['Уровень жесткости']) {
+        const stiffness = offer.params['Уровень жесткости'].toLowerCase();
+        fullQueryWords.forEach(word => {
+          if (word.includes('жесткий') && stiffness.includes('жесткий')) {
+            relevanceScore += 4;
+          } else if (word.includes('мягкий') && stiffness.includes('мягкий')) {
+            relevanceScore += 4;
+          }
+        });
+      }
+      
+      // 13. Обычный поиск по ключевым словам
       queryWords.forEach(word => {
         // Совпадение в названии = 3 балла
         if (nameText.includes(word)) {
@@ -436,7 +745,7 @@ function filterOffers(catalog, query, filters = {}) {
         }
       });
       
-      // 4. Дополнительный поиск по полным словам (для точных совпадений)
+      // 14. Дополнительный поиск по полным словам (для точных совпадений)
       fullQueryWords.forEach(word => {
         if (word.length > 2) {
           if (nameText.includes(word)) {
@@ -454,14 +763,16 @@ function filterOffers(catalog, query, filters = {}) {
   if (filtered.length === 0 && detectedCategory) {
     console.log('Fallback поиск по всем товарам');
     const allOffers = [...catalog.offers];
-    if (queryWords.length > 0 || queryDimensions.length > 0) {
+    if (queryWords.length > 0 || queryDimensions.length > 0 || priceRange.minPrice || priceRange.maxPrice || sleepingPlaces.length > 0 || detectedRoom || maxLoad) {
       filtered = allOffers.map(offer => {
         let relevanceScore = 0;
         const nameText = (offer.name || '').toLowerCase();
         const descText = (offer.description || '').toLowerCase();
         const paramsText = JSON.stringify(offer.params || {}).toLowerCase();
         
-        // Применяем ту же логику поиска что и выше
+        // Применяем ту же расширенную логику поиска что и выше
+        // (копируем всю логику из основного поиска)
+        
         // 1. Точное совпадение тканей/материалов
         if (offer.params) {
           const fabricParams = ['Ткань', 'Обивка', 'Материал'];
@@ -473,7 +784,91 @@ function filterOffers(catalog, query, filters = {}) {
           });
         }
         
-        // 2. Поиск по размерам
+        // 2. Поиск по цвету с синонимами
+        if (offer.params && offer.params['Цвет']) {
+          const offerColor = offer.params['Цвет'].toLowerCase();
+          fullQueryWords.forEach(word => {
+            const colorSynonyms = getColorSynonyms(word);
+            if (colorSynonyms.some(synonym => offerColor.includes(synonym.toLowerCase()))) {
+              relevanceScore += 8;
+            }
+          });
+        }
+        
+        // 3. Поиск по механизму с синонимами
+        if (offer.params) {
+          const mechanismParams = ['Механизм трансформации', 'Механизм'];
+          mechanismParams.forEach(paramName => {
+            const paramValue = (offer.params[paramName] || '').toLowerCase();
+            fullQueryWords.forEach(word => {
+              const mechanismSynonyms = getMechanismSynonyms(word);
+              if (mechanismSynonyms.some(synonym => paramValue.includes(synonym.toLowerCase()))) {
+                relevanceScore += 7;
+              }
+            });
+          });
+        }
+        
+        // 4. Поиск по спальному месту
+        if (sleepingPlaces.length > 0 && offer.params && offer.params['Спальное место, см']) {
+          const sleepingPlaceValue = offer.params['Спальное место, см'];
+          const numbers = sleepingPlaceValue.match(/\d+/g);
+          if (numbers && numbers.length >= 2) {
+            const offerPlace = [parseInt(numbers[0]), parseInt(numbers[1])];
+            sleepingPlaces.forEach(queryPlace => {
+              if (Math.abs(offerPlace[0] - queryPlace[0]) <= 5 && Math.abs(offerPlace[1] - queryPlace[1]) <= 5) {
+                relevanceScore += 6;
+              }
+            });
+          }
+        }
+        
+        // 5. Поиск по конфигурации
+        if (offer.params && offer.params['Конфигурация']) {
+          const configValue = offer.params['Конфигурация'].toLowerCase();
+          fullQueryWords.forEach(word => {
+            if (word.includes('угловой') && configValue.includes('угловой')) {
+              relevanceScore += 6;
+            } else if (word.includes('прямой') && configValue.includes('прямой')) {
+              relevanceScore += 6;
+            } else if (word.includes('модульный') && configValue.includes('модуль')) {
+              relevanceScore += 6;
+            }
+          });
+        }
+        
+        // 6. Поиск по функциям
+        if (offer.params) {
+          const functionParams = {
+            'ящик': 'Ящик для белья',
+            'подъемный': 'Подъемный механизм',
+            'ортопедическое': 'Ортопедческое основание'
+          };
+          
+          Object.entries(functionParams).forEach(([keyword, paramName]) => {
+            if (fullQueryWords.some(word => word.includes(keyword)) && offer.params[paramName]) {
+              relevanceScore += 5;
+            }
+          });
+        }
+        
+        // 7. Поиск по назначению/комнате
+        if (detectedRoom) {
+          const roomCategories = {
+            'гостиная': ['диван', 'стол', 'кресло', 'тумба'],
+            'спальня': ['кровать', 'шкаф', 'комод', 'тумба'],
+            'кухня': ['кухня', 'стол', 'стул'],
+            'детская': ['кровать', 'шкаф', 'стол'],
+            'прихожая': ['прихожая', 'вешалка', 'тумба']
+          };
+          
+          const expectedCategories = roomCategories[detectedRoom] || [];
+          if (expectedCategories.some(cat => offer.category && offer.category.toLowerCase().includes(cat))) {
+            relevanceScore += 5;
+          }
+        }
+        
+        // 8. Поиск по размерам
         if (queryDimensions.length > 0) {
           const offerDimensions = extractOfferDimensions(offer);
           if (checkDimensionMatch(offerDimensions, queryDimensions)) {
@@ -481,14 +876,53 @@ function filterOffers(catalog, query, filters = {}) {
           }
         }
         
-        // 3. Обычный поиск по ключевым словам
+        // 9. Поиск со скидкой
+        if (offer.oldPrice && offer.oldPrice > offer.price) {
+          if (fullQueryWords.some(word => ['скидка', 'акция', 'распродажа', 'уценка'].includes(word))) {
+            relevanceScore += 4;
+          }
+        }
+        
+        // 10. Поиск по материалу каркаса
+        if (offer.params && offer.params['Материал каркаса']) {
+          const frameMaterial = offer.params['Материал каркаса'].toLowerCase();
+          fullQueryWords.forEach(word => {
+            if (word.includes('дерево') && (frameMaterial.includes('брус') || frameMaterial.includes('фанера') || frameMaterial.includes('массив'))) {
+              relevanceScore += 4;
+            } else if (word.includes('металл') && (frameMaterial.includes('металл') || frameMaterial.includes('сталь'))) {
+              relevanceScore += 4;
+            }
+          });
+        }
+        
+        // 11. Поиск по нагрузке
+        if (maxLoad && offer.params && offer.params['Максимальная нагрузка']) {
+          const offerLoad = parseInt(offer.params['Максимальная нагрузка']);
+          if (offerLoad >= maxLoad) {
+            relevanceScore += 4;
+          }
+        }
+        
+        // 12. Поиск по жесткости
+        if (offer.params && offer.params['Уровень жесткости']) {
+          const stiffness = offer.params['Уровень жесткости'].toLowerCase();
+          fullQueryWords.forEach(word => {
+            if (word.includes('жесткий') && stiffness.includes('жесткий')) {
+              relevanceScore += 4;
+            } else if (word.includes('мягкий') && stiffness.includes('мягкий')) {
+              relevanceScore += 4;
+            }
+          });
+        }
+        
+        // 13. Обычный поиск по ключевым словам
         queryWords.forEach(word => {
           if (nameText.includes(word)) relevanceScore += 3;
           if (paramsText.includes(word)) relevanceScore += 2;
           if (descText.includes(word)) relevanceScore += 1;
         });
         
-        // 4. Дополнительный поиск по полным словам
+        // 14. Дополнительный поиск по полным словам
         fullQueryWords.forEach(word => {
           if (word.length > 2 && nameText.includes(word)) {
             relevanceScore += 1;
