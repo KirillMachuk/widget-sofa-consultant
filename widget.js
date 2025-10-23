@@ -937,6 +937,7 @@
         if (buttonData.text === 'Здесь в чате') {
           addMsg('bot', 'Отлично! Задавайте любые вопросы, постараюсь помочь!');
         } else if (buttonData.text === 'Звонок дизайнера') {
+          bypassFormPause = true; // Обходим паузу для кнопок
           addMsg('bot', 'Отлично! Дизайнер перезвонит и проконсультирует по всем вопросам. Оставьте ваши контакты:');
           setTimeout(() => {
             renderConsultationForm();
@@ -1009,6 +1010,7 @@
         
         if (buttonData.text === 'Хочу подарок') {
           // Для кнопки "Хочу подарок" сразу показываем форму
+          bypassFormPause = true; // Обходим паузу для кнопок
           renderForm('Выберите подарок и оставьте контакты!', [
             { type: 'offer' },
             { id: 'name', placeholder: 'Имя', required: true },
@@ -1016,6 +1018,7 @@
           ], 'Получить подарок');
         } else if (buttonData.text === 'Записаться в шоурум') {
           // Для записи в шоурум - сообщение + форма
+          bypassFormPause = true; // Обходим паузу для кнопок
           addMsg('bot', 'Подскажите пожалуйста в каком городе находитесь и ваш номер телефона, передам дизайнеру в шоу-руме и он с вами свяжется');
           setTimeout(() => {
             renderShowroomForm();
@@ -1085,6 +1088,7 @@
   let widgetOpenedInSession = false; // Флаг для отслеживания первого открытия виджета в сессии
   let lastFormShownAt = 0; // Время последнего показа формы
   let userMessagesAfterLastForm = 0; // Количество сообщений пользователя после последней формы
+  let bypassFormPause = false; // Флаг обхода паузы для форм от кнопок быстрых действий
 
   // Функция для локальной обработки сообщений без API
   function generateLocalReply(userMessage, prompt, catalog) {
@@ -1571,7 +1575,7 @@
       const lastBotMessage = loadHistory().filter(m => m.role === 'assistant').slice(-1)[0];
       if (lastBotMessage && shouldShowForm(lastBotMessage.content)) {
         // Проверяем паузу между показами форм (минимум 3 реплики клиента)
-        if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+        if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
           // Пауза не прошла - не показываем форму
           return;
         }
@@ -1670,8 +1674,8 @@
           addMsg('bot', response.formMessage);
           
           // Проверяем паузу между показами форм (минимум 3 реплики клиента)
-          console.log('Form pause check:', { lastFormShownAt, userMessagesAfterLastForm });
-          if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+          console.log('Form pause check:', { lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
+          if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
             // Пауза не прошла - не показываем форму, только сообщение бота
             console.log('Form paused - not showing form');
             return;
@@ -1696,7 +1700,7 @@
           // Показываем форму с подарком при ошибке AI (только если она еще не была показана)
           if (!fallbackFormShown) {
             // Проверяем паузу между показами форм (минимум 3 реплики клиента)
-            if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+            if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
               // Пауза не прошла - не показываем форму
               return;
             }
@@ -1757,8 +1761,8 @@
     }
     
     // Проверяем паузу между показами форм (минимум 3 реплики клиента)
-    console.log('maybeOfferPhoneFlow pause check:', { lastFormShownAt, userMessagesAfterLastForm });
-    if (lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+    console.log('maybeOfferPhoneFlow pause check:', { lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
+    if (!bypassFormPause && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
       console.log('maybeOfferPhoneFlow paused - not showing form');
       return; // Не показываем форму слишком часто
     }
@@ -1803,12 +1807,13 @@
   }
 
   function renderForm(title, fields, submitText, pretext) {
-    console.log('renderForm called:', { title, lastFormShownAt, userMessagesAfterLastForm });
+    console.log('renderForm called:', { title, lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
     
     // Обновляем состояние отслеживания показа формы
     lastFormShownAt = Date.now();
     userMessagesAfterLastForm = 0;
-    console.log('Form shown - reset counters:', { lastFormShownAt, userMessagesAfterLastForm });
+    bypassFormPause = false; // Сбрасываем флаг обхода паузы после показа формы
+    console.log('Form shown - reset counters:', { lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
     
     const wrap = document.createElement('div'); 
     wrap.className='vfw-msg bot';
