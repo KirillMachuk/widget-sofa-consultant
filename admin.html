@@ -565,7 +565,7 @@
             const password = document.getElementById('password').value;
             
             try {
-                const response = await fetch('/api/admin-auth', {
+                const response = await fetch('./api/admin-auth', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -602,7 +602,7 @@
             if (search) params.append('search', search);
             
             try {
-                const response = await fetch(`/api/admin-chats?${params}`);
+                const response = await fetch(`./api/admin-chats?${params}`);
                 const data = await response.json();
                 
                 if (data.success) {
@@ -654,7 +654,7 @@
             event.currentTarget.classList.add('active');
             
             try {
-                const response = await fetch(`/api/admin-session/${sessionId}`);
+                const response = await fetch(`./api/admin-session/${sessionId}`);
                 const data = await response.json();
                 
                 if (data.success) {
