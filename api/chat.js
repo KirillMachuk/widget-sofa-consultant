@@ -73,7 +73,7 @@ async function handler(req, res){
       console.log('Инициализация сессии:', session_id);
       sessionCache.set(session_id, { prompt, catalog, locale: locale || 'ru' });
       
-      // Временно отключаем сохранение при инициализации
+      // Временно отключаем сохранение при инициализации - ИСПРАВЛЕНО
       console.log('Сессия инициализирована, сохранение отключено');
       
       return res.status(200).json({ status: 'initialized' });
