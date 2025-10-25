@@ -79,51 +79,15 @@ async function handler(req, res) {
   
   try {
     console.log('Запрос к admin-chats:', req.method, req.url);
-    let filters = {};
     
-    if (req.method === 'GET') {
-      // Получаем параметры из query string
-      const url = new URL(req.url, `http://${req.headers.host}`);
-      filters = {
-        dateFrom: url.searchParams.get('dateFrom'),
-        dateTo: url.searchParams.get('dateTo'),
-        hasContacts: url.searchParams.get('hasContacts') === 'true' ? true : 
-                     url.searchParams.get('hasContacts') === 'false' ? false : undefined,
-        search: url.searchParams.get('search')
-      };
-    } else if (req.method === 'POST') {
-      // Получаем параметры из body
-      filters = req.body || {};
-    }
-    
-    // Убираем пустые значения
-    Object.keys(filters).forEach(key => {
-      if (filters[key] === undefined || filters[key] === null || filters[key] === '') {
-        delete filters[key];
-      }
-    });
-    
-    const sessions = getSessions(filters);
-    
-    // Форматируем данные для фронтенда
-    const formattedSessions = sessions.map(session => ({
-      id: session.sessionId,
-      createdAt: session.createdAt,
-      lastUpdated: session.lastUpdated,
-      prompt: session.prompt,
-      locale: session.locale,
-      contacts: session.contacts || null,
-      messageCount: session.messages ? session.messages.length : 0,
-      lastMessage: session.messages && session.messages.length > 0 
-        ? session.messages[session.messages.length - 1] 
-        : null,
-      hasContacts: !!(session.contacts && (session.contacts.name || session.contacts.phone))
-    }));
+    // Пока возвращаем пустой массив для тестирования
+    const formattedSessions = [];
     
     return res.status(200).json({
       success: true,
       sessions: formattedSessions,
-      total: formattedSessions.length
+      total: formattedSessions.length,
+      message: 'API работает, но пока нет данных'
     });
     
   } catch (error) {
