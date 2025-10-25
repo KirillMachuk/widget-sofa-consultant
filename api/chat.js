@@ -291,19 +291,24 @@ async function handler(req, res){
       
       // Сохраняем диалог в файл
       try {
+        console.log('Сохраняем диалог для сессии:', session_id);
+        
         // Сохраняем сообщение пользователя
-        addMessage(session_id, {
+        const userSaved = addMessage(session_id, {
           role: 'user',
           content: user_message
         });
+        console.log('Сообщение пользователя сохранено:', userSaved);
         
         // Сохраняем ответ бота
-        addMessage(session_id, {
+        const botSaved = addMessage(session_id, {
           role: 'assistant',
           content: reply,
           formMessage: formMessage,
           needsForm: shouldGenerateFormMessage
         });
+        console.log('Ответ бота сохранен:', botSaved);
+        
       } catch (error) {
         console.error('Ошибка сохранения диалога:', error);
       }

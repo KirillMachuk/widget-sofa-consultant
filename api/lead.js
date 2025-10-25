@@ -83,7 +83,7 @@ async function handler(req, res){
         return res.status(502).json({ error: 'GAS upstream error', status: r.status, body: text.slice(0, 500) });
       }
       
-      // Сохраняем контактные данные к сессии
+      // Сохраняем контактные данные к сессии ПОСЛЕ успешного ответа от GAS
       if (session_id) {
         try {
           updateSessionContacts(session_id, {
@@ -93,6 +93,7 @@ async function handler(req, res){
             page_url: page_url || '',
             timestamp: timestamp || new Date().toISOString()
           });
+          console.log('Контакты сохранены для сессии:', session_id);
         } catch (error) {
           console.error('Ошибка сохранения контактов:', error);
         }
