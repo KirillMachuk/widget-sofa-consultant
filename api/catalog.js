@@ -1,8 +1,12 @@
 // Модуль для работы с YML каталогом клиента
-// Загружает каталог с внешнего URL, парсит XML, кеширует в Vercel KV и фильтрует товары
+// Загружает каталог с внешнего URL, парсит XML, кеширует в Upstash Redis и фильтрует товары
 
-// Импорт Vercel KV
-const { kv } = require('@vercel/kv');
+// Импорт Upstash Redis
+const { Redis } = require('@upstash/redis');
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
 
 const CATALOG_URL = 'https://nm-shop.by/index.php?route=extension/feed/yandex_yml_cht';
 const CATALOG_CACHE_KEY = 'catalog:main';
@@ -13,12 +17,12 @@ const FETCH_TIMEOUT_MS = 8000; // 8 секунд - успеем до лимит�
 // Получение каталога из KV или загрузка нового
 async function getCatalog() {
   try {
-    // 1. Пробуем загрузить из KV
-    const cached = await kv.get(CATALOG_CACHE_KEY);
-    const metadata = await kv.get(CATALOG_METADATA_KEY);
+    // 1. Пробуем загрузить из Redis
+    const cached = await redis.get(CATALOG_CACHE_KEY);
+    const metadata = await redis.get(CATALOG_METADATA_KEY);
     
     if (cached && metadata) {
-      console.log('✅ Каталог загружен из KV:', {
+      console.log('✅ Каталог загружен из Redis:', {
         totalOffers: cached.totalCount,
         lastUpdate: metadata.lastUpdate,
         age: Date.now() - metadata.timestamp
@@ -26,32 +30,32 @@ async function getCatalog() {
       return cached;
     }
     
-    // 2. Если нет в KV - загружаем с сайта
-    console.log('⚠️ Каталог не найден в KV, загружаем с сайта...');
+    // 2. Если нет в Redis - загружаем с сайта
+    console.log('⚠️ Каталог не найден в Redis, загружаем с сайта...');
     const freshCatalog = await fetchCatalog();
     
-    // 3. Сохраняем в KV на 24 часа
-    await kv.set(CATALOG_CACHE_KEY, freshCatalog, { ex: CACHE_DURATION_SECONDS });
-    await kv.set(CATALOG_METADATA_KEY, {
+    // 3. Сохраняем в Redis на 24 часа
+    await redis.setex(CATALOG_CACHE_KEY, CACHE_DURATION_SECONDS, freshCatalog);
+    await redis.setex(CATALOG_METADATA_KEY, CACHE_DURATION_SECONDS, {
       lastUpdate: freshCatalog.timestamp,
       timestamp: Date.now()
-    }, { ex: CACHE_DURATION_SECONDS });
+    });
     
-    console.log('✅ Каталог загружен с сайта и сохранен в KV');
+    console.log('✅ Каталог загружен с сайта и сохранен в Redis');
     return freshCatalog;
     
   } catch (error) {
     console.error('❌ Ошибка работы с каталогом:', error);
     
-    // Fallback: пробуем загрузить хоть старый каталог из KV (игнорируя срок)
+    // Fallback: пробуем загрузить хоть старый каталог из Redis (игнорируя срок)
     try {
-      const oldCached = await kv.get(CATALOG_CACHE_KEY);
+      const oldCached = await redis.get(CATALOG_CACHE_KEY);
       if (oldCached) {
-        console.log('⚠️ Используем устаревший каталог из KV');
+        console.log('⚠️ Используем устаревший каталог из Redis');
         return oldCached;
       }
-    } catch (kvError) {
-      console.error('❌ KV также недоступен');
+    } catch (redisError) {
+      console.error('❌ Redis также недоступен');
     }
     
     // Если совсем ничего не работает - возвращаем пустой каталог
@@ -1085,7 +1089,7 @@ async function handler(req, res) {
     if (action === 'stats') {
       // Статистика каталога
       const catalog = await getCatalog();
-      const metadata = await kv.get(CATALOG_METADATA_KEY);
+      const metadata = await redis.get(CATALOG_METADATA_KEY);
       
       return res.status(200).json({
         success: true,

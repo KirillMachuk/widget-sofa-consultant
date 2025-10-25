@@ -14,8 +14,8 @@
   },
   "homepage": "https://ваш-username.github.io/ваш-репозиторий",
   "dependencies": {
+    "@upstash/redis": "^1.35.6",
     "@vercel/kv": "^1.0.1",
-    "@upstash/redis": "^1.25.1",
     "crypto-js": "^4.2.0"
   },
   "devDependencies": {
