@@ -84,13 +84,21 @@ async function handler(req, res){
         
         await catalogHandler(catalogReq, catalogRes);
         
-        if (catalogData && catalogData.success && catalogData.formattedForGPT && catalogData.totalFound > 0) {
-          relevantProducts = catalogData.formattedForGPT;
-          catalogAvailable = true;
-          console.log('✅ Найдено товаров:', catalogData.totalFound);
+        if (catalogData && catalogData.success) {
+          if (catalogData.totalFound > 0 && catalogData.formattedForGPT) {
+            relevantProducts = catalogData.formattedForGPT;
+            catalogAvailable = true;
+            console.log('✅ Найдено товаров:', catalogData.totalFound);
+          } else {
+            // Товары не найдены по критериям - продолжаем работу
+            console.log('⚠️ Товары не найдены по критериям, каталог работает');
+            relevantProducts = 'ТОВАРЫ_НЕ_НАЙДЕНЫ';
+            catalogAvailable = true; // Каталог работает, просто нет совпадений
+          }
         } else {
-          console.log('❌ Каталог пустой или недоступен');
-          relevantProducts = 'КАТАЛОГ_ПУСТОЙ';
+          console.log('❌ Каталог недоступен или ошибка загрузки');
+          relevantProducts = 'КАТАЛОГ_НЕДОСТУПЕН';
+          catalogAvailable = false;
         }
       } catch (error) {
         console.error('❌ Ошибка получения каталога:', error);
@@ -318,8 +326,10 @@ function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = fa
     `Цель: ${prompt.goal}`,
     `Инструкции: ${prompt.main_instructions.join(' ')}`,
     `О компании: ${prompt.about_company?.description||''}`,
+    `Достижения компании: ${prompt.about_company?.achievements ? Object.values(prompt.about_company.achievements).join(', ') : ''}`,
+    `Салоны: ${prompt.about_company?.showrooms ? 'Информация о салонах доступна по городам (Минск, Витебск, Новополоцк, Бобруйск)' : ''}`,
     `Офферы: ${prompt.offers?.main_discount||''}; альтернативы: ${(prompt.offers?.alternative_offers||[]).join('; ')}`,
-    `FAQ: доставка/сроки/сборка/гарантия/оплата/шоурум`,
+    `Доставка и оплата: Детальная информация о стоимости доставки по типам товаров и регионам, специальные условия, возврат/замена, рассрочка, кастомизация`,
     `Стиль: ${prompt.templates_and_style||''}`
   ].join('\n') : 'Ты консультант. Отвечай кратко.';
   
@@ -337,13 +347,23 @@ function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = fa
   // Add aggressive catalog usage instructions
   about += '\n\nВАЖНО ПРИ РАБОТЕ С КАТАЛОГОМ:\n- Из каталога показаны только релевантные товары - выбери 2-3 лучших\n- ВСЕГДА предлагай конкретные товары с названием, ценой и ссылкой\n- Если товаров мало - предложи все что есть\n- Если товаров 0 - предложи консультацию дизайнера для индивидуального подбора\n- При поиске товаров используй каталог агрессивно - ищи похожие категории, синонимы, смежные товары\n- КРИТИЧЕСКИ ВАЖНО: Если в каталоге 0 результатов - это ошибка поиска, попробуй другие термины или предложи дизайнера';
   
+  // Add delivery and payment instructions
+  about += '\n\nРАБОТА С ДОСТАВКОЙ И ОПЛАТОЙ:\n- При вопросах о доставке используй таблицы стоимости по типам товаров и регионам\n- Учитывай тип товара (диван, кресло, шкаф и т.д.) и локацию клиента (в пределах/за пределами 2й МКАД)\n- При заказе от 2700 BYN - бесплатная доставка\n- Для подвесного кресла "Кокон" используй отдельную таблицу по городам\n- При запросах о возврате/замене отправляй ссылку: https://nm-shop.by/zamena-i-vozvrat-tovara/\n- При вопросах о рассрочке показывай форму обратной связи с текстом "Консультация по рассрочке"\n- При вопросах о кастомизации мебели показывай форму с текстом "Согласование размеров и конструкции"\n- Если информации нет в справочнике - эскалируй на менеджера';
+  
+  // Add showrooms instructions
+  about += '\n\nРАБОТА С САЛОНАМИ:\n- При вопросах о салонах в конкретном городе предоставляй точную информацию: адрес, телефон, время работы\n- Доступны салоны в Минске (2 салона), Витебске, Новополоцке, Бобруйске\n- При вопросах "где посмотреть мебель в [город]" - давай адрес и контакты ближайшего салона';
+  
   let fence = '';
-  if (relevantProducts === 'КАТАЛОГ_ПУСТОЙ') {
-    fence = 'КАТАЛОГ ПУСТОЙ: В каталоге нет подходящих товаров. НЕ ПРИДУМЫВАЙ товары! Скажи что сейчас нет в наличии и предложи консультацию дизайнера.';
-  } else if (relevantProducts === 'КАТАЛОГ_ОШИБКА') {
-    fence = 'КАТАЛОГ НЕДОСТУПЕН: Каталог временно недоступен. НЕ ПРИДУМЫВАЙ товары! Предложи консультацию дизайнера для подбора.';
+  if (relevantProducts === 'ТОВАРЫ_НЕ_НАЙДЕНЫ') {
+    fence = 'ПО КРИТЕРИЯМ НЕ НАЙДЕНО: В каталоге есть товары, но не по этим критериям. Предложи:
+1. Расширить бюджет или изменить критерии
+2. Показать похожие варианты
+3. Консультацию дизайнера
+НЕ ГОВОРИ "в каталоге нет товаров" - они есть, просто не подходят по критериям!';
+  } else if (relevantProducts === 'КАТАЛОГ_НЕДОСТУПЕН' || relevantProducts === 'КАТАЛОГ_ОШИБКА') {
+    fence = 'КАТАЛОГ НЕДОСТУПЕН: Технические проблемы. Предложи консультацию дизайнера.';
   } else if (relevantProducts) {
-    fence = `Релевантные товары из каталога:\n${relevantProducts}\n`;
+    fence = `Товары из каталога:\n${relevantProducts}`;
   }
   
   return [

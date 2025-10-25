@@ -13,6 +13,9 @@
     "predeploy": "npm run build"
   },
   "homepage": "https://ваш-username.github.io/ваш-репозиторий",
+  "dependencies": {
+    "@vercel/kv": "^1.0.0"
+  },
   "devDependencies": {
     "gh-pages": "^6.0.0"
   },

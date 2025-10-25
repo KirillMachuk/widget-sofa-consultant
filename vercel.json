@@ -1,9 +1,20 @@
 {
-  "outputDirectory": ".",
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api/$1"
+  "functions": {
+    "api/chat.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    },
+    "api/catalog.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    },
+    "api/update-catalog.js": {
+      "memory": 512,
+      "maxDuration": 10
+    },
+    "api/lead.js": {
+      "memory": 512,
+      "maxDuration": 10
     }
-  ]
+  }
 }

@@ -8,7 +8,7 @@
   window.VFW_LOADED = true;
   
   const CONFIG = {
-    openaiEndpoint: './api/chat',
+    openaiEndpoint: '/api/chat',
     gasEndpoint: 'https://script.google.com/macros/s/AKfycbyJg7_2DnyoROYCl_TrH4G7jzHTUD8MJnVy7Suf62o4m7zOA9nzPqKSP_pmUKXFaV3T7w/exec',
     promptUrl: './Промпт.json',
     catalogUrl: './Каталог.json',
@@ -1745,7 +1745,9 @@
     /(оставите телефон|оставить телефон|дайте телефон|дайте номер)/i,
     /(спецпредложение|специальное предложение)/i,
     /(закреплю|закреплю за вами)/i,
-    /(10%|скидка|специальная)/i
+    /(10%|скидка|специальная)/i,
+    /(рассрочк|рассрочку|рассрочка|рассрочки)/i,
+    /(размер|размеры|конструкц|кастомизац|измен|под заказ)/i
   ];
   
   // Прямые просьбы заполнить форму (обход паузы)
@@ -1809,21 +1811,39 @@
     const forceFormWords = ['закреплю', 'спецпредложение', 'скидка', '10%', 'специальная', 'подарок', 'выберите', 'выбор', 'диван', 'цена', 'стоимость', 'подходит', 'нравится', 'интересно'];
     const hasForceWords = forceFormWords.some(word => botReply.toLowerCase().includes(word));
     
+    // Проверяем специальные триггеры
+    const installmentKeywords = ['рассрочк', 'рассрочку', 'рассрочка', 'рассрочки'];
+    const customizationKeywords = ['размер', 'размеры', 'конструкц', 'кастомизац', 'измен', 'под заказ'];
+    
+    const hasInstallmentRequest = installmentKeywords.some(keyword => botReply.toLowerCase().includes(keyword));
+    const hasCustomizationRequest = customizationKeywords.some(keyword => botReply.toLowerCase().includes(keyword));
+    
     if (isDirectRequest || matchedTriggers.length > 0 || hasForceWords){
       
-      // Всегда показываем форму с выбором подарка
-      const pretexts = [
-        'Закрепить подарок и оставить данные?',
-        'Выберите подарок и оставьте контакты?',
-        'Записать данные для получения подарка?',
-        'Сохранить контакты для акции?'
-      ];
-      const randomPretext = pretexts[Math.floor(Math.random() * pretexts.length)];
-      renderForm(randomPretext, [
-        { type: 'offer' },
-        { id: 'name', placeholder: 'Имя', required: true },
-        { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-      ], 'Получить подарок');
+      if (hasInstallmentRequest) {
+        // Показываем форму для рассрочки
+        renderConsultationForm();
+      } else if (hasCustomizationRequest) {
+        // Показываем форму для кастомизации
+        renderForm('Согласование размеров и конструкции', [
+          { id: 'name', placeholder: 'Имя', required: true },
+          { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
+        ], 'Получить консультацию', 'Согласование размеров и конструкции');
+      } else {
+        // Обычная форма с подарками
+        const pretexts = [
+          'Закрепить подарок и оставить данные?',
+          'Выберите подарок и оставьте контакты?',
+          'Записать данные для получения подарка?',
+          'Сохранить контакты для акции?'
+        ];
+        const randomPretext = pretexts[Math.floor(Math.random() * pretexts.length)];
+        renderForm(randomPretext, [
+          { type: 'offer' },
+          { id: 'name', placeholder: 'Имя', required: true },
+          { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
+        ], 'Получить подарок');
+      }
       
     }
   }
@@ -1957,13 +1977,13 @@
 
   function renderConsultationForm(){
     renderForm(
-      'Консультация дизайнера',
+      'Консультация по рассрочке',
       [
         { id: 'name', placeholder: 'Имя', required: true },
         { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
       ],
       'Получить консультацию',
-      'Консультация дизайнера - запрос на звонок'
+      'Консультация по рассрочке'
     );
   }
 

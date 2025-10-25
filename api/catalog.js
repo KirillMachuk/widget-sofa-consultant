@@ -1,50 +1,77 @@
 // Модуль для работы с YML каталогом клиента
-// Загружает каталог с внешнего URL, парсит XML, кеширует в памяти и фильтрует товары
+// Загружает каталог с внешнего URL, парсит XML, кеширует в Vercel KV и фильтрует товары
 
-// Кеш каталога в памяти
-let catalogCache = null;
-let lastFetchTime = null;
-let lastUpdateHour = null;
+// Импорт Vercel KV
+const { kv } = require('@vercel/kv');
 
 const CATALOG_URL = 'https://nm-shop.by/index.php?route=extension/feed/yandex_yml_cht';
-const CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 часа
-const MOSCOW_TIMEZONE = 'Europe/Moscow';
-const UPDATE_HOUR = 18; // Обновление после 18:00 МСК
+const CATALOG_CACHE_KEY = 'catalog:main';
+const CATALOG_METADATA_KEY = 'catalog:metadata';
+const CACHE_DURATION_SECONDS = 24 * 60 * 60; // 24 часа
+const FETCH_TIMEOUT_MS = 8000; // 8 секунд - успеем до лимита Vercel
 
-// Получение текущего времени по Москве
-function getMoscowTime() {
-  return new Date(new Date().toLocaleString('en-US', { timeZone: MOSCOW_TIMEZONE }));
-}
-
-// Проверка, нужно ли обновить кеш
-function shouldUpdateCache() {
-  if (!catalogCache || !lastFetchTime) return true;
-  
-  const now = Date.now();
-  const timeSinceLastFetch = now - lastFetchTime;
-  
-  // Если прошло больше 24 часов
-  if (timeSinceLastFetch > CACHE_DURATION_MS) return true;
-  
-  // Проверяем, прошло ли 18:00 МСК с последнего обновления
-  const moscowTime = getMoscowTime();
-  const currentHour = moscowTime.getHours();
-  
-  // Если сейчас >= 18:00 и последнее обновление было до 18:00
-  if (currentHour >= UPDATE_HOUR && (!lastUpdateHour || lastUpdateHour < UPDATE_HOUR)) {
-    return true;
-  }
-  
-  return false;
-}
-
-// Загрузка и парсинг YML каталога
-async function fetchCatalog() {
+// Получение каталога из KV или загрузка нового
+async function getCatalog() {
   try {
-    console.log('Загружаем каталог с', CATALOG_URL);
+    // 1. Пробуем загрузить из KV
+    const cached = await kv.get(CATALOG_CACHE_KEY);
+    const metadata = await kv.get(CATALOG_METADATA_KEY);
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 секунд таймаут
+    if (cached && metadata) {
+      console.log('✅ Каталог загружен из KV:', {
+        totalOffers: cached.totalCount,
+        lastUpdate: metadata.lastUpdate,
+        age: Date.now() - metadata.timestamp
+      });
+      return cached;
+    }
+    
+    // 2. Если нет в KV - загружаем с сайта
+    console.log('⚠️ Каталог не найден в KV, загружаем с сайта...');
+    const freshCatalog = await fetchCatalog();
+    
+    // 3. Сохраняем в KV на 24 часа
+    await kv.set(CATALOG_CACHE_KEY, freshCatalog, { ex: CACHE_DURATION_SECONDS });
+    await kv.set(CATALOG_METADATA_KEY, {
+      lastUpdate: freshCatalog.timestamp,
+      timestamp: Date.now()
+    }, { ex: CACHE_DURATION_SECONDS });
+    
+    console.log('✅ Каталог загружен с сайта и сохранен в KV');
+    return freshCatalog;
+    
+  } catch (error) {
+    console.error('❌ Ошибка работы с каталогом:', error);
+    
+    // Fallback: пробуем загрузить хоть старый каталог из KV (игнорируя срок)
+    try {
+      const oldCached = await kv.get(CATALOG_CACHE_KEY);
+      if (oldCached) {
+        console.log('⚠️ Используем устаревший каталог из KV');
+        return oldCached;
+      }
+    } catch (kvError) {
+      console.error('❌ KV также недоступен');
+    }
+    
+    // Если совсем ничего не работает - возвращаем пустой каталог
+    return {
+      offers: [],
+      categories: {},
+      totalCount: 0,
+      timestamp: new Date().toISOString(),
+      error: 'Catalog unavailable'
+    };
+  }
+}
+
+// Загрузка каталога с сайта (уменьшенный таймаут)
+async function fetchCatalog() {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS); // 8 секунд
+  
+  try {
+    console.log('📥 Загружаем каталог с', CATALOG_URL);
     
     const response = await fetch(CATALOG_URL, {
       signal: controller.signal,
@@ -232,21 +259,7 @@ function parseYMLNode(xmlText) {
   };
 }
 
-// Получение каталога (с кешированием)
-async function getCatalog() {
-  if (shouldUpdateCache()) {
-    console.log('Обновляем кеш каталога...');
-    catalogCache = await fetchCatalog();
-    lastFetchTime = Date.now();
-    
-    const moscowTime = getMoscowTime();
-    lastUpdateHour = moscowTime.getHours();
-  } else {
-    console.log('Используем кешированный каталог');
-  }
-  
-  return catalogCache;
-}
+// Старая функция удалена - теперь используется новая getCatalog() с KV
 
 // Определение категории из текста запроса
 function detectCategory(query) {
@@ -304,6 +317,10 @@ function extractPriceRange(query) {
   const queryLower = query.toLowerCase();
   const priceRange = { minPrice: null, maxPrice: null };
   
+  // НОВОЕ: Проверяем валюту - если написано "руб" без "BYN", предполагаем BYN
+  const hasBYN = /byn|белорусск|бел\.руб/i.test(queryLower);
+  const hasRUB = /руб|рубл/i.test(queryLower);
+  
   // Паттерны для цен
   const patterns = [
     // "до 1000", "до 1000 рублей", "дешевле 1000"
@@ -348,6 +365,13 @@ function extractPriceRange(query) {
   }
   if (queryLower.includes('дорогой') || queryLower.includes('премиум') || queryLower.includes('элитный')) {
     priceRange.minPrice = 3000;
+  }
+  
+  // НОВОЕ: Если цена очень низкая и написано "руб", предполагаем что это BYN
+  if (hasRUB && !hasBYN) {
+    // Пользователь написал "руб" без уточнения - это скорее всего BYN
+    // Не делаем ничего - цены уже правильные
+    console.log('💰 Обнаружена цена в рублях, предполагаем BYN');
   }
   
   return priceRange;
@@ -757,6 +781,16 @@ function filterOffers(catalog, query, filters = {}) {
       return { ...offer, relevanceScore };
     }).filter(offer => offer.relevanceScore > 0)
       .sort((a, b) => b.relevanceScore - a.relevanceScore);
+  }
+  
+  // Fallback: если ничего не найдено с фильтрами - ищем без цены
+  if (filtered.length === 0 && detectedCategory && (priceRange.minPrice || priceRange.maxPrice)) {
+    console.log('⚠️ Fallback поиск без фильтра по цене');
+    
+    filtered = catalog.offers
+      .filter(offer => offer.category && offer.category.toLowerCase().includes(detectedCategory))
+      .sort((a, b) => a.price - b.price) // Сортируем по цене
+      .slice(0, 20); // Берём топ-20 самых дешевых
   }
   
   // Fallback: если по категории ничего не найдено, ищем по всем товарам
