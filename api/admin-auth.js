@@ -17,7 +17,18 @@ async function handler(req, res) {
     console.log('Headers:', req.headers);
     console.log('Body:', req.body);
     
-    const { login, password } = req.body || {};
+    // Парсим body если он строка
+    let body = req.body;
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        console.error('Ошибка парсинга JSON:', e);
+        return res.status(400).json({ error: 'Invalid JSON' });
+      }
+    }
+    
+    const { login, password } = body || {};
     console.log('Извлеченные данные:', { login, password });
     
     // Простая проверка логина/пароля
