@@ -211,6 +211,11 @@ async function handler(req, res){
 
 // Проверяем, нужно ли генерировать персонализированное сообщение с формой
 function checkIfNeedsFormMessage(reply, messages, userMessagesAfterLastForm = 0) {
+  // Не показываем форму если сообщение содержит ссылку на возврат/обмен
+  if (reply.includes('zamena-i-vozvrat-tovara')) {
+    return false;
+  }
+  
   // Проверяем паузу между показами форм (минимум 3 реплики клиента)
   if (userMessagesAfterLastForm > 0 && userMessagesAfterLastForm < 3) {
     return false; // Не показываем форму слишком часто
