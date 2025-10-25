@@ -84,10 +84,16 @@ async function handler(req, res){
     
     // Handle chat requests
     if (action === 'chat' && session_id && user_message) {
+      console.log('Обработка чата для сессии:', session_id);
+      console.log('Сообщение пользователя:', user_message);
+      
       const session = sessionCache.get(session_id);
       if (!session) {
+        console.log('Сессия не найдена в кеше:', session_id);
         return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
       }
+      
+      console.log('Сессия найдена:', !!session);
       
       // Build messages from history_tail + current message
       const messages = [
@@ -100,6 +106,7 @@ async function handler(req, res){
       let catalogAvailable = false;
       try {
         console.log('🔍 Прямой запрос к каталогу для:', user_message);
+        console.log('Начинаем работу с каталогом...');
         
         // Прямой вызов каталога без HTTP запроса
         const catalogHandler = require('./catalog');
@@ -163,15 +170,21 @@ async function handler(req, res){
         relevantProducts = 'КАТАЛОГ_ОШИБКА';
       }
       
+      console.log('Строим системный промпт...');
       const sys = buildSystemPrompt(session.prompt, relevantProducts, session.locale, aggressive_mode);
+      console.log('Системный промпт готов, длина:', sys.length);
+      
       // Dev fallback: if no API key, return a mock reply so the widget works locally
       if (!process.env.OPENAI_API_KEY){
+        console.log('Нет API ключа OpenAI, возвращаем mock ответ');
         const lastUser = (Array.isArray(messages)?messages:[]).filter(m=>m.role==='user').slice(-1)[0]?.content || '';
         const mock = lastUser
           ? `Понял ваш запрос: «${lastUser.slice(0, 140)}». Я консультант по диванам. Расскажите, какой диван вас интересует?`
           : 'Здравствуйте! Я консультант по диванам. Помогу подобрать идеальный диван для вашего дома. Какой диван вас интересует?';
         return res.status(200).json({ reply: mock });
       }
+      
+      console.log('Отправляем запрос к OpenAI...');
       const model = 'gpt-5-mini';
       const body = {
         model,
@@ -206,16 +219,24 @@ async function handler(req, res){
         },
         body: JSON.stringify(body)
       });
+      
+      console.log('Ответ от OpenAI, статус:', r.status);
+      
       if (!r.ok){
         const t = await r.text();
         const reason = (t || '').slice(0, 500);
+        console.error('Ошибка OpenAI API:', r.status, reason);
         
         // Более дружелюбный fallback
         const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
         return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift', debug: { status: r.status, modelTried: model, reason } });
       }
+      
       const data = await r.json();
+      console.log('Получен ответ от OpenAI, choices:', data.choices?.length);
+      
       let reply = data.choices?.[0]?.message?.content || '';
+      console.log('Ответ бота (первые 100 символов):', reply.substring(0, 100));
       
       // Ограничиваем длину ответа до 800 символов с умной обрезкой
       if (reply.length > 800) {
@@ -252,12 +273,10 @@ async function handler(req, res){
         formMessage = await generatePersonalizedFormMessage(messages, session);
       }
       
-      // Сохраняем диалог в Redis
-      try {
-        await saveChat(session_id, user_message, reply);
-      } catch (error) {
-        console.error('Ошибка сохранения диалога:', error);
-      }
+      // Сохраняем диалог в Redis (не блокируем основной поток)
+      saveChat(session_id, user_message, reply).catch(error => {
+        console.error('Ошибка сохранения диалога (не критично):', error);
+      });
       
       return res.status(200).json({ 
         reply, 
@@ -269,6 +288,8 @@ async function handler(req, res){
     // No valid action found
     return res.status(400).json({ error: 'Invalid request format' });
   }catch(e){
+    console.error('КРИТИЧЕСКАЯ ОШИБКА в API чата:', e);
+    console.error('Стек ошибки:', e.stack);
     const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
     return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift' });
   }
