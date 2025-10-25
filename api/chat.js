@@ -327,9 +327,9 @@ function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = fa
     `Инструкции: ${prompt.main_instructions.join(' ')}`,
     `О компании: ${prompt.about_company?.description||''}`,
     `Достижения компании: ${prompt.about_company?.achievements ? Object.values(prompt.about_company.achievements).join(', ') : ''}`,
-    `Салоны: ${prompt.about_company?.showrooms ? 'Информация о салонах доступна по городам (Минск, Витебск, Новополоцк, Бобруйск)' : ''}`,
+    `Салоны: ${prompt.about_company?.showrooms ? JSON.stringify(prompt.about_company.showrooms, null, 2) : 'Информация о салонах недоступна'}`,
     `Офферы: ${prompt.offers?.main_discount||''}; альтернативы: ${(prompt.offers?.alternative_offers||[]).join('; ')}`,
-    `Доставка и оплата: Детальная информация о стоимости доставки по типам товаров и регионам, специальные условия, возврат/замена, рассрочка, кастомизация`,
+    `Доставка и оплата: ${prompt.delivery_and_payment ? JSON.stringify(prompt.delivery_and_payment, null, 2) : 'Информация о доставке недоступна'}`,
     `Стиль: ${prompt.templates_and_style||''}`
   ].join('\n') : 'Ты консультант. Отвечай кратко.';
   
