@@ -23,7 +23,11 @@ module.exports = async function handler(req, res) {
     console.log('Запрос к admin-session:', req.method, req.url);
     
     // Получаем sessionId из URL
-    const sessionId = req.url.split('/').pop();
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const sessionId = url.pathname.split('/').pop();
+    
+    console.log('URL:', req.url);
+    console.log('SessionId из URL:', sessionId);
     
     if (!sessionId) {
       return res.status(400).json({ 
@@ -34,12 +38,15 @@ module.exports = async function handler(req, res) {
     
     // Читаем сессию из Redis
     const chatKey = `chat:${sessionId}`;
+    console.log('Ищем в Redis ключ:', chatKey);
+    
     const session = await redis.get(chatKey);
+    console.log('Найдена сессия в Redis:', !!session);
     
     if (!session) {
       return res.status(404).json({ 
         success: false, 
-        message: 'Сессия не найдена' 
+        message: 'Сессия не найдена в Redis' 
       });
     }
     
