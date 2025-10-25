@@ -1,5 +1,3 @@
-const { getSessions } = require('../utils/data-storage');
-
 async function handler(req, res) {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -15,6 +13,22 @@ async function handler(req, res) {
   }
   
   try {
+    console.log('Запрос к admin-chats:', req.method, req.url);
+    
+    // Пробуем загрузить модуль
+    let getSessions;
+    try {
+      const dataStorage = require('../utils/data-storage');
+      getSessions = dataStorage.getSessions;
+      console.log('Модуль data-storage загружен успешно');
+    } catch (error) {
+      console.error('Ошибка загрузки модуля data-storage:', error);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Ошибка загрузки модуля данных',
+        error: error.message 
+      });
+    }
     let filters = {};
     
     if (req.method === 'GET') {

@@ -100,7 +100,9 @@ function updateSessionContacts(sessionId, contacts) {
 
 // Получаем все сессии с фильтрацией
 function getSessions(filters = {}) {
+  console.log('getSessions вызвана с фильтрами:', filters);
   let chats = readChats();
+  console.log('Прочитано чатов:', chats.length);
   
   // Фильтр по дате
   if (filters.dateFrom) {
