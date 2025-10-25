@@ -1,4 +1,22 @@
-const { readChats } = require('../utils/data-storage');
+const fs = require('fs');
+const path = require('path');
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
+
+// Читаем данные из файла
+function readChats() {
+  try {
+    if (!fs.existsSync(CHATS_FILE)) {
+      return [];
+    }
+    const data = fs.readFileSync(CHATS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Ошибка чтения файла чатов:', error);
+    return [];
+  }
+}
 
 async function handler(req, res) {
   // Add CORS headers
