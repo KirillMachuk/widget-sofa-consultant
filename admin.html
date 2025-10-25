@@ -1,0 +1,763 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Админ-панель - Диалоги с ботом</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            color: #1e293b;
+            font-size: 28px;
+            font-weight: 700;
+        }
+
+        .logout-btn {
+            background: #ef4444;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .logout-btn:hover {
+            background: #dc2626;
+        }
+
+        .filters {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .filters-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr auto;
+            gap: 16px;
+            align-items: end;
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .filter-group label {
+            font-size: 14px;
+            font-weight: 600;
+            color: #475569;
+            margin-bottom: 6px;
+        }
+
+        .filter-group input, .filter-group select {
+            padding: 10px 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .filter-group input:focus, .filter-group select:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .search-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        .search-btn:hover {
+            background: #2563eb;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 24px;
+        }
+
+        .sessions-list {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .sessions-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .sessions-header h2 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+        }
+
+        .sessions-container {
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .session-item {
+            padding: 16px 24px;
+            border-bottom: 1px solid #f1f5f9;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .session-item:hover {
+            background: #f8fafc;
+        }
+
+        .session-item.active {
+            background: #eff6ff;
+            border-left: 4px solid #3b82f6;
+        }
+
+        .session-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .session-id {
+            font-family: 'Monaco', 'Menlo', monospace;
+            font-size: 12px;
+            color: #64748b;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+        }
+
+        .session-date {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .session-info {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .session-badge {
+            font-size: 11px;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 600;
+        }
+
+        .badge-contacts {
+            background: #dcfce7;
+            color: #166534;
+        }
+
+        .badge-no-contacts {
+            background: #fef3c7;
+            color: #92400e;
+        }
+
+        .session-preview {
+            font-size: 14px;
+            color: #475569;
+            line-height: 1.4;
+            max-height: 2.8em;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .chat-view {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .chat-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid #e2e8f0;
+            background: #f8fafc;
+        }
+
+        .chat-header h3 {
+            font-size: 18px;
+            font-weight: 600;
+            color: #1e293b;
+            margin-bottom: 8px;
+        }
+
+        .chat-meta {
+            display: flex;
+            gap: 16px;
+            font-size: 14px;
+            color: #64748b;
+        }
+
+        .chat-messages {
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 24px;
+        }
+
+        .message {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .message-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        .message.user .message-avatar {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .message.assistant .message-avatar {
+            background: #10b981;
+            color: white;
+        }
+
+        .message-content {
+            flex: 1;
+        }
+
+        .message-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 4px;
+        }
+
+        .message-role {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .message-time {
+            font-size: 12px;
+            color: #64748b;
+        }
+
+        .message-text {
+            background: #f8fafc;
+            padding: 12px 16px;
+            border-radius: 12px;
+            border-top-left-radius: 4px;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-text {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .message.assistant .message-text {
+            background: #f1f5f9;
+            color: #1e293b;
+        }
+
+        .form-message {
+            background: #fef3c7;
+            border: 1px solid #f59e0b;
+            border-radius: 8px;
+            padding: 12px;
+            margin-top: 8px;
+            font-size: 14px;
+            color: #92400e;
+        }
+
+        .contacts-info {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+        }
+
+        .contacts-info h4 {
+            color: #0c4a6e;
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .contacts-details {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 14px;
+        }
+
+        .contact-item {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .contact-label {
+            font-weight: 600;
+            color: #0c4a6e;
+        }
+
+        .contact-value {
+            color: #0369a1;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 24px;
+            color: #64748b;
+        }
+
+        .empty-state h3 {
+            font-size: 18px;
+            margin-bottom: 8px;
+        }
+
+        .empty-state p {
+            font-size: 14px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #64748b;
+        }
+
+        .login-form {
+            max-width: 400px;
+            margin: 100px auto;
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .login-form h1 {
+            text-align: center;
+            margin-bottom: 32px;
+            color: #1e293b;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 600;
+            color: #374151;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #d1d5db;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .login-btn {
+            width: 100%;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .login-btn:hover {
+            background: #2563eb;
+        }
+
+        .error-message {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            color: #dc2626;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+
+        @media (max-width: 768px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+            
+            .filters-row {
+                grid-template-columns: 1fr;
+            }
+            
+            .contacts-details {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Форма входа -->
+        <div id="login-form" class="login-form">
+            <h1>Вход в админ-панель</h1>
+            <div id="login-error" class="error-message" style="display: none;"></div>
+            <form id="login">
+                <div class="form-group">
+                    <label for="login">Логин:</label>
+                    <input type="text" id="login" name="login" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Пароль:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" class="login-btn">Войти</button>
+            </form>
+        </div>
+
+        <!-- Основной интерфейс -->
+        <div id="admin-interface" style="display: none;">
+            <div class="container">
+                <div class="header">
+                    <h1>Диалоги с ботом</h1>
+                    <button class="logout-btn" onclick="logout()">Выйти</button>
+                </div>
+
+                <div class="filters">
+                    <div class="filters-row">
+                        <div class="filter-group">
+                            <label for="dateFrom">Дата от:</label>
+                            <input type="date" id="dateFrom">
+                        </div>
+                        <div class="filter-group">
+                            <label for="dateTo">Дата до:</label>
+                            <input type="date" id="dateTo">
+                        </div>
+                        <div class="filter-group">
+                            <label for="hasContacts">Контакты:</label>
+                            <select id="hasContacts">
+                                <option value="">Все</option>
+                                <option value="true">С контактами</option>
+                                <option value="false">Без контактов</option>
+                            </select>
+                        </div>
+                        <div class="filter-group">
+                            <label for="search">Поиск:</label>
+                            <input type="text" id="search" placeholder="Поиск по сообщениям...">
+                        </div>
+                        <button class="search-btn" onclick="loadSessions()">Поиск</button>
+                    </div>
+                </div>
+
+                <div class="main-content">
+                    <div class="sessions-list">
+                        <div class="sessions-header">
+                            <h2>Сессии</h2>
+                        </div>
+                        <div id="sessions-container" class="sessions-container">
+                            <div class="loading">Загрузка...</div>
+                        </div>
+                    </div>
+
+                    <div class="chat-view">
+                        <div class="chat-header">
+                            <h3>Выберите сессию</h3>
+                        </div>
+                        <div id="chat-messages" class="chat-messages">
+                            <div class="empty-state">
+                                <h3>Выберите сессию для просмотра</h3>
+                                <p>Кликните на сессию в списке слева</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentToken = null;
+        let currentSession = null;
+
+        // Проверяем авторизацию при загрузке
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('admin_token');
+            if (token) {
+                currentToken = token;
+                showAdminInterface();
+                loadSessions();
+            } else {
+                showLoginForm();
+            }
+        });
+
+        // Обработка формы входа
+        document.getElementById('login').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const login = document.getElementById('login').value;
+            const password = document.getElementById('password').value;
+            
+            try {
+                const response = await fetch('/api/admin-auth', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ login, password })
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentToken = data.token;
+                    localStorage.setItem('admin_token', data.token);
+                    showAdminInterface();
+                    loadSessions();
+                } else {
+                    showError(data.message);
+                }
+            } catch (error) {
+                showError('Ошибка подключения к серверу');
+            }
+        });
+
+        // Загрузка сессий
+        async function loadSessions() {
+            const dateFrom = document.getElementById('dateFrom').value;
+            const dateTo = document.getElementById('dateTo').value;
+            const hasContacts = document.getElementById('hasContacts').value;
+            const search = document.getElementById('search').value;
+            
+            const params = new URLSearchParams();
+            if (dateFrom) params.append('dateFrom', dateFrom);
+            if (dateTo) params.append('dateTo', dateTo);
+            if (hasContacts) params.append('hasContacts', hasContacts);
+            if (search) params.append('search', search);
+            
+            try {
+                const response = await fetch(`/api/admin-chats?${params}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    displaySessions(data.sessions);
+                } else {
+                    showError('Ошибка загрузки сессий');
+                }
+            } catch (error) {
+                showError('Ошибка подключения к серверу');
+            }
+        }
+
+        // Отображение списка сессий
+        function displaySessions(sessions) {
+            const container = document.getElementById('sessions-container');
+            
+            if (sessions.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>Сессии не найдены</h3><p>Попробуйте изменить фильтры</p></div>';
+                return;
+            }
+            
+            container.innerHTML = sessions.map(session => `
+                <div class="session-item" onclick="selectSession('${session.id}')">
+                    <div class="session-header">
+                        <span class="session-id">${session.id}</span>
+                        <span class="session-date">${formatDate(session.lastUpdated)}</span>
+                    </div>
+                    <div class="session-info">
+                        <span class="session-badge ${session.hasContacts ? 'badge-contacts' : 'badge-no-contacts'}">
+                            ${session.hasContacts ? 'Есть контакты' : 'Без контактов'}
+                        </span>
+                        <span class="session-badge">${session.messageCount} сообщений</span>
+                    </div>
+                    <div class="session-preview">
+                        ${session.lastMessage ? session.lastMessage.content.substring(0, 100) + '...' : 'Нет сообщений'}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Выбор сессии
+        async function selectSession(sessionId) {
+            // Убираем активный класс с других элементов
+            document.querySelectorAll('.session-item').forEach(item => {
+                item.classList.remove('active');
+            });
+            
+            // Добавляем активный класс к выбранному элементу
+            event.currentTarget.classList.add('active');
+            
+            try {
+                const response = await fetch(`/api/admin-session/${sessionId}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    currentSession = data.session;
+                    displayChat(data.session);
+                } else {
+                    showError('Ошибка загрузки сессии');
+                }
+            } catch (error) {
+                showError('Ошибка подключения к серверу');
+            }
+        }
+
+        // Отображение чата
+        function displayChat(session) {
+            const container = document.getElementById('chat-messages');
+            
+            let html = '';
+            
+            // Информация о контактах
+            if (session.contacts && (session.contacts.name || session.contacts.phone)) {
+                html += `
+                    <div class="contacts-info">
+                        <h4>Контактные данные</h4>
+                        <div class="contacts-details">
+                            ${session.contacts.name ? `<div class="contact-item"><span class="contact-label">Имя:</span><span class="contact-value">${session.contacts.name}</span></div>` : ''}
+                            ${session.contacts.phone ? `<div class="contact-item"><span class="contact-label">Телефон:</span><span class="contact-value">${session.contacts.phone}</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Сообщения
+            if (session.messages && session.messages.length > 0) {
+                html += session.messages.map(message => `
+                    <div class="message ${message.role}">
+                        <div class="message-avatar">
+                            ${message.role === 'user' ? 'П' : 'Б'}
+                        </div>
+                        <div class="message-content">
+                            <div class="message-header">
+                                <span class="message-role">${message.role === 'user' ? 'Пользователь' : 'Бот'}</span>
+                                <span class="message-time">${formatDateTime(message.timestamp)}</span>
+                            </div>
+                            <div class="message-text">${message.content}</div>
+                            ${message.formMessage ? `<div class="form-message">Форма: ${message.formMessage}</div>` : ''}
+                        </div>
+                    </div>
+                `).join('');
+            } else {
+                html += '<div class="empty-state"><h3>Нет сообщений</h3></div>';
+            }
+            
+            container.innerHTML = html;
+        }
+
+        // Показ формы входа
+        function showLoginForm() {
+            document.getElementById('login-form').style.display = 'block';
+            document.getElementById('admin-interface').style.display = 'none';
+        }
+
+        // Показ админ-интерфейса
+        function showAdminInterface() {
+            document.getElementById('login-form').style.display = 'none';
+            document.getElementById('admin-interface').style.display = 'block';
+        }
+
+        // Выход
+        function logout() {
+            localStorage.removeItem('admin_token');
+            currentToken = null;
+            currentSession = null;
+            showLoginForm();
+        }
+
+        // Показ ошибки
+        function showError(message) {
+            const errorDiv = document.getElementById('login-error');
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        // Форматирование даты
+        function formatDate(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleDateString('ru-RU', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        // Форматирование даты и времени
+        function formatDateTime(dateString) {
+            const date = new Date(dateString);
+            return date.toLocaleString('ru-RU');
+        }
+    </script>
+</body>
+</html>

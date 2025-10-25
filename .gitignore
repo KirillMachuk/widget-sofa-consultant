@@ -121,3 +121,6 @@ logs
 # Temporary files
 *.tmp
 *.temp
+
+# Admin data storage
+data/

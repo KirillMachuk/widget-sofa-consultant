@@ -1782,11 +1782,6 @@
   ];
   
   function shouldShowForm(message) {
-    // Не показываем форму если сообщение содержит ссылку на возврат/обмен
-    if (message.includes('zamena-i-vozvrat-tovara')) {
-      return false;
-    }
-    
     return FORM_TRIGGERS.some(regex => regex.test(message));
   }
   
@@ -1796,11 +1791,6 @@
 
   
   function maybeOfferPhoneFlow(botReply){
-    // Не показываем форму если сообщение содержит ссылку на возврат/обмен
-    if (botReply.includes('zamena-i-vozvrat-tovara')) {
-      return;
-    }
-    
     const history = loadHistory();
     const userMessages = history.filter(m => m.role === 'user').length;
     const botMessages = history.filter(m => m.role === 'assistant').length;

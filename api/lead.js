@@ -1,3 +1,6 @@
+// Import data storage utilities
+const { updateSessionContacts } = require('../utils/data-storage');
+
 async function handler(req, res){
   // Add CORS headers for external domains
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -31,6 +34,22 @@ async function handler(req, res){
       if (!r.ok){
         return res.status(502).json({ error: 'GAS upstream error', status: r.status, body: text.slice(0, 500) });
       }
+      
+      // Сохраняем контактные данные к сессии
+      if (session_id) {
+        try {
+          updateSessionContacts(session_id, {
+            name: name || '',
+            phone: phone || '',
+            pretext: pretext || '',
+            page_url: page_url || '',
+            timestamp: timestamp || new Date().toISOString()
+          });
+        } catch (error) {
+          console.error('Ошибка сохранения контактов:', error);
+        }
+      }
+      
       // Try to parse JSON, fallback to text
       try{ return res.status(200).json(JSON.parse(text)); }
       catch(e){ return res.status(200).json({ ok: true, upstream: text.slice(0, 200) }); }

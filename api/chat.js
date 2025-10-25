@@ -4,6 +4,9 @@ const sessionCache = new Map();
 // Import catalog module
 const catalogHandler = require('./catalog');
 
+// Import data storage utilities
+const { addMessage, upsertSession } = require('../utils/data-storage');
+
 async function handler(req, res){
   // Add CORS headers for external domains
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -21,6 +24,14 @@ async function handler(req, res){
     // Handle session initialization (first request with prompt/catalog)
     if (action === 'init' && prompt && catalog) {
       sessionCache.set(session_id, { prompt, catalog, locale: locale || 'ru' });
+      
+      // Сохраняем инициализацию сессии в файл
+      upsertSession(session_id, {
+        prompt: prompt.role_and_task || 'Консультант',
+        locale: locale || 'ru',
+        createdAt: new Date().toISOString()
+      });
+      
       return res.status(200).json({ status: 'initialized' });
     }
     
@@ -194,6 +205,25 @@ async function handler(req, res){
         formMessage = await generatePersonalizedFormMessage(messages, session);
       }
       
+      // Сохраняем диалог в файл
+      try {
+        // Сохраняем сообщение пользователя
+        addMessage(session_id, {
+          role: 'user',
+          content: user_message
+        });
+        
+        // Сохраняем ответ бота
+        addMessage(session_id, {
+          role: 'assistant',
+          content: reply,
+          formMessage: formMessage,
+          needsForm: shouldGenerateFormMessage
+        });
+      } catch (error) {
+        console.error('Ошибка сохранения диалога:', error);
+      }
+      
       return res.status(200).json({ 
         reply, 
         formMessage,
@@ -211,11 +241,6 @@ async function handler(req, res){
 
 // Проверяем, нужно ли генерировать персонализированное сообщение с формой
 function checkIfNeedsFormMessage(reply, messages, userMessagesAfterLastForm = 0) {
-  // Не показываем форму если сообщение содержит ссылку на возврат/обмен
-  if (reply.includes('zamena-i-vozvrat-tovara')) {
-    return false;
-  }
-  
   // Проверяем паузу между показами форм (минимум 3 реплики клиента)
   if (userMessagesAfterLastForm > 0 && userMessagesAfterLastForm < 3) {
     return false; // Не показываем форму слишком часто
