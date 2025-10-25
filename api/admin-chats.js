@@ -10,12 +10,15 @@ async function readChats() {
   try {
     // Получаем все ключи с префиксом chat:
     const keys = await redis.keys('chat:*');
+    console.log('Найдены ключи в Redis:', keys);
+    
     if (keys.length === 0) {
       return [];
     }
     
     // Читаем все сессии одним запросом
     const sessions = await redis.mget(...keys);
+    console.log('Прочитано сессий:', sessions.length);
     return sessions.filter(session => session !== null);
   } catch (error) {
     console.error('Ошибка чтения чатов из Redis:', error);
