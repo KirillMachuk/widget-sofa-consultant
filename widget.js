@@ -362,6 +362,18 @@
       font-size: 15px;
     }
     
+    .vfw-msg .bubble .vfw-link {
+      color: #1976d2;
+      text-decoration: underline;
+      cursor: pointer;
+      transition: color 0.2s ease;
+    }
+    
+    .vfw-msg .bubble .vfw-link:hover {
+      color: #0d47a1;
+      text-decoration: underline;
+    }
+    
     .vfw-msg.bot .bubble {
       background: #f1f2f2;
     }
@@ -856,7 +868,15 @@
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
-    return div.innerHTML.replace(/\n/g, '<br>');
+    let html = div.innerHTML.replace(/\n/g, '<br>');
+    
+    // Преобразуем ссылки nm-shop.by в кликабельные ссылки
+    const urlRegex = /(https?:\/\/[^\s]*nm-shop\.by[^\s]*)/gi;
+    html = html.replace(urlRegex, (match) => {
+      return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="vfw-link">${match}</a>`;
+    });
+    
+    return html;
   }
 
   function addMsg(role, text){
