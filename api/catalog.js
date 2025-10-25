@@ -1085,6 +1085,7 @@ async function handler(req, res) {
     if (action === 'stats') {
       // Статистика каталога
       const catalog = await getCatalog();
+      const metadata = await kv.get(CATALOG_METADATA_KEY);
       
       return res.status(200).json({
         success: true,
@@ -1092,8 +1093,8 @@ async function handler(req, res) {
         categories: catalog.categories,
         lastUpdate: catalog.timestamp,
         cacheInfo: {
-          lastFetchTime: lastFetchTime ? new Date(lastFetchTime).toISOString() : null,
-          lastUpdateHour: lastUpdateHour
+          lastFetchTime: metadata?.timestamp ? new Date(metadata.timestamp).toISOString() : null,
+          lastUpdateHour: metadata?.lastUpdate ? new Date(metadata.lastUpdate).getHours() : null
         }
       });
     }
