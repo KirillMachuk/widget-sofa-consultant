@@ -45,6 +45,8 @@ async function saveChat(sessionId, userMessage, botReply) {
     // Сохраняем в Redis
     await redis.set(chatKey, session);
     console.log('Диалог сохранен в Redis для сессии:', sessionId);
+    console.log('Ключ в Redis:', chatKey);
+    console.log('Данные сессии:', JSON.stringify(session, null, 2));
     return true;
   } catch (error) {
     console.error('Ошибка сохранения диалога в Redis:', error);
