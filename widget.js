@@ -871,7 +871,7 @@
     let html = div.innerHTML.replace(/\n/g, '<br>');
     
     // Преобразуем ссылки nm-shop.by в кликабельные ссылки
-    const urlRegex = /(https?:\/\/[^\s]*nm-shop\.by[^\s]*)/gi;
+    const urlRegex = /(https?:\/\/[^\s<]+nm-shop\.by[^\s<]*?)(?=[<\s]|$)/gi;
     html = html.replace(urlRegex, (match) => {
       return `<a href="${match}" target="_blank" rel="noopener noreferrer" class="vfw-link">${match}</a>`;
     });
