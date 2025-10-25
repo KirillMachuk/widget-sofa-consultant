@@ -1,24 +1,4 @@
-const fs = require('fs');
-const path = require('path');
-
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
-
-// Читаем данные из файла
-function readChats() {
-  try {
-    if (!fs.existsSync(CHATS_FILE)) {
-      return [];
-    }
-    const data = fs.readFileSync(CHATS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Ошибка чтения файла чатов:', error);
-    return [];
-  }
-}
-
-async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
@@ -33,9 +13,10 @@ async function handler(req, res) {
   }
   
   try {
+    console.log('Запрос к admin-session:', req.method, req.url);
+    
     // Получаем sessionId из URL
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const sessionId = url.pathname.split('/').pop();
+    const sessionId = req.url.split('/').pop();
     
     if (!sessionId) {
       return res.status(400).json({ 
@@ -44,26 +25,17 @@ async function handler(req, res) {
       });
     }
     
-    const chats = readChats();
-    const session = chats.find(chat => chat.sessionId === sessionId);
-    
-    if (!session) {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Сессия не найдена' 
-      });
-    }
-    
+    // Пока возвращаем пустую сессию
     return res.status(200).json({
       success: true,
       session: {
-        id: session.sessionId,
-        createdAt: session.createdAt,
-        lastUpdated: session.lastUpdated,
-        prompt: session.prompt,
-        locale: session.locale,
-        contacts: session.contacts || null,
-        messages: session.messages || []
+        id: sessionId,
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        prompt: 'Тестовая сессия',
+        locale: 'ru',
+        contacts: null,
+        messages: []
       }
     });
     
@@ -75,6 +47,4 @@ async function handler(req, res) {
       error: error.message 
     });
   }
-}
-
-module.exports = handler;
+};
