@@ -13,7 +13,12 @@ async function handler(req, res) {
   }
   
   try {
+    console.log('Получен запрос авторизации:', req.method, req.url);
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+    
     const { login, password } = req.body || {};
+    console.log('Извлеченные данные:', { login, password });
     
     // Простая проверка логина/пароля
     if (login === 'admin' && password === 'admin') {
