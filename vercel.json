@@ -3,7 +3,11 @@
   "builds": [
     {
       "src": "api/**/*.js",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "memory": 1024,
+        "maxDuration": 10
+      }
     },
     {
       "src": "*.{html,js,json}",
@@ -19,23 +23,5 @@
       "src": "/(.*)",
       "dest": "/$1"
     }
-  ],
-  "functions": {
-    "api/chat.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    },
-    "api/catalog.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    },
-    "api/update-catalog.js": {
-      "memory": 512,
-      "maxDuration": 10
-    },
-    "api/lead.js": {
-      "memory": 512,
-      "maxDuration": 10
-    }
-  }
+  ]
 }
