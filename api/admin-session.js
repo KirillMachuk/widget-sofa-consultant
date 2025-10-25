@@ -1,3 +1,10 @@
+// Используем тот же Redis клиент что и для каталога
+const { Redis } = require('@upstash/redis');
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
+
 module.exports = async function handler(req, res) {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -25,17 +32,27 @@ module.exports = async function handler(req, res) {
       });
     }
     
-    // Пока возвращаем пустую сессию
+    // Читаем сессию из Redis
+    const chatKey = `chat:${sessionId}`;
+    const session = await redis.get(chatKey);
+    
+    if (!session) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'Сессия не найдена' 
+      });
+    }
+    
     return res.status(200).json({
       success: true,
       session: {
-        id: sessionId,
-        createdAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-        prompt: 'Тестовая сессия',
-        locale: 'ru',
-        contacts: null,
-        messages: []
+        id: session.sessionId,
+        createdAt: session.createdAt,
+        lastUpdated: session.lastUpdated,
+        prompt: session.prompt,
+        locale: session.locale,
+        contacts: session.contacts || null,
+        messages: session.messages || []
       }
     });
     

@@ -4,29 +4,20 @@ const sessionCache = new Map();
 // Import catalog module
 const catalogHandler = require('./catalog');
 
-// Простые функции для сохранения диалогов
-const fs = require('fs');
-const path = require('path');
+// Используем тот же Redis клиент что и для каталога
+const { Redis } = require('@upstash/redis');
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
-
-// Создаем директорию data если не существует
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Простое сохранение диалога
-function saveChat(sessionId, userMessage, botReply) {
+// Сохранение диалога в Redis
+async function saveChat(sessionId, userMessage, botReply) {
   try {
-    let chats = [];
-    if (fs.existsSync(CHATS_FILE)) {
-      const data = fs.readFileSync(CHATS_FILE, 'utf8');
-      chats = JSON.parse(data);
-    }
+    const chatKey = `chat:${sessionId}`;
     
-    // Находим или создаем сессию
-    let session = chats.find(chat => chat.sessionId === sessionId);
+    // Читаем существующую сессию
+    let session = await redis.get(chatKey);
     if (!session) {
       session = {
         sessionId,
@@ -34,7 +25,6 @@ function saveChat(sessionId, userMessage, botReply) {
         lastUpdated: new Date().toISOString(),
         messages: []
       };
-      chats.push(session);
     }
     
     // Добавляем сообщения
@@ -52,12 +42,12 @@ function saveChat(sessionId, userMessage, botReply) {
     
     session.lastUpdated = new Date().toISOString();
     
-    // Сохраняем
-    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
-    console.log('Диалог сохранен для сессии:', sessionId);
+    // Сохраняем в Redis
+    await redis.set(chatKey, session);
+    console.log('Диалог сохранен в Redis для сессии:', sessionId);
     return true;
   } catch (error) {
-    console.error('Ошибка сохранения диалога:', error);
+    console.error('Ошибка сохранения диалога в Redis:', error);
     return false;
   }
 }
@@ -260,9 +250,9 @@ async function handler(req, res){
         formMessage = await generatePersonalizedFormMessage(messages, session);
       }
       
-      // Сохраняем диалог
+      // Сохраняем диалог в Redis
       try {
-        saveChat(session_id, user_message, reply);
+        await saveChat(session_id, user_message, reply);
       } catch (error) {
         console.error('Ошибка сохранения диалога:', error);
       }

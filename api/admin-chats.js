@@ -1,19 +1,24 @@
-const fs = require('fs');
-const path = require('path');
+// Используем тот же Redis клиент что и для каталога
+const { Redis } = require('@upstash/redis');
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
-
-// Читаем данные из файла
-function readChats() {
+// Читаем все чаты из Redis
+async function readChats() {
   try {
-    if (!fs.existsSync(CHATS_FILE)) {
+    // Получаем все ключи с префиксом chat:
+    const keys = await redis.keys('chat:*');
+    if (keys.length === 0) {
       return [];
     }
-    const data = fs.readFileSync(CHATS_FILE, 'utf8');
-    return JSON.parse(data);
+    
+    // Читаем все сессии одним запросом
+    const sessions = await redis.mget(...keys);
+    return sessions.filter(session => session !== null);
   } catch (error) {
-    console.error('Ошибка чтения файла чатов:', error);
+    console.error('Ошибка чтения чатов из Redis:', error);
     return [];
   }
 }
@@ -35,9 +40,9 @@ module.exports = async function handler(req, res) {
   try {
     console.log('Запрос к admin-chats:', req.method, req.url);
     
-    // Читаем реальные данные
-    const chats = readChats();
-    console.log('Найдено чатов:', chats.length);
+    // Читаем реальные данные из Redis
+    const chats = await readChats();
+    console.log('Найдено чатов в Redis:', chats.length);
     
     // Форматируем данные для фронтенда
     const formattedSessions = chats.map(session => ({

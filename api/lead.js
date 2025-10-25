@@ -1,29 +1,29 @@
-// Простое сохранение контактов
-const fs = require('fs');
-const path = require('path');
+// Используем тот же Redis клиент что и для каталога
+const { Redis } = require('@upstash/redis');
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
 
-const DATA_DIR = path.join(__dirname, '..', 'data');
-const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
-
-function saveContacts(sessionId, contacts) {
+// Сохранение контактов в Redis
+async function saveContacts(sessionId, contacts) {
   try {
-    let chats = [];
-    if (fs.existsSync(CHATS_FILE)) {
-      const data = fs.readFileSync(CHATS_FILE, 'utf8');
-      chats = JSON.parse(data);
-    }
+    const chatKey = `chat:${sessionId}`;
     
-    const sessionIndex = chats.findIndex(chat => chat.sessionId === sessionId);
-    if (sessionIndex >= 0) {
-      chats[sessionIndex].contacts = contacts;
-      chats[sessionIndex].lastUpdated = new Date().toISOString();
-      fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
-      console.log('Контакты сохранены для сессии:', sessionId);
+    // Читаем существующую сессию
+    let session = await redis.get(chatKey);
+    if (session) {
+      session.contacts = contacts;
+      session.lastUpdated = new Date().toISOString();
+      
+      // Сохраняем обратно в Redis
+      await redis.set(chatKey, session);
+      console.log('Контакты сохранены в Redis для сессии:', sessionId);
       return true;
     }
     return false;
   } catch (error) {
-    console.error('Ошибка сохранения контактов:', error);
+    console.error('Ошибка сохранения контактов в Redis:', error);
     return false;
   }
 }
@@ -64,7 +64,7 @@ async function handler(req, res){
       
       // Сохраняем контакты ПОСЛЕ успешного ответа от GAS
       if (session_id) {
-        saveContacts(session_id, {
+        await saveContacts(session_id, {
           name: name || '',
           phone: phone || '',
           pretext: pretext || '',
