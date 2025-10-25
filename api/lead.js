@@ -1,52 +1,31 @@
-// Встроенные функции для работы с данными
+// Простое сохранение контактов
 const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', 'data');
 const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
 
-// Создаем директорию data если не существует
-if (!fs.existsSync(DATA_DIR)) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-// Читаем данные из файла
-function readChats() {
+function saveContacts(sessionId, contacts) {
   try {
-    if (!fs.existsSync(CHATS_FILE)) {
-      return [];
+    let chats = [];
+    if (fs.existsSync(CHATS_FILE)) {
+      const data = fs.readFileSync(CHATS_FILE, 'utf8');
+      chats = JSON.parse(data);
     }
-    const data = fs.readFileSync(CHATS_FILE, 'utf8');
-    return JSON.parse(data);
+    
+    const sessionIndex = chats.findIndex(chat => chat.sessionId === sessionId);
+    if (sessionIndex >= 0) {
+      chats[sessionIndex].contacts = contacts;
+      chats[sessionIndex].lastUpdated = new Date().toISOString();
+      fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
+      console.log('Контакты сохранены для сессии:', sessionId);
+      return true;
+    }
+    return false;
   } catch (error) {
-    console.error('Ошибка чтения файла чатов:', error);
-    return [];
-  }
-}
-
-// Сохраняем данные в файл
-function saveChats(chats) {
-  try {
-    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    console.error('Ошибка сохранения файла чатов:', error);
+    console.error('Ошибка сохранения контактов:', error);
     return false;
   }
-}
-
-// Обновляем контактные данные сессии
-function updateSessionContacts(sessionId, contacts) {
-  const chats = readChats();
-  const sessionIndex = chats.findIndex(chat => chat.sessionId === sessionId);
-  
-  if (sessionIndex >= 0) {
-    chats[sessionIndex].contacts = contacts;
-    chats[sessionIndex].lastUpdated = new Date().toISOString();
-    return saveChats(chats);
-  }
-  
-  return false;
 }
 
 async function handler(req, res){
@@ -83,20 +62,15 @@ async function handler(req, res){
         return res.status(502).json({ error: 'GAS upstream error', status: r.status, body: text.slice(0, 500) });
       }
       
-      // Сохраняем контактные данные к сессии ПОСЛЕ успешного ответа от GAS
+      // Сохраняем контакты ПОСЛЕ успешного ответа от GAS
       if (session_id) {
-        try {
-          updateSessionContacts(session_id, {
-            name: name || '',
-            phone: phone || '',
-            pretext: pretext || '',
-            page_url: page_url || '',
-            timestamp: timestamp || new Date().toISOString()
-          });
-          console.log('Контакты сохранены для сессии:', session_id);
-        } catch (error) {
-          console.error('Ошибка сохранения контактов:', error);
-        }
+        saveContacts(session_id, {
+          name: name || '',
+          phone: phone || '',
+          pretext: pretext || '',
+          page_url: page_url || '',
+          timestamp: timestamp || new Date().toISOString()
+        });
       }
       
       // Try to parse JSON, fallback to text

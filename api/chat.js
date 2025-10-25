@@ -4,7 +4,7 @@ const sessionCache = new Map();
 // Import catalog module
 const catalogHandler = require('./catalog');
 
-// Встроенные функции для работы с данными
+// Простые функции для сохранения диалогов
 const fs = require('fs');
 const path = require('path');
 
@@ -16,79 +16,50 @@ if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
 }
 
-// Читаем данные из файла
-function readChats() {
+// Простое сохранение диалога
+function saveChat(sessionId, userMessage, botReply) {
   try {
-    if (!fs.existsSync(CHATS_FILE)) {
-      return [];
+    let chats = [];
+    if (fs.existsSync(CHATS_FILE)) {
+      const data = fs.readFileSync(CHATS_FILE, 'utf8');
+      chats = JSON.parse(data);
     }
-    const data = fs.readFileSync(CHATS_FILE, 'utf8');
-    return JSON.parse(data);
-  } catch (error) {
-    console.error('Ошибка чтения файла чатов:', error);
-    return [];
-  }
-}
-
-// Сохраняем данные в файл
-function saveChats(chats) {
-  try {
-    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
-    return true;
-  } catch (error) {
-    console.error('Ошибка сохранения файла чатов:', error);
-    return false;
-  }
-}
-
-// Добавляем или обновляем сессию
-function upsertSession(sessionId, sessionData) {
-  const chats = readChats();
-  const existingIndex = chats.findIndex(chat => chat.sessionId === sessionId);
-  
-  const sessionRecord = {
-    sessionId,
-    ...sessionData,
-    lastUpdated: new Date().toISOString()
-  };
-  
-  if (existingIndex >= 0) {
-    chats[existingIndex] = { ...chats[existingIndex], ...sessionRecord };
-  } else {
-    chats.push(sessionRecord);
-  }
-  
-  return saveChats(chats);
-}
-
-// Добавляем сообщение к сессии
-function addMessage(sessionId, message) {
-  const chats = readChats();
-  const sessionIndex = chats.findIndex(chat => chat.sessionId === sessionId);
-  
-  if (sessionIndex >= 0) {
-    if (!chats[sessionIndex].messages) {
-      chats[sessionIndex].messages = [];
+    
+    // Находим или создаем сессию
+    let session = chats.find(chat => chat.sessionId === sessionId);
+    if (!session) {
+      session = {
+        sessionId,
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        messages: []
+      };
+      chats.push(session);
     }
-    chats[sessionIndex].messages.push({
-      ...message,
+    
+    // Добавляем сообщения
+    session.messages.push({
+      role: 'user',
+      content: userMessage,
       timestamp: new Date().toISOString()
     });
-    chats[sessionIndex].lastUpdated = new Date().toISOString();
-  } else {
-    // Создаем новую сессию
-    chats.push({
-      sessionId,
-      messages: [{
-        ...message,
-        timestamp: new Date().toISOString()
-      }],
-      createdAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString()
+    
+    session.messages.push({
+      role: 'assistant',
+      content: botReply,
+      timestamp: new Date().toISOString()
     });
+    
+    session.lastUpdated = new Date().toISOString();
+    
+    // Сохраняем
+    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
+    console.log('Диалог сохранен для сессии:', sessionId);
+    return true;
+  } catch (error) {
+    console.error('Ошибка сохранения диалога:', error);
+    return false;
   }
-  
-  return saveChats(chats);
 }
 
 async function handler(req, res){
@@ -289,26 +260,9 @@ async function handler(req, res){
         formMessage = await generatePersonalizedFormMessage(messages, session);
       }
       
-      // Сохраняем диалог в файл
+      // Сохраняем диалог
       try {
-        console.log('Сохраняем диалог для сессии:', session_id);
-        
-        // Сохраняем сообщение пользователя
-        const userSaved = addMessage(session_id, {
-          role: 'user',
-          content: user_message
-        });
-        console.log('Сообщение пользователя сохранено:', userSaved);
-        
-        // Сохраняем ответ бота
-        const botSaved = addMessage(session_id, {
-          role: 'assistant',
-          content: reply,
-          formMessage: formMessage,
-          needsForm: shouldGenerateFormMessage
-        });
-        console.log('Ответ бота сохранен:', botSaved);
-        
+        saveChat(session_id, user_message, reply);
       } catch (error) {
         console.error('Ошибка сохранения диалога:', error);
       }
