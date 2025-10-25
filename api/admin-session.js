@@ -22,14 +22,14 @@ module.exports = async function handler(req, res) {
   try {
     console.log('Запрос к admin-session:', req.method, req.url);
     
-    // Получаем sessionId из URL
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    const sessionId = url.pathname.split('/').pop();
+    // Получаем sessionId из URL - упрощенный способ
+    const pathParts = req.url.split('/');
+    const sessionId = pathParts[pathParts.length - 1];
     
     console.log('URL:', req.url);
     console.log('SessionId из URL:', sessionId);
     
-    if (!sessionId) {
+    if (!sessionId || sessionId === 'admin-session') {
       return res.status(400).json({ 
         success: false, 
         message: 'Session ID не указан' 
