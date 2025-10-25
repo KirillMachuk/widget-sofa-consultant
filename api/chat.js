@@ -70,14 +70,11 @@ async function handler(req, res){
     
     // Handle session initialization (first request with prompt/catalog)
     if (action === 'init' && prompt && catalog) {
+      console.log('Инициализация сессии:', session_id);
       sessionCache.set(session_id, { prompt, catalog, locale: locale || 'ru' });
       
-      // Сохраняем инициализацию сессии в файл
-      upsertSession(session_id, {
-        prompt: prompt.role_and_task || 'Консультант',
-        locale: locale || 'ru',
-        createdAt: new Date().toISOString()
-      });
+      // Временно отключаем сохранение при инициализации
+      console.log('Сессия инициализирована, сохранение отключено');
       
       return res.status(200).json({ status: 'initialized' });
     }
