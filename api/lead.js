@@ -1,5 +1,53 @@
-// Import data storage utilities
-const { updateSessionContacts } = require('../utils/data-storage');
+// Встроенные функции для работы с данными
+const fs = require('fs');
+const path = require('path');
+
+const DATA_DIR = path.join(__dirname, '..', 'data');
+const CHATS_FILE = path.join(DATA_DIR, 'chats.json');
+
+// Создаем директорию data если не существует
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+
+// Читаем данные из файла
+function readChats() {
+  try {
+    if (!fs.existsSync(CHATS_FILE)) {
+      return [];
+    }
+    const data = fs.readFileSync(CHATS_FILE, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error('Ошибка чтения файла чатов:', error);
+    return [];
+  }
+}
+
+// Сохраняем данные в файл
+function saveChats(chats) {
+  try {
+    fs.writeFileSync(CHATS_FILE, JSON.stringify(chats, null, 2), 'utf8');
+    return true;
+  } catch (error) {
+    console.error('Ошибка сохранения файла чатов:', error);
+    return false;
+  }
+}
+
+// Обновляем контактные данные сессии
+function updateSessionContacts(sessionId, contacts) {
+  const chats = readChats();
+  const sessionIndex = chats.findIndex(chat => chat.sessionId === sessionId);
+  
+  if (sessionIndex >= 0) {
+    chats[sessionIndex].contacts = contacts;
+    chats[sessionIndex].lastUpdated = new Date().toISOString();
+    return saveChats(chats);
+  }
+  
+  return false;
+}
 
 async function handler(req, res){
   // Add CORS headers for external domains
