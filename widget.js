@@ -106,26 +106,13 @@
     /* Индикатор онлайн */
     .vfw-online-indicator {
       position: absolute;
-      top: 2px;
+      bottom: 2px;
       right: 2px;
       width: 18px;
       height: 18px;
       background: #10b981;
-      border: 3px solid #fff;
       border-radius: 50%;
       box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
-      animation: vfw-pulse 2s ease-in-out infinite;
-    }
-    
-    @keyframes vfw-pulse {
-      0%, 100% { 
-        opacity: 1;
-        transform: scale(1);
-      }
-      50% { 
-        opacity: 0.7;
-        transform: scale(1.1);
-      }
     }
     
     /* Основная панель виджета */
@@ -175,7 +162,6 @@
       .vfw-online-indicator {
         width: 20px;
         height: 20px;
-        border-width: 3px;
       }
       
       .vfw-panel {
@@ -639,8 +625,7 @@
           <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
         <div class="vfw-hint-content">
-          Привет! ✋
-          Я онлайн и готов помочь с выбором мебели!
+          Привет! ✋<br>Я онлайн и готов помочь с выбором мебели!
         </div>
       </div>
     </div>
