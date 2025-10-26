@@ -1,8 +1,52 @@
-// Simple in-memory cache for sessions
+// Simple in-memory cache for sessions with size limit
 const sessionCache = new Map();
+const MAX_SESSION_CACHE_SIZE = 100; // Ограничиваем размер кэша
+
+// Circuit Breaker для OpenAI API
+const circuitBreaker = {
+  failures: 0,
+  lastFailureTime: null,
+  threshold: 5, // После 5 неудач переходим в "open" состояние
+  timeout: 60000, // 1 минута в "open" состоянии
+  state: 'closed' // closed, open, half-open
+};
+
+// Проверка состояния Circuit Breaker
+function isCircuitOpen() {
+  if (circuitBreaker.state === 'open') {
+    if (Date.now() - circuitBreaker.lastFailureTime > circuitBreaker.timeout) {
+      circuitBreaker.state = 'half-open';
+      circuitBreaker.failures = 0;
+      console.log('Circuit breaker: переход в half-open состояние');
+    }
+    return circuitBreaker.state === 'open';
+  }
+  return false;
+}
+
+// Очистка старых сессий из кэша
+function cleanupSessionCache() {
+  if (sessionCache.size > MAX_SESSION_CACHE_SIZE) {
+    const entries = Array.from(sessionCache.entries());
+    // Сортируем по времени последнего обновления
+    entries.sort((a, b) => {
+      const timeA = new Date(a[1].lastUpdated || a[1].createdAt || 0).getTime();
+      const timeB = new Date(b[1].lastUpdated || b[1].createdAt || 0).getTime();
+      return timeA - timeB;
+    });
+    
+    // Удаляем самые старые сессии
+    const toDelete = entries.slice(0, sessionCache.size - MAX_SESSION_CACHE_SIZE);
+    toDelete.forEach(([key]) => sessionCache.delete(key));
+    console.log(`Очищено ${toDelete.length} старых сессий из кэша`);
+  }
+}
 
 // Import catalog module
 const catalogHandler = require('./catalog');
+
+// Import rate limiter
+const { checkRateLimit } = require('../utils/rate-limiter');
 
 // Используем тот же Redis клиент что и для каталога
 const { Redis } = require('@upstash/redis');
@@ -65,16 +109,36 @@ async function handler(req, res){
   }
   
   if (req.method !== 'POST') return res.status(405).end();
+  
+  // Rate limiting для chat endpoint
+  const rateLimitResult = await checkRateLimit(req);
+  if (!rateLimitResult.allowed) {
+    return res.status(429).json({
+      error: 'Too Many Requests',
+      message: 'Превышен лимит запросов. Попробуйте позже.',
+      retryAfter: Math.ceil(rateLimitResult.resetTime / 1000)
+    });
+  }
+  
   try{
     const { action, session_id, user_message, history_tail, prompt, catalog, locale, aggressive_mode, user_messages_after_last_form } = req.body || {};
     
     // Handle session initialization (first request with prompt/catalog)
     if (action === 'init' && prompt && catalog) {
-      console.log('Инициализация сессии:', session_id);
-      sessionCache.set(session_id, { prompt, catalog, locale: locale || 'ru' });
+      console.log(`[${new Date().toISOString()}] Инициализация сессии:`, session_id);
       
-      // Временно отключаем сохранение при инициализации - ИСПРАВЛЕНО
-      console.log('Сессия инициализирована, сохранение отключено');
+      // Очищаем кэш если он переполнен
+      cleanupSessionCache();
+      
+      sessionCache.set(session_id, { 
+        prompt, 
+        catalog, 
+        locale: locale || 'ru',
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString()
+      });
+      
+      console.log(`[${new Date().toISOString()}] Сессия инициализирована, размер кэша: ${sessionCache.size}`);
       
       return res.status(200).json({ status: 'initialized' });
     }
@@ -181,6 +245,13 @@ async function handler(req, res){
         return res.status(200).json({ reply: mock });
       }
       
+      // Проверяем Circuit Breaker
+      if (isCircuitOpen()) {
+        console.log('Circuit breaker: OpenAI API недоступен, используем fallback');
+        const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
+        return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift', circuitBreaker: true });
+      }
+      
       console.log('Отправляем запрос к OpenAI...');
       const model = 'gpt-5-mini';
       const body = {
@@ -188,11 +259,11 @@ async function handler(req, res){
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24)
       };
       // Функция для retry запросов с таймаутом
-      async function fetchWithRetry(url, options, maxRetries = 3) {
+      async function fetchWithRetry(url, options, maxRetries = 5) {
         for (let i = 0; i < maxRetries; i++) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 секунд таймаут
+            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 секунд таймаут (вместо 25)
             
             const response = await fetch(url, {
               ...options,
@@ -202,8 +273,10 @@ async function handler(req, res){
             clearTimeout(timeoutId);
             return response;
           } catch (error) {
+            console.log(`OpenAI retry ${i + 1}/${maxRetries}:`, error.name);
             if (i === maxRetries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Экспоненциальная задержка
+            // Экспоненциальная задержка: 1s, 2s, 4s, 8s
+            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
           }
         }
       }
@@ -220,6 +293,15 @@ async function handler(req, res){
       console.log('Ответ от OpenAI, статус:', r.status);
       
       if (!r.ok){
+        // Обновляем Circuit Breaker при ошибке
+        circuitBreaker.failures++;
+        circuitBreaker.lastFailureTime = Date.now();
+        
+        if (circuitBreaker.failures >= circuitBreaker.threshold) {
+          circuitBreaker.state = 'open';
+          console.log('Circuit breaker: переход в open состояние');
+        }
+        
         const t = await r.text();
         const reason = (t || '').slice(0, 500);
         console.error('Ошибка OpenAI API:', r.status, reason);
@@ -227,6 +309,13 @@ async function handler(req, res){
         // Более дружелюбный fallback
         const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
         return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift', debug: { status: r.status, modelTried: model, reason } });
+      }
+      
+      // Сброс Circuit Breaker при успешном запросе
+      if (circuitBreaker.state === 'half-open') {
+        circuitBreaker.state = 'closed';
+        circuitBreaker.failures = 0;
+        console.log('Circuit breaker: переход в closed состояние');
       }
       
       const data = await r.json();

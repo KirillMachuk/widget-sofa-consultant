@@ -1,27 +1,27 @@
-// Используем тот же Redis клиент что и для каталога
-const { Redis } = require('@upstash/redis');
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+// Используем новый Redis клиент с retry логикой
+const redisClient = require('../utils/redis-client');
 
-// Читаем все чаты из Redis
+// Читаем все чаты из Redis с использованием SCAN (неблокирующая операция)
 async function readChats() {
   try {
-    // Получаем все ключи с префиксом chat:
-    const keys = await redis.keys('chat:*');
-    console.log('Найдены ключи в Redis:', keys);
+    console.log('🔍 Сканируем Redis для поиска сессий...');
+    
+    // Используем SCAN вместо keys() для неблокирующей операции
+    const keys = await redisClient.getAllKeys('chat:*', 50); // batch size 50
+    console.log(`Найдено ключей в Redis: ${keys.length}`);
     
     if (keys.length === 0) {
       return [];
     }
     
     // Читаем все сессии одним запросом
-    const sessions = await redis.mget(...keys);
-    console.log('Прочитано сессий:', sessions.length);
-    return sessions.filter(session => session !== null);
+    const sessions = await redisClient.mget(...keys);
+    const validSessions = sessions.filter(session => session !== null);
+    console.log(`Прочитано сессий: ${validSessions.length}`);
+    
+    return validSessions;
   } catch (error) {
-    console.error('Ошибка чтения чатов из Redis:', error);
+    console.error('❌ Ошибка чтения чатов из Redis:', error);
     return [];
   }
 }

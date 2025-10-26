@@ -51,7 +51,10 @@ async function getCatalog() {
     try {
       const oldCached = await redis.get(CATALOG_CACHE_KEY);
       if (oldCached) {
-        console.log('⚠️ Используем устаревший каталог из Redis');
+        console.log('⚠️ Используем устаревший каталог из Redis (graceful degradation)');
+        // Помечаем что каталог устаревший, но все равно используем
+        oldCached.isStale = true;
+        oldCached.fallbackReason = 'Fresh catalog unavailable, using cached version';
         return oldCached;
       }
     } catch (redisError) {
@@ -59,44 +62,59 @@ async function getCatalog() {
     }
     
     // Если совсем ничего не работает - возвращаем пустой каталог
+    console.log('❌ Полный fallback: каталог недоступен');
     return {
       offers: [],
       categories: {},
       totalCount: 0,
       timestamp: new Date().toISOString(),
-      error: 'Catalog unavailable'
+      error: 'Catalog unavailable',
+      isStale: true,
+      fallbackReason: 'No catalog data available'
     };
   }
 }
 
-// Загрузка каталога с сайта (уменьшенный таймаут)
+// Загрузка каталога с сайта с retry логикой
 async function fetchCatalog() {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS); // 8 секунд
+  const maxRetries = 3;
   
-  try {
-    console.log('📥 Загружаем каталог с', CATALOG_URL);
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS); // 8 секунд
     
-    const response = await fetch(CATALOG_URL, {
-      signal: controller.signal,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (compatible; WidgetBot/1.0)',
+    try {
+      console.log(`📥 Загружаем каталог с ${CATALOG_URL} (попытка ${attempt}/${maxRetries})`);
+      
+      const response = await fetch(CATALOG_URL, {
+        signal: controller.signal,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; WidgetBot/1.0)',
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    });
-    
-    clearTimeout(timeoutId);
-    
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
+      
+      const xmlText = await response.text();
+      console.log(`✅ Каталог загружен, размер: ${Math.round(xmlText.length / 1024)} KB`);
+      
+      return parseYML(xmlText);
+    } catch (error) {
+      console.error(`❌ Ошибка загрузки каталога (попытка ${attempt}/${maxRetries}):`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Экспоненциальная задержка: 1s, 2s, 4s
+      const delay = 1000 * Math.pow(2, attempt - 1);
+      console.log(`⏳ Повторная попытка через ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
     }
-    
-    const xmlText = await response.text();
-    console.log('Каталог загружен, размер:', Math.round(xmlText.length / 1024), 'KB');
-    
-    return parseYML(xmlText);
-  } catch (error) {
-    console.error('Ошибка загрузки каталога:', error);
-    throw error;
   }
 }
 
