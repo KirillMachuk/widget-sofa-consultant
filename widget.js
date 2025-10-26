@@ -103,6 +103,31 @@
       transform: translateY(0px);
     }
     
+    /* Индикатор онлайн */
+    .vfw-online-indicator {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 18px;
+      height: 18px;
+      background: #10b981;
+      border: 3px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
+      animation: vfw-pulse 2s ease-in-out infinite;
+    }
+    
+    @keyframes vfw-pulse {
+      0%, 100% { 
+        opacity: 1;
+        transform: scale(1);
+      }
+      50% { 
+        opacity: 0.7;
+        transform: scale(1.1);
+      }
+    }
+    
     /* Основная панель виджета */
     .vfw-panel {
       position: fixed;
@@ -145,6 +170,12 @@
         width: 96px;
         height: 96px;
         box-shadow: 0 8px 32px rgba(0,0,0,.25);
+      }
+      
+      .vfw-online-indicator {
+        width: 20px;
+        height: 20px;
+        border-width: 3px;
       }
       
       .vfw-panel {
@@ -598,8 +629,9 @@
   const root = document.createElement('div');
   root.className = 'vfw-root';
   root.innerHTML = `
-    <button class="vfw-btn" id="vfwBtn" aria-label="Открыть чат">
+    <button class="vfw-btn" id="vfwBtn" aria-label="Открыть чат" style="position:relative">
       <img src="./images/consultant.jpg" alt="Консультант" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);">
+      <span class="vfw-online-indicator"></span>
     </button>
     <div class="vfw-hints" id="vfwHints">
       <div class="vfw-hint" id="vfwHintSingle">
@@ -607,7 +639,8 @@
           <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke-width="2" stroke-linecap="round"/></svg>
         </button>
         <div class="vfw-hint-content">
-          Готов проконсультировать!
+          Привет! ✋
+          Я онлайн и готов помочь с выбором мебели!
         </div>
       </div>
     </div>
@@ -1257,7 +1290,7 @@
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting && els.panel.getAttribute('data-open') !== '1' && canShowHints()) {
-            showHintsWithAutoHide('Готов проконсультировать!');
+            showHintsWithAutoHide('Привет! ✋\nЯ онлайн и готов помочь с выбором мебели!');
             markTriggered();
             observer.disconnect();
           }
@@ -2000,6 +2033,13 @@
     schedulePageCountTrigger();
     watchSpaRouting();
     setupExitIntent();
+    
+    // Показываем приветственную подсказку через 15 секунд
+    setTimeout(() => {
+      if (els.panel.getAttribute('data-open') !== '1' && canShowHints()) {
+        showHintsWithAutoHide('Привет! ✋\nЯ онлайн и готов помочь с выбором мебели!');
+      }
+    }, 15000);
     
     // Загружаем данные в фоне
     fetchPromptAndCatalog().catch(e => {
