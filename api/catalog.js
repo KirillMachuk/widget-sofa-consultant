@@ -314,6 +314,64 @@ function detectCategory(query) {
   return null;
 }
 
+// Извлечение количества из запроса
+function extractQuantity(query) {
+  const queryLower = query.toLowerCase();
+  
+  // Паттерны: "4 стула", "нужен 3 стула", "купить 5 стульев"
+  const patterns = [
+    /(\d+)\s*(?:стул|стуль|стула|стульев|стулья|кресл|диван|стол)/i,
+    /(?:нужен|нужно|купить|хочу)\s*(\d+)/i
+  ];
+  
+  for (const pattern of patterns) {
+    const match = query.match(pattern);
+    if (match) {
+      const quantity = parseInt(match[1]);
+      console.log(`🔢 extractQuantity: найдено количество ${quantity} в запросе:`, query.substring(0, 100));
+      return quantity;
+    }
+  }
+  
+  console.log(`🔢 extractQuantity: количество не найдено, используем 1 для запроса:`, query.substring(0, 100));
+  return 1; // По умолчанию 1 штука
+}
+
+// Расчет цены за единицу товара
+function getPricePerUnit(offer) {
+  const name = (offer.name || '').toLowerCase();
+  
+  // Ищем "2 шт", "3 шт" и т.д. в названии
+  const match = name.match(/(\d+)\s*шт/);
+  if (match) {
+    const quantity = parseInt(match[1]);
+    const pricePerUnit = offer.price / quantity;
+    console.log(`💰 getPricePerUnit: ${offer.name} - ${offer.price} BYN за ${quantity} шт = ${pricePerUnit.toFixed(0)} BYN/шт`);
+    return pricePerUnit;
+  }
+  
+  console.log(`💰 getPricePerUnit: ${offer.name} - ${offer.price} BYN за 1 шт`);
+  return offer.price; // Цена за 1 шт
+}
+
+// Определение намерения пользователя по цене
+function detectPriceIntent(query) {
+  const queryLower = query.toLowerCase();
+  
+  if (queryLower.includes('самый дешевый') || 
+      queryLower.includes('самый дешёвый') ||
+      queryLower.includes('дешевле всего') ||
+      queryLower.includes('минимальная цена') ||
+      queryLower.includes('самый дешевый стул') ||
+      queryLower.includes('самый дешевый диван')) {
+    console.log(`🎯 detectPriceIntent: найден запрос на самый дешевый в:`, query.substring(0, 100));
+    return 'cheapest'; // Показать только самый дешевый
+  }
+  
+  console.log(`🎯 detectPriceIntent: запрос на разнообразие в:`, query.substring(0, 100));
+  return 'variety'; // Показать разнообразие (дешевый + средний + дорогой)
+}
+
 // Извлечение размеров из запроса
 function extractDimensions(query) {
   const dimensions = [];
@@ -1012,29 +1070,71 @@ function filterOffers(catalog, query, filters = {}) {
     }
   }
   
-  // Ограничиваем количество результатов
-  const maxResults = filters.limit || 50;
-  const finalResults = filtered.slice(0, maxResults);
+  // Интеллектуальная сортировка и отбор товаров
+  const priceIntent = detectPriceIntent(query);
+  const requestedQuantity = extractQuantity(query);
   
-  // Логируем финальные результаты
-  console.log(`📊 filterOffers RESULT: найдено ${finalResults.length} товаров`);
-  if (finalResults.length > 0) {
-    console.log('📦 Первые 3 товара:', finalResults.slice(0, 3).map(o => ({
-      name: o.name,
-      price: o.price,
-      category: o.category
-    })));
-  } else {
-    console.log('❌ Товары НЕ найдены по запросу');
+  console.log(`🎯 Намерение: ${priceIntent}, количество: ${requestedQuantity}`);
+  
+  // Добавляем цену за единицу и общую стоимость к каждому товару
+  filtered = filtered.map(offer => ({
+    ...offer,
+    pricePerUnit: getPricePerUnit(offer),
+    totalPrice: getPricePerUnit(offer) * requestedQuantity
+  }));
+  
+  // Фильтруем по общей стоимости если указан бюджет
+  if (priceRange.maxPrice) {
+    const beforeFilter = filtered.length;
+    filtered = filtered.filter(o => o.totalPrice <= priceRange.maxPrice);
+    console.log(`💰 Фильтр по бюджету ${priceRange.maxPrice}: ${beforeFilter} → ${filtered.length} товаров`);
   }
   
-  return finalResults;
+  // Сортировка в зависимости от намерения
+  if (priceIntent === 'cheapest') {
+    // Только самый дешевый - сортируем по цене за единицу
+    filtered.sort((a, b) => a.pricePerUnit - b.pricePerUnit);
+    const finalResults = filtered.slice(0, 1); // Только 1 товар
+    console.log(`📊 filterOffers RESULT (cheapest): найден 1 самый дешевый товар`);
+    return finalResults;
+  } else {
+    // Разнообразие - сортируем по цене, но показываем несколько
+    filtered.sort((a, b) => a.pricePerUnit - b.pricePerUnit);
+    
+    // Выбираем 2-3 товара: дешевый, средний, дорогой
+    const results = [];
+    if (filtered.length >= 3) {
+      results.push(filtered[0]); // Самый дешевый
+      results.push(filtered[Math.floor(filtered.length / 2)]); // Средний
+      results.push(filtered[filtered.length - 1]); // Самый дорогой в бюджете
+      console.log(`📊 filterOffers RESULT (variety): выбрано 3 товара (дешевый, средний, дорогой)`);
+    } else {
+      results.push(...filtered); // Если < 3, показываем все
+      console.log(`📊 filterOffers RESULT (variety): показаны все ${filtered.length} товара`);
+    }
+    
+    // Логируем финальные результаты
+    console.log('📦 Выбранные товары:', results.map(o => ({
+      name: o.name,
+      price: o.price,
+      pricePerUnit: o.pricePerUnit,
+      totalPrice: o.totalPrice,
+      category: o.category
+    })));
+    
+    return results;
+  }
 }
 
 // Форматирование товаров для GPT
 function formatOffersForGPT(offers) {
   return offers.map(offer => {
     let info = `- ${offer.name} — ${offer.price} ${offer.currency}`;
+    
+    // Добавляем цену за единицу если это комплект
+    if (offer.pricePerUnit && offer.pricePerUnit !== offer.price) {
+      info += ` (${offer.pricePerUnit.toFixed(0)} ${offer.currency} за шт)`;
+    }
     
     if (offer.oldPrice && offer.oldPrice > offer.price) {
       info += ` (было: ${offer.oldPrice} ${offer.currency})`;
