@@ -98,6 +98,83 @@ async function saveChat(sessionId, userMessage, botReply) {
   }
 }
 
+// Определение намерения пользователя (нужен ли поиск в каталоге)
+async function detectIntent(userMessage) {
+  const intentPrompt = `Ты анализируешь запросы клиентов мебельного магазина nm-shop.by.
+
+ЗАДАЧА: Определить, нужен ли поиск товаров в каталоге для ответа на запрос.
+
+ЗАПРОС КЛИЕНТА: "${userMessage}"
+
+ПРАВИЛА:
+1. Если клиент спрашивает о конкретных товарах (диван, стул, кровать) с характеристиками (механизм, размер, цвет, цена) → нужен каталог
+2. Если клиент хочет подобрать/купить/посмотреть товары с конкретными параметрами → нужен каталог
+3. Если клиент спрашивает о салонах, адресах, доставке, оплате, гарантии, контактах, режиме работы → каталог НЕ нужен
+4. Если клиент просто упоминает товар в контексте другого вопроса (например "где диваны посмотреть") → каталог НЕ нужен
+5. Если комбинированный запрос ("диван + доставка") и есть характеристики товара → нужен каталог
+
+ПРИМЕРЫ:
+
+Запрос: "нужен стул до 300 руб"
+Ответ: {"needsCatalog": true, "reason": "конкретный запрос с ценой"}
+
+Запрос: "где можно диваны посмотреть в минске"
+Ответ: {"needsCatalog": false, "reason": "вопрос о салонах"}
+
+Запрос: "какие условия доставки дивана"
+Ответ: {"needsCatalog": false, "reason": "вопрос о доставке"}
+
+Запрос: "подберите диван с механизмом еврокнижка"
+Ответ: {"needsCatalog": true, "reason": "подбор товара с характеристиками"}
+
+Запрос: "диван с механизмом еврокнижка и стоимость доставки в минске"
+Ответ: {"needsCatalog": true, "reason": "комбинированный запрос - нужны товары + FAQ"}
+
+Запрос: "подскажите где можно вживую ваши диваны в минске глянуть и какие условия по доставке в минске"
+Ответ: {"needsCatalog": false, "reason": "вопросы о салонах и доставке без характеристик товара"}
+
+ВАЖНО: Отвечай ТОЛЬКО JSON объектом: {"needsCatalog": true/false, "reason": "причина"}`;
+
+  try {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-5-mini',
+        messages: [{ role: 'system', content: intentPrompt }],
+        temperature: 0.1, // Низкая температура для стабильности
+        max_tokens: 100
+      })
+    });
+
+    if (!response.ok) {
+      console.error('Intent Detection: OpenAI error', response.status);
+      // Fallback: если ошибка - считаем что каталог НЕ нужен (безопаснее)
+      return { needsCatalog: false, reason: 'openai_error_fallback' };
+    }
+
+    const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content || '{}';
+    
+    // Парсим JSON с обработкой ошибок
+    try {
+      const result = JSON.parse(resultText);
+      console.log('🔍 Intent Detection:', result);
+      return result;
+    } catch (parseError) {
+      console.error('Intent Detection: JSON parse error', resultText);
+      return { needsCatalog: false, reason: 'json_parse_error' };
+    }
+  } catch (error) {
+    console.error('Intent Detection: request error', error);
+    // Fallback: при ошибке сети считаем что каталог НЕ нужен
+    return { needsCatalog: false, reason: 'network_error_fallback' };
+  }
+}
+
 async function handler(req, res){
   // Add CORS headers for external domains
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -162,10 +239,24 @@ async function handler(req, res){
         { role: 'user', content: user_message }
       ];
       
-      // Get relevant products from catalog - direct integration
+      // ЭТАП 1: Определяем намерение (нужен ли каталог)
+      let intent;
+      try {
+        intent = await detectIntent(user_message);
+      } catch (error) {
+        console.error('Ошибка определения намерения:', error);
+        // Fallback - считаем что каталог НЕ нужен
+        intent = { needsCatalog: false, reason: 'detectIntent_error' };
+      }
+      
+      // ЭТАП 2: Get relevant products from catalog - только если нужно
       let relevantProducts = '';
       let catalogAvailable = false;
-      try {
+      
+      if (intent.needsCatalog) {
+        console.log('✅ Каталог нужен:', intent.reason);
+        
+        try {
         // Извлекаем предыдущие сообщения для контекста (без текущего)
         const historyMessages = messages.filter(m => m.role === 'user');
         let enrichedQuery;
@@ -267,9 +358,14 @@ async function handler(req, res){
           relevantProducts = 'КАТАЛОГ_НЕДОСТУПЕН';
           catalogAvailable = false;
         }
-      } catch (error) {
-        console.error('❌ Ошибка получения каталога:', error);
-        relevantProducts = 'КАТАЛОГ_ОШИБКА';
+        } catch (error) {
+          console.error('❌ Ошибка получения каталога:', error);
+          relevantProducts = 'КАТАЛОГ_ОШИБКА';
+        }
+      } else {
+        console.log('ℹ️ Каталог НЕ нужен:', intent.reason);
+        relevantProducts = ''; // Пустая строка = не передаем товары в промпт
+        catalogAvailable = true; // Каталог "доступен", просто не используется
       }
       
       console.log('Строим системный промпт...');
