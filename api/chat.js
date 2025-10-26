@@ -147,7 +147,9 @@ async function detectIntent(userMessage) {
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: intentPrompt }],
-        max_completion_tokens: 100
+        max_completion_tokens: 150,  // Буфер для детальных reason
+        reasoning_effort: 'medium',  // Сбалансированный анализ
+        verbosity: 'low'             // Краткий ответ (только JSON)
       })
     });
 
