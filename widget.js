@@ -1504,9 +1504,9 @@
       // Восстанавливаем форму если она была предложена
       const lastBotMessage = loadHistory().filter(m => m.role === 'assistant').slice(-1)[0];
       if (lastBotMessage && shouldShowForm(lastBotMessage.content)) {
-        // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+        // Проверяем паузу между показами форм (минимум 2 реплики клиента)
         const isDirectRequest = isDirectFormRequest(lastBotMessage.content);
-        if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+        if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
           // Пауза не прошла - не показываем форму
           return;
         }
@@ -1596,10 +1596,10 @@
         if (response.formMessage) {
           addMsg('bot', response.formMessage);
           
-          // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+          // Проверяем паузу между показами форм (минимум 2 реплики клиента)
           console.log('Form pause check:', { lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
           const isDirectRequest = isDirectFormRequest(response.formMessage);
-          if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+          if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
             // Пауза не прошла - не показываем форму, только сообщение бота
             console.log('Form paused - not showing form');
             return;
@@ -1623,9 +1623,9 @@
         } else if (response.needsForm && response.formType === 'gift') {
           // Показываем форму с подарком при ошибке AI (только если она еще не была показана)
           if (!fallbackFormShown) {
-            // Проверяем паузу между показами форм (минимум 3 реплики клиента)
+            // Проверяем паузу между показами форм (минимум 2 реплики клиента)
             const isDirectRequest = isDirectFormRequest(response.text);
-            if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+            if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
               // Пауза не прошла - не показываем форму
               return;
             }
@@ -1708,7 +1708,7 @@
     // Обходим паузу для прямых просьб заполнить форму
     const isDirectRequest = isDirectFormRequest(botReply);
     console.log('Direct request check:', { botReply, isDirectRequest, bypassFormPause, lastFormShownAt, userMessagesAfterLastForm });
-    if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 3) {
+    if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
       console.log('maybeOfferPhoneFlow paused - not showing form');
       return; // Не показываем форму слишком часто
     }
@@ -1735,24 +1735,16 @@
     
     // Проверяем специальные триггеры
     const installmentKeywords = ['рассрочк', 'рассрочку', 'рассрочка', 'рассрочки'];
-    const customizationKeywords = ['размер', 'размеры', 'конструкц', 'кастомизац', 'измен', 'под заказ'];
     
     const hasInstallmentRequest = installmentKeywords.some(keyword => botReply.toLowerCase().includes(keyword));
-    const hasCustomizationRequest = customizationKeywords.some(keyword => botReply.toLowerCase().includes(keyword));
     
     if (isDirectRequest || matchedTriggers.length > 0 || hasForceWords){
       
       if (hasInstallmentRequest) {
         // Показываем форму для рассрочки
         renderConsultationForm();
-      } else if (hasCustomizationRequest) {
-        // Показываем форму для кастомизации
-        renderForm('Согласование размеров и конструкции', [
-          { id: 'name', placeholder: 'Имя', required: true },
-          { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-        ], 'Получить консультацию', 'Согласование размеров и конструкции');
       } else {
-        // Обычная форма с подарками
+        // Обычная форма с подарками (по умолчанию)
         const pretexts = [
           'Закрепить подарок и оставить данные?',
           'Выберите подарок и оставьте контакты?',
