@@ -263,7 +263,7 @@ async function handler(req, res){
         for (let i = 0; i < maxRetries; i++) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 9000); // 9 секунд таймаут (баланс между скоростью и надежностью)
+            const timeoutId = setTimeout(() => controller.abort(), 25000); // 25 секунд таймаут (изначальное значение)
             
             const response = await fetch(url, {
               ...options,
