@@ -1100,9 +1100,37 @@ function filterOffers(catalog, query, filters = {}) {
   
   // Фильтруем по общей стоимости если указан бюджет
   if (priceRange.maxPrice) {
-    const beforeFilter = filtered.length;
-    filtered = filtered.filter(o => o.totalPrice <= priceRange.maxPrice);
-    console.log(`💰 Фильтр по бюджету ${priceRange.maxPrice}: ${beforeFilter} → ${filtered.length} товаров`);
+    console.log('🔍 До фильтра по бюджету:', filtered.slice(0, 5).map(o => ({
+      name: o.name,
+      pricePerUnit: o.pricePerUnit,
+      totalPrice: o.totalPrice,
+      budget: priceRange.maxPrice
+    })));
+    
+    // Сначала показываем товары В бюджете
+    const inBudget = filtered.filter(o => o.totalPrice <= priceRange.maxPrice);
+    
+    // Если нашли - отлично
+    if (inBudget.length > 0) {
+      filtered = inBudget;
+      console.log(`💰 В бюджете ${priceRange.maxPrice}: ${filtered.length} товаров`);
+    } else {
+      // Если НЕ нашли - показываем ближайшие выше бюджета (до +20%)
+      const nearBudget = filtered.filter(o => 
+        o.totalPrice <= priceRange.maxPrice * 1.2
+      ).slice(0, 3);
+      
+      if (nearBudget.length > 0) {
+        filtered = nearBudget;
+        console.log(`💰 Выше бюджета, показываем ближайшие: ${filtered.length} товаров`);
+        
+        // Добавляем флаг что это товары выше бюджета
+        filtered = filtered.map(o => ({...o, aboveBudget: true}));
+      } else {
+        filtered = [];
+        console.log(`❌ Нет товаров даже с запасом +20% от бюджета`);
+      }
+    }
   }
   
   // Сортировка в зависимости от намерения
@@ -1142,13 +1170,19 @@ function filterOffers(catalog, query, filters = {}) {
 }
 
 // Форматирование товаров для GPT
-function formatOffersForGPT(offers) {
+function formatOffersForGPT(offers, maxPrice = null) {
   return offers.map(offer => {
     let info = `- ${offer.name} — ${offer.price} ${offer.currency}`;
     
     // Добавляем цену за единицу если это комплект
     if (offer.pricePerUnit && offer.pricePerUnit !== offer.price) {
       info += ` (${offer.pricePerUnit.toFixed(0)} ${offer.currency} за шт)`;
+    }
+    
+    // Добавляем информацию о превышении бюджета
+    if (offer.aboveBudget && offer.totalPrice && maxPrice) {
+      const excess = offer.totalPrice - maxPrice;
+      info += ` (на ${excess.toFixed(0)} ${offer.currency} выше бюджета)`;
     }
     
     if (offer.oldPrice && offer.oldPrice > offer.price) {
@@ -1239,7 +1273,7 @@ async function handler(req, res) {
       const filteredOffers = filterOffers(catalog, query || '', filters || {});
       
       // Форматируем для GPT
-      const formattedOffers = formatOffersForGPT(filteredOffers);
+      const formattedOffers = formatOffersForGPT(filteredOffers, priceRange.maxPrice);
       
       return res.status(200).json({
         success: true,
