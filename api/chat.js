@@ -6,8 +6,8 @@ const MAX_SESSION_CACHE_SIZE = 100; // Ограничиваем размер к�
 const circuitBreaker = {
   failures: 0,
   lastFailureTime: null,
-  threshold: 5, // После 5 неудач переходим в "open" состояние
-  timeout: 60000, // 1 минута в "open" состоянии
+  threshold: 3, // После 3 неудач переходим в "open" состояние (более агрессивно)
+  timeout: 30000, // 30 секунд в "open" состоянии (быстрее восстановление)
   state: 'closed' // closed, open, half-open
 };
 
@@ -263,7 +263,7 @@ async function handler(req, res){
         for (let i = 0; i < maxRetries; i++) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 8000); // 8 секунд таймаут (вместо 25)
+            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 секунд таймаут (еще меньше)
             
             const response = await fetch(url, {
               ...options,
@@ -275,8 +275,9 @@ async function handler(req, res){
           } catch (error) {
             console.log(`OpenAI retry ${i + 1}/${maxRetries}:`, error.name);
             if (i === maxRetries - 1) throw error;
-            // Экспоненциальная задержка: 1s, 2s, 4s, 8s
-            await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, i)));
+            // Более быстрая retry стратегия: 500ms, 1s, 2s, 4s
+            const delay = Math.min(500 * Math.pow(2, i), 4000);
+            await new Promise(resolve => setTimeout(resolve, delay));
           }
         }
       }
