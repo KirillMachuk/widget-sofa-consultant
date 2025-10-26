@@ -169,6 +169,7 @@ async function detectIntent(userMessage) {
     try {
       const result = JSON.parse(resultText);
       console.log('🔍 Intent Detection:', result);
+      console.log('🔍 Intent Detection: needsCatalog =', result.needsCatalog, ', reason =', result.reason);
       return result;
     } catch (parseError) {
       console.error('Intent Detection: JSON parse error', resultText);
@@ -375,6 +376,11 @@ async function handler(req, res){
       }
       
       console.log('Строим системный промпт...');
+      console.log('📊 relevantProducts для промпта:', {
+        length: relevantProducts?.length || 0,
+        isEmpty: !relevantProducts || relevantProducts.trim() === '',
+        preview: relevantProducts?.substring(0, 200) || 'empty'
+      });
       const sys = buildSystemPrompt(session.prompt, relevantProducts, session.locale, aggressive_mode);
       console.log('Системный промпт готов, длина:', sys.length);
       
