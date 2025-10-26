@@ -166,17 +166,22 @@ async function handler(req, res){
       let relevantProducts = '';
       let catalogAvailable = false;
       try {
-        // Извлекаем ключевые слова из истории диалога для контекста
-        const historyText = messages
-          .filter(m => m.role === 'user')
-          .map(m => m.content)
-          .join(' ');
+        // Извлекаем предыдущие сообщения для контекста (без текущего)
+        const historyMessages = messages.filter(m => m.role === 'user');
+        let enrichedQuery;
         
-        // Комбинируем текущий запрос с историей для лучшего поиска
-        const enrichedQuery = `${historyText} ${user_message}`;
+        if (historyMessages.length > 1) {
+          // Есть история - берем только предыдущие сообщения (не дублируем текущее)
+          const previousMessages = historyMessages.slice(0, -1); // Все кроме последнего
+          const historyText = previousMessages.map(m => m.content).join(' ');
+          enrichedQuery = `${historyText} ${user_message}`;
+          console.log('📝 Обогащенный запрос с историей (без дублей):', enrichedQuery.substring(0, 150));
+        } else {
+          // Первое сообщение - используем как есть
+          enrichedQuery = user_message;
+          console.log('🔍 Первый запрос - без обогащения:', enrichedQuery);
+        }
         
-        console.log('🔍 Прямой запрос к каталогу для:', user_message);
-        console.log('📝 Обогащенный запрос с историей:', enrichedQuery);
         console.log('Начинаем работу с каталогом...');
         
         // Прямой вызов каталога без HTTP запроса
@@ -220,11 +225,23 @@ async function handler(req, res){
         
         await catalogHandler(catalogReq, catalogRes);
         
+        // Fallback: если с обогащением ничего не нашли - пробуем без истории
+        if (catalogData && catalogData.success && catalogData.totalFound === 0 && enrichedQuery !== user_message) {
+          console.log('⚠️ С обогащением не нашли товары, пробуем без истории...');
+          catalogReq.body.query = user_message; // Только текущее сообщение
+          catalogData = null; // Сброс
+          await catalogHandler(catalogReq, catalogRes);
+          
+          if (catalogData && catalogData.success && catalogData.totalFound > 0) {
+            console.log('✅ Без обогащения нашли товары:', catalogData.totalFound);
+          }
+        }
+        
         if (catalogData && catalogData.success) {
           if (catalogData.totalFound > 0 && catalogData.formattedForGPT) {
             relevantProducts = catalogData.formattedForGPT;
             catalogAvailable = true;
-            console.log('✅ Найдено товаров:', catalogData.totalFound);
+            console.log('✅ Финально найдено товаров:', catalogData.totalFound);
           } else {
             // Товары не найдены по критериям - продолжаем работу
             console.log('⚠️ Товары не найдены по критериям, каталог работает');
