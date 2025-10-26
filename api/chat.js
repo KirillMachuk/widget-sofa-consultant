@@ -148,7 +148,7 @@ async function detectIntent(userMessage) {
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: intentPrompt }],
         temperature: 0.1, // Низкая температура для стабильности
-        max_tokens: 100
+        max_completion_tokens: 100
       })
     });
 
