@@ -133,7 +133,22 @@ async function detectIntent(userMessage) {
 Запрос: "подскажите где можно вживую ваши диваны в минске глянуть и какие условия по доставке в минске"
 Ответ: {"needsCatalog": false, "reason": "вопросы о салонах и доставке без характеристик товара"}
 
-ВАЖНО: Отвечай ТОЛЬКО JSON объектом: {"needsCatalog": true/false, "reason": "причина"}`;
+ПРИМЕРЫ:
+
+Запрос: "нужен стул до 300 руб"
+Ответ: {"needsCatalog": true, "reason": "конкретный запрос с ценой"}
+
+Запрос: "4 стула на кухню бюджет до 1000 руб черный цвет"
+Ответ: {"needsCatalog": true, "reason": "подбор товаров с конкретными характеристиками"}
+
+Запрос: "где можно диваны посмотреть в минске"
+Ответ: {"needsCatalog": false, "reason": "вопрос о салонах"}
+
+Запрос: "какие условия доставки"
+Ответ: {"needsCatalog": false, "reason": "вопрос о доставке"}
+
+ВАЖНО: Отвечай СТРОГО валидным JSON объектом, ничего больше:
+{"needsCatalog": true или false, "reason": "краткое объяснение"}`;
 
   console.log('🔍 Intent Detection: промпт длина:', intentPrompt.length, 'символов');
   
@@ -147,9 +162,13 @@ async function detectIntent(userMessage) {
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: intentPrompt }],
-        max_completion_tokens: 150,  // Буфер для детальных reason
-        reasoning_effort: 'medium',  // Сбалансированный анализ
-        verbosity: 'low'             // Краткий ответ (только JSON)
+        max_output_tokens: 150,      // ✅ Правильный параметр для GPT-5
+        reasoning: {                  // ✅ Объект для настройки рассуждений
+          effort: 'medium'
+        },
+        text: {                       // ✅ Объект для настройки вывода
+          verbosity: 'low'
+        }
       })
     });
 
@@ -164,16 +183,21 @@ async function detectIntent(userMessage) {
     }
 
     const data = await response.json();
+    
+    // Подробное логирование для отладки
+    console.log('🔍 Intent Detection FULL response:', JSON.stringify(data, null, 2));
+    
     const resultText = data.choices?.[0]?.message?.content || '{}';
+    console.log('🔍 Intent Detection extracted content:', resultText);
     
     // Парсим JSON с обработкой ошибок
     try {
       const result = JSON.parse(resultText);
-      console.log('🔍 Intent Detection:', result);
-      console.log('🔍 Intent Detection: needsCatalog =', result.needsCatalog, ', reason =', result.reason);
+      console.log('🔍 Intent Detection parsed:', result);
+      console.log('🔍 needsCatalog =', result.needsCatalog, ', reason =', result.reason);
       return result;
     } catch (parseError) {
-      console.error('Intent Detection: JSON parse error', resultText);
+      console.error('❌ Intent Detection: JSON parse error', resultText);
       return { needsCatalog: false, reason: 'json_parse_error' };
     }
   } catch (error) {
