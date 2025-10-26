@@ -103,70 +103,6 @@
       transform: translateY(0px);
     }
     
-    /* Всплывающее сообщение */
-    .vfw-badge {
-      position: absolute;
-      right: 108px;
-      bottom: 100px;
-      max-width: 280px;
-      min-width: 200px;
-      background: ${CONFIG.brand.bg};
-      color: ${CONFIG.brand.text};
-      border-radius: 14px;
-      padding: 10px 12px;
-      box-shadow: 0 12px 40px rgba(0,0,0,.18);
-      opacity: 0;
-      transform: translateY(6px) scale(.98);
-      pointer-events: auto;
-      border: 1px solid rgba(17,17,17,.06);
-      z-index: 999998;
-    }
-    
-    .vfw-badge[data-show="1"] {
-      animation: vfw-pop .4s cubic-bezier(.2,.8,.2,1) forwards;
-    }
-    
-    @keyframes vfw-pop {
-      0% { opacity: 0; transform: translateY(8px) scale(.96); }
-      60% { opacity: 1; transform: translateY(-2px) scale(1.02); }
-      100% { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    
-    .vfw-badge-tail {
-      position: absolute;
-      right: -8px;
-      bottom: 8px;
-      width: 16px;
-      height: 16px;
-      background: ${CONFIG.brand.bg};
-      transform: rotate(45deg);
-      border-right: 1px solid rgba(17,17,17,.06);
-      border-bottom: 1px solid rgba(17,17,17,.06);
-    }
-    
-    .vfw-badge-close {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 20px;
-      height: 20px;
-      border-radius: 50%;
-      background: #fff;
-      border: 1px solid rgba(17,17,17,.12);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      cursor: pointer;
-      box-shadow: 0 2px 8px rgba(0,0,0,.15);
-    }
-    
-    .vfw-badge-close svg {
-      stroke: #111;
-      stroke-width: 2;
-      width: 12px;
-      height: 12px;
-    }
-    
     /* Основная панель виджета */
     .vfw-panel {
       position: fixed;
@@ -228,22 +164,6 @@
         padding-left: env(safe-area-inset-left, 0);
         padding-right: env(safe-area-inset-right, 0);
       }
-      
-      .vfw-badge {
-        right: 124px;
-        bottom: 136px;
-        max-width: calc(100vw - 140px);
-      }
-      
-      .vfw-badge-close {
-        width: 24px;
-        height: 24px;
-      }
-      
-      .vfw-badge-close svg {
-        width: 14px;
-        height: 14px;
-      }
     }
     
     @media (max-width: 480px) {
@@ -255,12 +175,6 @@
       .vfw-btn {
         width: 88px;
         height: 88px;
-      }
-      
-      .vfw-badge {
-        right: 116px;
-        bottom: 112px;
-        max-width: calc(100vw - 140px);
       }
     }
     
@@ -684,13 +598,6 @@
   const root = document.createElement('div');
   root.className = 'vfw-root';
   root.innerHTML = `
-    <div class="vfw-badge" id="vfwBadge">
-      <div id="vfwBadgeText"></div>
-      <button class="vfw-badge-close" id="vfwBadgeClose" aria-label="Закрыть">
-        <svg viewBox="0 0 24 24" fill="none"><path d="M6 6l12 12M18 6L6 18" stroke-linecap="round"/></svg>
-      </button>
-      <div class="vfw-badge-tail"></div>
-    </div>
     <button class="vfw-btn" id="vfwBtn" aria-label="Открыть чат">
       <img src="./images/consultant.jpg" alt="Консультант" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);">
     </button>
@@ -822,9 +729,6 @@
 
   const els = {
     root: root,
-    badge: root.querySelector('#vfwBadge'),
-    badgeText: root.querySelector('#vfwBadgeText'),
-    badgeClose: root.querySelector('#vfwBadgeClose'),
     btn: root.querySelector('#vfwBtn'),
     panel: root.querySelector('#vfwPanel'),
     body: root.querySelector('#vfwBody'),
@@ -841,22 +745,8 @@
     hintClose: root.querySelector('#vfwHintClose')
   };
 
-  function onAnyPageClickOnce(fn){
-    const handler = (e)=>{ document.removeEventListener('click', handler, true); fn(e); };
-    document.addEventListener('click', handler, true);
-  }
-
-  function showBadge(text){
-    els.badgeText.textContent = text;
-    els.badge.setAttribute('data-show','1');
-    onAnyPageClickOnce(()=> {
-      els.badge.removeAttribute('data-show');
-    });
-  }
-
   function openPanel(){
     els.panel.setAttribute('data-open','1');
-    els.badge.removeAttribute('data-show');
     disableScroll();
   }
 
@@ -1627,14 +1517,6 @@
     widgetOpenedInSession = false;
     enableScroll(); // Дополнительно разблокируем скролл при завершении диалога
   });
-
-  if (els.badgeClose){ 
-    els.badgeClose.addEventListener('click', (e)=>{
-      e.preventDefault();
-      e.stopPropagation();
-      els.badge.removeAttribute('data-show'); 
-    }); 
-  }
 
   if (els.hintClose){ 
     els.hintClose.addEventListener('click', (e)=>{
