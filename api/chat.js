@@ -153,7 +153,7 @@ async function detectIntent(userMessage) {
   console.log('🔍 Intent Detection: промпт длина:', intentPrompt.length, 'символов');
   
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    const response = await fetch('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
@@ -162,10 +162,12 @@ async function detectIntent(userMessage) {
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: intentPrompt }],
-        max_tokens: 150,             // ✅ Chat Completions API параметр
-        temperature: 0.1,           // ✅ Chat Completions API параметр
-        response_format: {           // ✅ Для гарантии JSON ответа
-          type: "json_object"
+        max_output_tokens: 150,      // ✅ Responses API параметр
+        reasoning: {                  // ✅ Вместо temperature
+          effort: 'medium'
+        },
+        text: {                       // ✅ Для краткого JSON
+          verbosity: 'low'
         }
       })
     });
@@ -182,11 +184,13 @@ async function detectIntent(userMessage) {
 
     const data = await response.json();
     
-    // Подробное логирование для отладки
-    console.log('🔍 Intent Detection FULL response:', JSON.stringify(data, null, 2));
+    // Подробное логирование для отладки Responses API
+    console.log('🔍 Responses API FULL response:', JSON.stringify(data, null, 2));
+    console.log('🔍 Response structure:', Object.keys(data));
+    console.log('🔍 Choices structure:', data.choices?.[0] ? Object.keys(data.choices[0]) : 'no choices');
     
     const resultText = data.choices?.[0]?.message?.content || '{}';
-    console.log('🔍 Intent Detection extracted content:', resultText);
+    console.log('🔍 Responses API extracted content:', resultText);
     
     // Парсим JSON с обработкой ошибок
     try {
