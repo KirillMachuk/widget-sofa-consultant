@@ -259,11 +259,11 @@ async function handler(req, res){
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24)
       };
       // Функция для retry запросов с таймаутом
-      async function fetchWithRetry(url, options, maxRetries = 5) {
+      async function fetchWithRetry(url, options, maxRetries = 3) {
         for (let i = 0; i < maxRetries; i++) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 секунды таймаут (критический минимум)
+            const timeoutId = setTimeout(() => controller.abort(), 9000); // 9 секунд таймаут (баланс между скоростью и надежностью)
             
             const response = await fetch(url, {
               ...options,
@@ -275,15 +275,9 @@ async function handler(req, res){
           } catch (error) {
             console.log(`OpenAI retry ${i + 1}/${maxRetries}:`, error.name);
             
-            // При AbortError (таймаут) - немедленный fallback после 1 попытки
-            if (error.name === 'AbortError' && i === 0) {
-              console.log('🚨 AbortError на первой попытке - немедленный fallback');
-              throw new Error('TIMEOUT_FALLBACK');
-            }
-            
             if (i === maxRetries - 1) throw error;
-            // Более быстрая retry стратегия: 200ms, 500ms, 1s, 2s
-            const delay = Math.min(200 * Math.pow(2, i), 2000);
+            // Retry стратегия: 1s, 2s (даем OpenAI время)
+            const delay = 1000 * (i + 1);
             await new Promise(resolve => setTimeout(resolve, delay));
           }
         }
@@ -300,13 +294,9 @@ async function handler(req, res){
           body: JSON.stringify(body)
         });
       } catch (error) {
-        // Обработка немедленного fallback при таймауте
-        if (error.message === 'TIMEOUT_FALLBACK') {
-          console.log('🚨 Немедленный fallback из-за таймаута OpenAI');
-          const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
-          return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift', timeoutFallback: true });
-        }
-        throw error; // Перебрасываем другие ошибки
+        // Обработка ошибок после всех retry попыток
+        console.error('❌ Все retry попытки исчерпаны:', error.message);
+        throw error;
       }
       
       console.log('Ответ от OpenAI, статус:', r.status);
