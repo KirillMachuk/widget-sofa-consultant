@@ -1208,7 +1208,7 @@
     if (els.hintSingle) {
       const hintContent = els.hintSingle.querySelector('.vfw-hint-content');
       if (hintContent) {
-        hintContent.textContent = text;
+        hintContent.innerHTML = text.replace(/\n/g, '<br>');
       }
     }
     
@@ -1230,7 +1230,7 @@
     if (els.hintSingle) {
       const hintContent = els.hintSingle.querySelector('.vfw-hint-content');
       if (hintContent) {
-        hintContent.textContent = 'Перед тем как уйти — хочу предложить вам подарок на выбор 🎁';
+        hintContent.innerHTML = 'Перед тем как уйти — хочу предложить вам подарок на выбор 🎁';
       }
     }
     
