@@ -301,13 +301,16 @@ function detectCategory(query) {
   };
   
   for (const [category, keywords] of Object.entries(categoryKeywords)) {
-    if (keywords.some(keyword => queryLower.includes(keyword))) {
-      console.log(`🔍 detectCategory: найдена категория "${category}" в запросе:`, query.substring(0, 100));
+    const foundKeywords = keywords.filter(keyword => queryLower.includes(keyword));
+    if (foundKeywords.length > 0) {
+      console.log(`🔍 detectCategory: найдена категория "${category}" по ключевым словам:`, foundKeywords);
+      console.log(`📝 Полный запрос:`, query);
       return category;
     }
   }
   
-  console.log('⚠️ detectCategory: категория НЕ найдена в запросе:', query.substring(0, 100));
+  console.log('⚠️ detectCategory: категория НЕ найдена в запросе:', query);
+  console.log('🔍 Доступные ключевые слова для стульев:', categoryKeywords['стул']);
   return null;
 }
 
@@ -573,6 +576,18 @@ function filterOffers(catalog, query, filters = {}) {
   const detectedCategory = detectCategory(query);
   if (detectedCategory) {
     console.log('✅ Определена категория из запроса:', detectedCategory);
+    
+    // Логируем все уникальные категории в каталоге для диагностики
+    const allCategories = [...new Set(catalog.offers.map(o => o.category).filter(Boolean))];
+    console.log('📋 Все категории в каталоге:', allCategories.slice(0, 10));
+    
+    // Ищем товары с похожими категориями
+    const similarCategories = allCategories.filter(cat => 
+      cat.toLowerCase().includes(detectedCategory) || 
+      detectedCategory.includes(cat.toLowerCase())
+    );
+    console.log(`🔍 Похожие категории для "${detectedCategory}":`, similarCategories);
+    
     filtered = filtered.filter(offer => 
       offer.category && offer.category.toLowerCase().includes(detectedCategory)
     );
