@@ -779,7 +779,7 @@
     let html = div.innerHTML.replace(/\n/g, '<br>');
     
     // Преобразуем ссылки nm-shop.by в кликабельные ссылки
-    const urlRegex = /(https?:\/\/[^\s<]+nm-shop\.by[^\s<]*?)(?=\s|$|\.\s|\.$|\.<)/gi;
+    const urlRegex = /(https?:\/\/nm-shop\.by[^\s<]*?)(?=\.|<br>|<|$)/gi;
     html = html.replace(urlRegex, (match) => {
       // Убираем точку в конце URL если она есть
       const cleanUrl = match.replace(/\.$/, '');
