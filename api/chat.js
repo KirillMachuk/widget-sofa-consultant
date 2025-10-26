@@ -110,18 +110,18 @@ async function handler(req, res){
   
   if (req.method !== 'POST') return res.status(405).end();
   
-  // Rate limiting для chat endpoint
-  const rateLimitResult = await checkRateLimit(req);
-  if (!rateLimitResult.allowed) {
-    return res.status(429).json({
-      error: 'Too Many Requests',
-      message: 'Превышен лимит запросов. Попробуйте позже.',
-      retryAfter: Math.ceil(rateLimitResult.resetTime / 1000)
-    });
-  }
-  
   try{
     const { action, session_id, user_message, history_tail, prompt, catalog, locale, aggressive_mode, user_messages_after_last_form } = req.body || {};
+    
+    // Rate limiting для chat endpoint (после получения session_id)
+    const rateLimitResult = await checkRateLimit(req);
+    if (!rateLimitResult.allowed) {
+      return res.status(429).json({
+        error: 'Too Many Requests',
+        message: 'Превышен лимит запросов. Попробуйте позже.',
+        retryAfter: Math.ceil(rateLimitResult.resetTime / 1000)
+      });
+    }
     
     // Handle session initialization (first request with prompt/catalog)
     if (action === 'init' && prompt && catalog) {

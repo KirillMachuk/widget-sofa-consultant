@@ -4,12 +4,18 @@ const redisClient = require('./redis-client');
 // Настройки rate limiting
 const RATE_LIMIT_CONFIG = {
   windowMs: 60 * 1000, // 1 минута
-  maxRequests: 10, // максимум 10 запросов в минуту
+  maxRequests: 50, // максимум 50 запросов в минуту
   keyPrefix: 'rate_limit:'
 };
 
-// Получить IP адрес из запроса
-function getClientIP(req) {
+// Получить идентификатор клиента из запроса (session_id или IP)
+function getClientIdentifier(req) {
+  // Сначала пробуем получить session_id из тела запроса
+  if (req.body && req.body.session_id) {
+    return req.body.session_id;
+  }
+  
+  // Fallback на IP если session_id недоступен
   return req.headers['x-forwarded-for'] || 
          req.headers['x-real-ip'] || 
          req.connection?.remoteAddress || 
@@ -19,8 +25,8 @@ function getClientIP(req) {
 
 // Проверить лимит запросов
 async function checkRateLimit(req) {
-  const clientIP = getClientIP(req);
-  const key = `${RATE_LIMIT_CONFIG.keyPrefix}${clientIP}`;
+  const clientIdentifier = getClientIdentifier(req);
+  const key = `${RATE_LIMIT_CONFIG.keyPrefix}${clientIdentifier}`;
   
   try {
     // Получаем текущее количество запросов
@@ -81,5 +87,5 @@ function rateLimitMiddleware() {
 module.exports = {
   checkRateLimit,
   rateLimitMiddleware,
-  getClientIP
+  getClientIdentifier
 };
