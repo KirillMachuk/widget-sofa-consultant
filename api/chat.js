@@ -162,12 +162,10 @@ async function detectIntent(userMessage) {
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: intentPrompt }],
-        max_tokens: 150,             // ✅ Правильный параметр для gpt-5-mini
-        reasoning: {                  // ✅ Объект для настройки рассуждений
-          effort: 'medium'
-        },
-        text: {                       // ✅ Объект для настройки вывода
-          verbosity: 'low'
+        max_tokens: 150,             // ✅ Chat Completions API параметр
+        temperature: 0.1,           // ✅ Chat Completions API параметр
+        response_format: {           // ✅ Для гарантии JSON ответа
+          type: "json_object"
         }
       })
     });
