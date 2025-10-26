@@ -166,7 +166,17 @@ async function handler(req, res){
       let relevantProducts = '';
       let catalogAvailable = false;
       try {
+        // Извлекаем ключевые слова из истории диалога для контекста
+        const historyText = messages
+          .filter(m => m.role === 'user')
+          .map(m => m.content)
+          .join(' ');
+        
+        // Комбинируем текущий запрос с историей для лучшего поиска
+        const enrichedQuery = `${historyText} ${user_message}`;
+        
         console.log('🔍 Прямой запрос к каталогу для:', user_message);
+        console.log('📝 Обогащенный запрос с историей:', enrichedQuery);
         console.log('Начинаем работу с каталогом...');
         
         // Прямой вызов каталога без HTTP запроса
@@ -177,7 +187,7 @@ async function handler(req, res){
           method: 'POST',
           body: {
             action: 'search',
-            query: user_message,
+            query: enrichedQuery, // Используем обогащенный запрос с историей
             filters: { limit: 20 }
           }
         };
