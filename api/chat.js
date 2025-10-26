@@ -263,7 +263,7 @@ async function handler(req, res){
         for (let i = 0; i < maxRetries; i++) {
           try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 секунд таймаут (еще меньше)
+            const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 секунды таймаут (критический минимум)
             
             const response = await fetch(url, {
               ...options,
@@ -274,22 +274,40 @@ async function handler(req, res){
             return response;
           } catch (error) {
             console.log(`OpenAI retry ${i + 1}/${maxRetries}:`, error.name);
+            
+            // При AbortError (таймаут) - немедленный fallback после 1 попытки
+            if (error.name === 'AbortError' && i === 0) {
+              console.log('🚨 AbortError на первой попытке - немедленный fallback');
+              throw new Error('TIMEOUT_FALLBACK');
+            }
+            
             if (i === maxRetries - 1) throw error;
-            // Более быстрая retry стратегия: 500ms, 1s, 2s, 4s
-            const delay = Math.min(500 * Math.pow(2, i), 4000);
+            // Более быстрая retry стратегия: 200ms, 500ms, 1s, 2s
+            const delay = Math.min(200 * Math.pow(2, i), 2000);
             await new Promise(resolve => setTimeout(resolve, delay));
           }
         }
       }
 
-      const r = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
-        method:'POST',
-        headers:{
-          'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(body)
-      });
+      let r;
+      try {
+        r = await fetchWithRetry('https://api.openai.com/v1/chat/completions', {
+          method:'POST',
+          headers:{
+            'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(body)
+        });
+      } catch (error) {
+        // Обработка немедленного fallback при таймауте
+        if (error.message === 'TIMEOUT_FALLBACK') {
+          console.log('🚨 Немедленный fallback из-за таймаута OpenAI');
+          const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
+          return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift', timeoutFallback: true });
+        }
+        throw error; // Перебрасываем другие ошибки
+      }
       
       console.log('Ответ от OpenAI, статус:', r.status);
       
