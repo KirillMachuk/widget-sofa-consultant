@@ -225,12 +225,26 @@ async function handler(req, res){
         
         await catalogHandler(catalogReq, catalogRes);
         
+        console.log('📊 Результат поиска в каталоге:', {
+          success: catalogData?.success,
+          totalFound: catalogData?.totalFound,
+          hasFormattedForGPT: !!catalogData?.formattedForGPT,
+          formattedLength: catalogData?.formattedForGPT?.length || 0
+        });
+        
         // Fallback: если с обогащением ничего не нашли - пробуем без истории
         if (catalogData && catalogData.success && catalogData.totalFound === 0 && enrichedQuery !== user_message) {
           console.log('⚠️ С обогащением не нашли товары, пробуем без истории...');
           catalogReq.body.query = user_message; // Только текущее сообщение
           catalogData = null; // Сброс
           await catalogHandler(catalogReq, catalogRes);
+          
+          console.log('📊 Результат поиска без обогащения:', {
+            success: catalogData?.success,
+            totalFound: catalogData?.totalFound,
+            hasFormattedForGPT: !!catalogData?.formattedForGPT,
+            formattedLength: catalogData?.formattedForGPT?.length || 0
+          });
           
           if (catalogData && catalogData.success && catalogData.totalFound > 0) {
             console.log('✅ Без обогащения нашли товары:', catalogData.totalFound);

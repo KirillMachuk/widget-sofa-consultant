@@ -286,6 +286,7 @@ function parseYMLNode(xmlText) {
 // Определение категории из текста запроса
 function detectCategory(query) {
   const queryLower = query.toLowerCase();
+  console.log(`🔍 detectCategory: анализируем запрос "${query}"`);
   
   // ПРИОРИТЕТ: если есть конкретный предмет мебели - используем его
   const furnitureKeywords = {
@@ -644,6 +645,8 @@ function extractOfferDimensions(offer) {
 function filterOffers(catalog, query, filters = {}) {
   let filtered = [...catalog.offers];
   console.log(`📊 filterOffers START: всего товаров в каталоге: ${filtered.length}`);
+  console.log(`🔍 Поисковый запрос: "${query}"`);
+  console.log(`📋 Фильтры:`, filters);
   
   // Автоопределение категории из запроса
   const detectedCategory = detectCategory(query);
@@ -1165,6 +1168,7 @@ function filterOffers(catalog, query, filters = {}) {
       category: o.category
     })));
     
+    console.log(`📊 filterOffers END: возвращаем ${results.length} товаров из ${filtered.length} отфильтрованных`);
     return results;
   }
 }
