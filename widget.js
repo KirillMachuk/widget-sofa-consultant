@@ -1180,6 +1180,7 @@
           action: 'init',
           session_id: SESSION_ID,
           prompt: PROMPT,
+          catalog: null, // Каталог больше не используется
           locale: 'ru'
         })
       }).catch(e => {
