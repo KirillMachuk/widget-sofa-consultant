@@ -257,7 +257,7 @@ async function handler(req, res){
     if (action === 'init' && prompt && catalog) {
       console.log(`[${new Date().toISOString()}] Инициализация сессии:`, session_id);
       
-      // Очищаем кэш если он переполнен
+      // Очищаем кэш только если он переполнен
       cleanupSessionCache();
       
       sessionCache.set(session_id, { 
@@ -283,6 +283,10 @@ async function handler(req, res){
         console.log('Сессия не найдена в кеше:', session_id);
         return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
       }
+      
+      // Обновляем время последнего использования сессии
+      session.lastUpdated = new Date().toISOString();
+      sessionCache.set(session_id, session);
       
       console.log('Сессия найдена:', !!session);
       
