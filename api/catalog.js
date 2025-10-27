@@ -1168,16 +1168,19 @@ function filterOffers(catalog, query, filters = {}) {
     console.log(`📊 filterOffers RESULT (cheapest): найден 1 самый дешевый товар`);
     return finalResults;
   } else {
-    // Разнообразие - сортируем по цене, но показываем несколько
-    filtered.sort((a, b) => a.pricePerUnit - b.pricePerUnit);
+    // Разнообразие - сортируем по relevanceScore (приоритет релевантности)
+    filtered.sort((a, b) => b.relevanceScore - a.relevanceScore);
     
-    // Выбираем 2-3 товара: дешевый, средний, дорогой
+    // Выбираем топ товары по релевантности (учитывая цвет, механизм и т.д.)
     const results = [];
-    if (filtered.length >= 3) {
-      results.push(filtered[0]); // Самый дешевый
-      results.push(filtered[Math.floor(filtered.length / 2)]); // Средний
-      results.push(filtered[filtered.length - 1]); // Самый дорогой в бюджете
-      console.log(`📊 filterOffers RESULT (variety): выбрано 3 товара (дешевый, средний, дорогой)`);
+    if (filtered.length >= 5) {
+      // Берем топ-5 самых релевантных
+      results.push(...filtered.slice(0, 5));
+      console.log(`📊 filterOffers RESULT (variety): выбрано 5 самых релевантных товаров`);
+    } else if (filtered.length >= 3) {
+      // Берем топ-3 самых релевантных
+      results.push(...filtered.slice(0, 3));
+      console.log(`📊 filterOffers RESULT (variety): выбрано 3 самых релевантных товара`);
     } else {
       results.push(...filtered); // Если < 3, показываем все
       console.log(`📊 filterOffers RESULT (variety): показаны все ${filtered.length} товара`);
@@ -1189,7 +1192,8 @@ function filterOffers(catalog, query, filters = {}) {
       price: o.price,
       pricePerUnit: o.pricePerUnit,
       totalPrice: o.totalPrice,
-      category: o.category
+      category: o.category,
+      relevanceScore: o.relevanceScore
     })));
     
     console.log(`📊 filterOffers END: возвращаем ${results.length} товаров из ${filtered.length} отфильтрованных`);
