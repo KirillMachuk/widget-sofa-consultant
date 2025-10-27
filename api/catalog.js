@@ -1300,6 +1300,9 @@ async function handler(req, res) {
       // Фильтруем товары
       const filteredOffers = filterOffers(catalog, query || '', filters || {});
       
+      // Извлекаем priceRange для форматирования
+      const priceRange = extractPriceRange(query || '');
+      
       // Форматируем для GPT
       const formattedOffers = formatOffersForGPT(filteredOffers, priceRange.maxPrice);
       
