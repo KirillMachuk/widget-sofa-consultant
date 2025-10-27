@@ -42,8 +42,7 @@ function cleanupSessionCache() {
   }
 }
 
-// Import catalog module
-const catalogHandler = require('./catalog');
+// Catalog module removed - no longer needed
 
 // Import rate limiter
 const { checkRateLimit } = require('../utils/rate-limiter');
@@ -98,133 +97,87 @@ async function saveChat(sessionId, userMessage, botReply) {
   }
 }
 
-// Определение намерения пользователя (нужен ли поиск в каталоге)
-async function detectIntent(userMessage) {
-  const intentPrompt = `Ты анализируешь запросы клиентов мебельного магазина nm-shop.by.
+// Определение типа вопроса и категории товара
+async function analyzeUserMessage(userMessage) {
+  const analysisPrompt = `Ты анализируешь запросы клиентов мебельного магазина nm-shop.by.
 
-ЗАДАЧА: Определить, нужен ли поиск товаров в каталоге для ответа на запрос.
+ЗАДАЧА: Определить тип вопроса и категорию товара (если есть).
 
 ЗАПРОС КЛИЕНТА: ${JSON.stringify(userMessage)}
 
 ПРАВИЛА:
-1. Если клиент спрашивает о конкретных товарах (диван, стул, кровать) с характеристиками (механизм, размер, цвет, цена) → нужен каталог
-2. Если клиент хочет подобрать/купить/посмотреть товары с конкретными параметрами → нужен каталог
-3. Если клиент спрашивает о салонах, адресах, доставке, оплате, гарантии, контактах, режиме работы → каталог НЕ нужен
-4. Если клиент просто упоминает товар в контексте другого вопроса (например "где диваны посмотреть") → каталог НЕ нужен
-5. Если комбинированный запрос ("диван + доставка") и есть характеристики товара → нужен каталог
+1. Если клиент спрашивает о конкретных товарах (диван, стул, кровать, кухня) → isProductQuestion: true
+2. Если клиент спрашивает о салонах, доставке, оплате, гарантии, контактах → isProductQuestion: false
+3. Определи категорию из вопроса:
+   - "диван", "софа", "угловой диван" → detectedCategory: "Диван"
+   - "кровать", "спальное место", "матрас" → detectedCategory: "Кровать"
+   - "кухня", "кухонный гарнитур", "кухонная мебель" → detectedCategory: "Кухня"
+   - "стол", "стул", "шкаф", "прихожая" → detectedCategory: "Другое"
+   - Нет упоминания категории → detectedCategory: null
 
 ПРИМЕРЫ:
 
 Запрос: "нужен стул до 300 руб"
-Ответ: {"needsCatalog": true, "reason": "конкретный запрос с ценой"}
+Ответ: {"isProductQuestion": true, "detectedCategory": "Другое"}
+
+Запрос: "какие у вас диваны?"
+Ответ: {"isProductQuestion": true, "detectedCategory": "Диван"}
 
 Запрос: "где можно диваны посмотреть в минске"
-Ответ: {"needsCatalog": false, "reason": "вопрос о салонах"}
-
-Запрос: "какие условия доставки дивана"
-Ответ: {"needsCatalog": false, "reason": "вопрос о доставке"}
-
-Запрос: "подберите диван с механизмом еврокнижка"
-Ответ: {"needsCatalog": true, "reason": "подбор товара с характеристиками"}
-
-Запрос: "диван с механизмом еврокнижка и стоимость доставки в минске"
-Ответ: {"needsCatalog": true, "reason": "комбинированный запрос - нужны товары + FAQ"}
-
-Запрос: "подскажите где можно вживую ваши диваны в минске глянуть и какие условия по доставке в минске"
-Ответ: {"needsCatalog": false, "reason": "вопросы о салонах и доставке без характеристик товара"}
-
-ПРИМЕРЫ:
-
-Запрос: "нужен стул до 300 руб"
-Ответ: {"needsCatalog": true, "reason": "конкретный запрос с ценой"}
-
-Запрос: "4 стула на кухню бюджет до 1000 руб черный цвет"
-Ответ: {"needsCatalog": true, "reason": "подбор товаров с конкретными характеристиками"}
-
-Запрос: "где можно диваны посмотреть в минске"
-Ответ: {"needsCatalog": false, "reason": "вопрос о салонах"}
+Ответ: {"isProductQuestion": false, "detectedCategory": null}
 
 Запрос: "какие условия доставки"
-Ответ: {"needsCatalog": false, "reason": "вопрос о доставке"}
+Ответ: {"isProductQuestion": false, "detectedCategory": null}
+
+Запрос: "подберите кровать с подъемным механизмом"
+Ответ: {"isProductQuestion": true, "detectedCategory": "Кровать"}
 
 ВАЖНО: Отвечай СТРОГО валидным JSON объектом, ничего больше:
-{"needsCatalog": true или false, "reason": "краткое объяснение"}`;
+{"isProductQuestion": true/false, "detectedCategory": "Диван"/"Кровать"/"Кухня"/"Другое"/null}`;
 
-  console.log('🔍 Intent Detection: промпт длина:', intentPrompt.length, 'символов');
+  console.log('🔍 Message Analysis: промпт длина:', analysisPrompt.length, 'символов');
   
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-5-mini',
-        input: [{ role: 'system', content: intentPrompt }],  // ✅ Responses API использует 'input' вместо 'messages'
-        max_output_tokens: 300,      // ✅ Увеличиваем для полного JSON ответа
-        reasoning: {                  // ✅ Вместо temperature
-          effort: 'medium'
-        },
-        text: {                       // ✅ Для краткого JSON
-          verbosity: 'low'
-        }
+        model: 'gpt-4o-mini',
+        messages: [{ role: 'system', content: analysisPrompt }],
+        max_tokens: 100,
+        temperature: 0.1
       })
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Intent Detection: OpenAI error', response.status);
-      console.error('Intent Detection: Error details:', errorText);
-      console.error('Intent Detection: User message was:', userMessage.substring(0, 200));
-      console.error('Intent Detection: User message length:', userMessage.length);
-      // Fallback: если ошибка - считаем что каталог НЕ нужен (безопаснее)
-      return { needsCatalog: false, reason: 'openai_error_fallback' };
+      console.error('Message Analysis: OpenAI error', response.status);
+      console.error('Message Analysis: Error details:', errorText);
+      // Fallback: считаем что это FAQ вопрос без категории
+      return { isProductQuestion: false, detectedCategory: null };
     }
 
     const data = await response.json();
+    const resultText = data.choices?.[0]?.message?.content || '{}';
     
-    // Подробное логирование для отладки Responses API
-    console.log('🔍 Responses API FULL response:', JSON.stringify(data, null, 2));
-    console.log('🔍 Response structure:', Object.keys(data));
-    console.log('🔍 Choices structure:', data.choices?.[0] ? Object.keys(data.choices[0]) : 'no choices');
-    
-    // Responses API использует другую структуру - output массив вместо choices
-    let resultText = '{}';
-    
-    if (data.output && data.output.length > 0) {
-      // Ищем message в output массиве
-      const messageOutput = data.output.find(item => item.type === 'message');
-      if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
-        // Берем первый content элемент
-        const content = messageOutput.content[0];
-        if (content.type === 'output_text' && content.text) {
-          resultText = content.text;
-        }
-      }
-    }
-    
-    // Fallback на старую структуру (если есть choices)
-    if (resultText === '{}' && data.choices?.[0]?.message?.content) {
-      resultText = data.choices[0].message.content;
-    }
-    
-    console.log('🔍 Responses API extracted content:', resultText);
+    console.log('🔍 Message Analysis extracted content:', resultText);
     
     // Парсим JSON с обработкой ошибок
     try {
       const result = JSON.parse(resultText);
-      console.log('🔍 Intent Detection parsed:', result);
-      console.log('🔍 needsCatalog =', result.needsCatalog, ', reason =', result.reason);
+      console.log('🔍 Message Analysis parsed:', result);
       return result;
     } catch (parseError) {
-      console.error('❌ Intent Detection: JSON parse error', resultText);
-      return { needsCatalog: false, reason: 'json_parse_error' };
+      console.error('❌ Message Analysis: JSON parse error', resultText);
+      return { isProductQuestion: false, detectedCategory: null };
     }
   } catch (error) {
-    console.error('Intent Detection: request error', error);
-    // Fallback: при ошибке сети считаем что каталог НЕ нужен
-    return { needsCatalog: false, reason: 'network_error_fallback' };
+    console.error('Message Analysis: request error', error);
+    // Fallback: при ошибке сети считаем что это FAQ вопрос
+    return { isProductQuestion: false, detectedCategory: null };
   }
 }
 
@@ -296,152 +249,20 @@ async function handler(req, res){
         { role: 'user', content: user_message }
       ];
       
-      // ЭТАП 1: Определяем намерение (нужен ли каталог)
-      let intent;
+      // ЭТАП 1: Анализируем сообщение пользователя
+      let messageAnalysis;
       try {
-        intent = await detectIntent(user_message);
+        messageAnalysis = await analyzeUserMessage(user_message);
       } catch (error) {
-        console.error('Ошибка определения намерения:', error);
-        // Fallback - считаем что каталог НЕ нужен
-        intent = { needsCatalog: false, reason: 'detectIntent_error' };
+        console.error('Ошибка анализа сообщения:', error);
+        // Fallback - считаем что это FAQ вопрос
+        messageAnalysis = { isProductQuestion: false, detectedCategory: null };
       }
       
-      // ЭТАП 2: Get relevant products from catalog - только если нужно
-      let relevantProducts = '';
-      let catalogAvailable = false;
+      console.log('📊 Анализ сообщения:', messageAnalysis);
       
-      if (intent.needsCatalog) {
-        console.log('✅ Каталог нужен:', intent.reason);
-        
-        try {
-        // Извлекаем предыдущие сообщения для контекста (без текущего)
-        const historyMessages = messages.filter(m => m.role === 'user');
-        let enrichedQuery;
-        
-        if (historyMessages.length > 1) {
-          // Есть история - берем только предыдущие сообщения (не дублируем текущее)
-          const previousMessages = historyMessages.slice(0, -1); // Все кроме последнего
-          const lastPreviousMessage = previousMessages[previousMessages.length - 1]?.content || '';
-          
-          // Проверяем что текущее сообщение не дублирует предыдущее
-          if (lastPreviousMessage === user_message) {
-            // Дубликат - используем только текущее сообщение
-            enrichedQuery = user_message;
-            console.log('⚠️ Обнаружен дубликат, используем только текущее сообщение');
-          } else {
-            // Обогащаем историей
-            const historyText = previousMessages.map(m => m.content).join(' ');
-            enrichedQuery = `${historyText} ${user_message}`;
-            console.log('📝 Обогащенный запрос с историей (без дублей):', enrichedQuery.substring(0, 150));
-          }
-        } else {
-          // Первое сообщение - используем как есть
-          enrichedQuery = user_message;
-          console.log('🔍 Первый запрос - без обогащения:', enrichedQuery);
-        }
-        
-        console.log('Начинаем работу с каталогом...');
-        
-        // Прямой вызов каталога без HTTP запроса
-        const catalogHandler = require('./catalog');
-        
-        // Создаем mock request/response для каталога
-        const catalogReq = {
-          method: 'POST',
-          body: {
-            action: 'search',
-            query: enrichedQuery, // Используем обогащенный запрос с историей
-            filters: { limit: 20 }
-          }
-        };
-        
-        let catalogData = null;
-        const catalogRes = {
-          setHeader: () => {},
-          status: (code) => ({
-            json: (data) => {
-              catalogData = data;
-              console.log('📊 Прямые данные каталога:', {
-                success: data.success,
-                totalFound: data.totalFound,
-                hasFormattedForGPT: !!data.formattedForGPT,
-                formattedLength: data.formattedForGPT ? data.formattedForGPT.length : 0
-              });
-            },
-            end: () => {}
-          }),
-          json: (data) => {
-            catalogData = data;
-            console.log('📊 Прямые данные каталога (200):', {
-              success: data.success,
-              totalFound: data.totalFound,
-              hasFormattedForGPT: !!data.formattedForGPT,
-              formattedLength: data.formattedForGPT ? data.formattedForGPT.length : 0
-            });
-          }
-        };
-        
-        await catalogHandler(catalogReq, catalogRes);
-        
-        console.log('📊 Результат поиска в каталоге:', {
-          success: catalogData?.success,
-          totalFound: catalogData?.totalFound,
-          hasFormattedForGPT: !!catalogData?.formattedForGPT,
-          formattedLength: catalogData?.formattedForGPT?.length || 0
-        });
-        
-        // Fallback: если с обогащением ничего не нашли - пробуем без истории
-        if (catalogData && catalogData.success && catalogData.totalFound === 0 && enrichedQuery !== user_message) {
-          console.log('⚠️ С обогащением не нашли товары, пробуем без истории...');
-          catalogReq.body.query = user_message; // Только текущее сообщение
-          catalogData = null; // Сброс
-          await catalogHandler(catalogReq, catalogRes);
-          
-          console.log('📊 Результат поиска без обогащения:', {
-            success: catalogData?.success,
-            totalFound: catalogData?.totalFound,
-            hasFormattedForGPT: !!catalogData?.formattedForGPT,
-            formattedLength: catalogData?.formattedForGPT?.length || 0
-          });
-          
-          if (catalogData && catalogData.success && catalogData.totalFound > 0) {
-            console.log('✅ Без обогащения нашли товары:', catalogData.totalFound);
-          }
-        }
-        
-        if (catalogData && catalogData.success) {
-          if (catalogData.totalFound > 0 && catalogData.formattedForGPT) {
-            relevantProducts = catalogData.formattedForGPT;
-            catalogAvailable = true;
-            console.log('✅ Финально найдено товаров:', catalogData.totalFound);
-          } else {
-            // Товары не найдены по критериям - продолжаем работу
-            console.log('⚠️ Товары не найдены по критериям, каталог работает');
-            relevantProducts = 'ТОВАРЫ_НЕ_НАЙДЕНЫ';
-            catalogAvailable = true; // Каталог работает, просто нет совпадений
-          }
-        } else {
-          console.log('❌ Каталог недоступен или ошибка загрузки');
-          relevantProducts = 'КАТАЛОГ_НЕДОСТУПЕН';
-          catalogAvailable = false;
-        }
-        } catch (error) {
-          console.error('❌ Ошибка получения каталога:', error);
-          relevantProducts = 'КАТАЛОГ_ОШИБКА';
-        }
-      } else {
-        console.log('ℹ️ Каталог НЕ нужен:', intent.reason);
-        relevantProducts = ''; // Пустая строка = не передаем товары в промпт
-        catalogAvailable = true; // Каталог "доступен", просто не используется
-      }
-      
-      console.log('Строим системный промпт...');
-      console.log('📊 relevantProducts для промпта:', {
-        length: relevantProducts?.length || 0,
-        isEmpty: !relevantProducts || relevantProducts.trim() === '',
-        preview: relevantProducts?.substring(0, 200) || 'empty'
-      });
-      const sys = buildSystemPrompt(session.prompt, relevantProducts, session.locale, aggressive_mode);
+      // Строим системный промпт без каталога
+      const sys = buildSystemPrompt(session.prompt, session.locale, aggressive_mode);
       console.log('Системный промпт готов, длина:', sys.length);
       
       // Dev fallback: if no API key, return a mock reply so the widget works locally
@@ -585,7 +406,9 @@ async function handler(req, res){
       return res.status(200).json({ 
         reply, 
         formMessage,
-        needsForm: shouldGenerateFormMessage 
+        needsForm: shouldGenerateFormMessage,
+        isProductQuestion: messageAnalysis.isProductQuestion,
+        detectedCategory: messageAnalysis.detectedCategory
       });
     }
     
@@ -709,7 +532,7 @@ ${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
   return null;
 }
 
-function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = false){
+function buildSystemPrompt(prompt, locale, aggressiveMode = false){
   const base = prompt?.main_instructions ? prompt : null;
   let about = base ? [
     `Роль: ${prompt.role_and_task}`,
@@ -718,24 +541,15 @@ function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = fa
     `О компании: ${prompt.about_company?.description||''}`,
     `Достижения компании: ${prompt.about_company?.achievements ? Object.values(prompt.about_company.achievements).join(', ') : ''}`,
     `Салоны: ${prompt.about_company?.showrooms ? JSON.stringify(prompt.about_company.showrooms, null, 2) : 'Информация о салонах недоступна'}`,
-    `Офферы: ${prompt.offers?.main_discount||''}; альтернативы: ${(prompt.offers?.alternative_offers||[]).join('; ')}`,
+    `Подарки по категориям: ${prompt.offers?.gifts_by_category ? JSON.stringify(prompt.offers.gifts_by_category, null, 2) : 'Информация о подарках недоступна'}`,
     `Доставка и оплата: ${prompt.delivery_and_payment ? JSON.stringify(prompt.delivery_and_payment, null, 2) : 'Информация о доставке недоступна'}`,
     `Стиль: ${prompt.templates_and_style||''}`
   ].join('\n') : 'Ты консультант. Отвечай кратко.';
   
   // Add aggressive behavior instructions
   if (aggressiveMode) {
-    about += '\n\nВАЖНО: Сейчас агрессивный режим (после 2-3 сообщений). Активно предлагай скидки, консультации, записи в шоурум. Ищи любой повод для сбора контактов. Будь более настойчивым в предложениях.';
+    about += '\n\nВАЖНО: Сейчас агрессивный режим (после 2-3 сообщений). Активно предлагай подарки и персональную подборку дизайнера. Ищи любой повод для сбора контактов. Будь более настойчивым в предложениях.';
   }
-  
-  // Add strict offer rules
-  about += '\n\nКРИТИЧЕСКИ ВАЖНО: Предлагай только ОДНУ акцию за раз. НЕ комбинируй скидки с подарками. При запросе товаров - внимательно проверяй каталог и предлагай только реально существующие модели.';
-  
-  // Add catalog limitation instruction
-  about += '\n\nКАТАЛОГ: В каталоге есть полная информация о товарах включая цвета, механизмы, описания. При запросе товаров из каталога предлагай максимум 3 самых релевантных варианта. Не перегружай сообщение длинными списками. НЕ используй жирный шрифт (**текст**) - заменяй на обычный текст. При запросе по цвету/стилю - фильтруй каталог по критериям и предлагай только подходящие варианты.';
-  
-  // Add aggressive catalog usage instructions
-  about += '\n\nВАЖНО ПРИ РАБОТЕ С КАТАЛОГОМ:\n- Из каталога показаны только релевантные товары - выбери 2-3 лучших\n- ВСЕГДА предлагай конкретные товары с названием, ценой и ссылкой\n- Если товаров мало - предложи все что есть\n- Если товаров 0 - предложи консультацию дизайнера для индивидуального подбора\n- При поиске товаров используй каталог агрессивно - ищи похожие категории, синонимы, смежные товары\n- КРИТИЧЕСКИ ВАЖНО: Если в каталоге 0 результатов - это ошибка поиска, попробуй другие термины или предложи дизайнера';
   
   // Add delivery and payment instructions
   about += '\n\nРАБОТА С ДОСТАВКОЙ И ОПЛАТОЙ:\n- При вопросах о доставке используй таблицы стоимости по типам товаров и регионам\n- Учитывай тип товара (диван, кресло, шкаф и т.д.) и локацию клиента (в пределах/за пределами 2й МКАД)\n- При заказе от 2700 BYN - бесплатная доставка\n- Для подвесного кресла "Кокон" используй отдельную таблицу по городам\n- При запросах о возврате/замене отправляй ссылку: https://nm-shop.by/zamena-i-vozvrat-tovara/\n- При вопросах о рассрочке показывай форму обратной связи с текстом "Консультация по рассрочке"\n- При вопросах о кастомизации мебели показывай форму с текстом "Согласование размеров и конструкции"\n- Если информации нет в справочнике - эскалируй на менеджера';
@@ -746,20 +560,10 @@ function buildSystemPrompt(prompt, relevantProducts, locale, aggressiveMode = fa
   // Add typo handling instructions
   about += '\n\nОБРАБОТКА ОПЕЧАТОК В ГОРОДАХ:\n- При распознавании городов учитывай возможные опечатки\n- "синск", "синске", "синска", "синском" = Минск\n- "витебс", "витебсск" = Витебск\n- "новополоц", "новополоцск" = Новополоцк\n- "бобруйс", "бобруйсск" = Бобруйск\n- Если сомневаешься в городе - уточни, но предложи ближайший салон';
   
-  let fence = '';
-  if (relevantProducts === 'ТОВАРЫ_НЕ_НАЙДЕНЫ') {
-    fence = 'ПО КРИТЕРИЯМ НЕ НАЙДЕНО: В каталоге есть товары, но не по этим критериям. Предложи:\n1. Расширить бюджет или изменить критерии\n2. Показать похожие варианты\n3. Консультацию дизайнера\nНЕ ГОВОРИ "в каталоге нет товаров" - они есть, просто не подходят по критериям!';
-  } else if (relevantProducts === 'КАТАЛОГ_НЕДОСТУПЕН' || relevantProducts === 'КАТАЛОГ_ОШИБКА') {
-    fence = 'КАТАЛОГ НЕДОСТУПЕН: Технические проблемы. Предложи консультацию дизайнера.';
-  } else if (relevantProducts) {
-    fence = `Товары из каталога:\n${relevantProducts}`;
-  }
-  
   return [
     about,
-    'Отвечай только по каталогу и этому промпту. Если вопрос вне — мягко откажись.',
+    'Отвечай только по этому промпту. Если вопрос вне — мягко откажись.',
     'Задавай только 1 уточняющий вопрос за раз.',
-    fence,
     `Язык: ${locale||'ru'}`
   ].join('\n\n');
 }

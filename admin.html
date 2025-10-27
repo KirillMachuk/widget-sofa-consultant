@@ -679,13 +679,17 @@
             let html = '';
             
             // Информация о контактах
-            if (session.contacts && (session.contacts.name || session.contacts.phone)) {
+            if (session.contacts && (session.contacts.name || session.contacts.phone || session.contacts.category || session.contacts.gift || session.contacts.messenger || session.contacts.wishes)) {
                 html += `
                     <div class="contacts-info">
                         <h4>Контактные данные</h4>
                         <div class="contacts-details">
                             ${session.contacts.name ? `<div class="contact-item"><span class="contact-label">Имя:</span><span class="contact-value">${session.contacts.name}</span></div>` : ''}
                             ${session.contacts.phone ? `<div class="contact-item"><span class="contact-label">Телефон:</span><span class="contact-value">${session.contacts.phone}</span></div>` : ''}
+                            ${session.contacts.category ? `<div class="contact-item"><span class="contact-label">Категория:</span><span class="contact-value">${session.contacts.category}</span></div>` : ''}
+                            ${session.contacts.gift ? `<div class="contact-item"><span class="contact-label">Подарок:</span><span class="contact-value">${session.contacts.gift}</span></div>` : ''}
+                            ${session.contacts.messenger ? `<div class="contact-item"><span class="contact-label">Мессенджер:</span><span class="contact-value">${session.contacts.messenger}</span></div>` : ''}
+                            ${session.contacts.wishes ? `<div class="contact-item"><span class="contact-label">Пожелания:</span><span class="contact-value">${session.contacts.wishes}</span></div>` : ''}
                         </div>
                     </div>
                 `;

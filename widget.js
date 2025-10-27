@@ -11,7 +11,6 @@
     openaiEndpoint: '/api/chat',
     gasEndpoint: 'https://script.google.com/macros/s/AKfycbyJg7_2DnyoROYCl_TrH4G7jzHTUD8MJnVy7Suf62o4m7zOA9nzPqKSP_pmUKXFaV3T7w/exec',
     promptUrl: './Промпт.json',
-    catalogUrl: './Каталог.json',
     triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
     brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 }
@@ -23,15 +22,12 @@
       const current = document.currentScript || Array.from(document.scripts).slice(-1)[0];
       if (!current) return;
       CONFIG.promptUrl = current.dataset.prompt || CONFIG.promptUrl;
-      CONFIG.catalogUrl = current.dataset.catalog || CONFIG.catalogUrl;
       CONFIG.gasEndpoint = current.dataset.gas || CONFIG.gasEndpoint;
       if (current.dataset.api) CONFIG.openaiEndpoint = current.dataset.api;
       
       if (current.dataset.promptContent) CONFIG.promptContent = current.dataset.promptContent;
-      if (current.dataset.catalogContent) CONFIG.catalogContent = current.dataset.catalogContent;
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
-      if (CONFIG.catalogUrl && !CONFIG.catalogUrl.includes('v=')) CONFIG.catalogUrl += '?v=' + WIDGET_VERSION;
     }catch(e){}
   })();
 
@@ -889,92 +885,6 @@
     }, 100);
   }
 
-  // Quick action buttons after welcome message
-  function addQuickButtons() {
-    const buttons = [
-      { text: 'Хочу подарок', icon: '🎁' },
-      { text: 'Записаться в шоурум', icon: '🏪' },
-      { text: 'Нужна консультация', icon: '💬' }
-    ];
-    
-    // Create container for horizontal layout
-    const container = document.createElement('div');
-    container.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 8px 36px;justify-content:flex-start';
-    
-    buttons.forEach(buttonData => {
-      const button = document.createElement('button');
-      button.className = 'quick-btn';
-      button.dataset.text = buttonData.text;
-      button.style.cssText = `
-        padding:10px 16px;
-        border:none;
-        border-radius:14px;
-        background:#e3f2fd;
-        color:#1976d2;
-        cursor:pointer;
-        font-size:14px;
-        font-weight:500;
-        transition:all 0.2s ease;
-        white-space:nowrap;
-        flex-shrink:0;
-        min-height:44px;
-      `;
-      button.innerHTML = `${buttonData.icon} ${buttonData.text}`;
-      
-      // Hover effects
-      button.addEventListener('mouseenter', () => {
-        button.style.background = '#bbdefb';
-        button.style.color = '#0d47a1';
-        button.style.transform = 'translateY(-1px)';
-      });
-      
-      button.addEventListener('mouseleave', () => {
-        button.style.background = '#e3f2fd';
-        button.style.color = '#1976d2';
-        button.style.transform = 'translateY(0)';
-      });
-      
-      // Click handler
-      button.addEventListener('click', () => {
-        container.remove(); // Remove all quick buttons
-        
-        if (buttonData.text === 'Хочу подарок') {
-          // Для кнопки "Хочу подарок" сразу показываем форму
-          bypassFormPause = true; // Обходим паузу для кнопок
-          renderForm('Выберите подарок и оставьте контакты!', [
-            { type: 'offer' },
-            { id: 'name', placeholder: 'Имя', required: true },
-            { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-          ], 'Получить подарок');
-        } else if (buttonData.text === 'Записаться в шоурум') {
-          // Для записи в шоурум - сообщение + форма
-          bypassFormPause = true; // Обходим паузу для кнопок
-          addMsg('bot', 'Подскажите пожалуйста в каком городе находитесь и ваш номер телефона, передам дизайнеру в шоу-руме и он с вами свяжется');
-          setTimeout(() => {
-            renderShowroomForm();
-          }, 1000);
-        } else if (buttonData.text === 'Нужна консультация') {
-          // Для консультации - показываем кнопки выбора
-          addMsg('bot', 'Конечно! Как вам удобнее получить консультацию?');
-          setTimeout(() => {
-            addConsultationButtons();
-          }, 500);
-        }
-      });
-      
-      container.appendChild(button);
-    });
-    
-    els.body.appendChild(container);
-    
-    // Smart scrolling for quick buttons
-    setTimeout(() => {
-      const isAtBottom = els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 10;
-      if (isAtBottom) {
-        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
-  }
   
   function showTyping(){
     const typingRow = document.createElement('div');
@@ -1011,7 +921,6 @@
     return s;
   }
 
-  let CATALOG = null;
   let PROMPT = null;
   const submittedLeads = new Set();
   let fallbackFormShown = false; // Флаг для отслеживания показа fallback формы
@@ -1020,38 +929,220 @@
   let userMessagesAfterLastForm = 0; // Количество сообщений пользователя после последней формы
   let bypassFormPause = false; // Флаг обхода паузы для форм от кнопок быстрых действий
 
-  // Функция для локальной обработки сообщений без API
-  function generateLocalReply(userMessage, prompt, catalog) {
-    const message = userMessage.toLowerCase();
+  // Словарь подарков по категориям
+  const GIFTS_BY_CATEGORY = {
+    'Диван': [
+      { text: '🎁 Журнальный стол в подарок', value: 'Журнальный стол в подарок' },
+      { text: '💰 Скидка 5%', value: 'Скидка 5%' }
+    ],
+    'Кровать': [
+      { text: '🎁 Подъемный механизм в подарок', value: 'Купи кровать, подъемный механизм в подарок' },
+      { text: '🛏️ Матрас за полцены', value: 'Купи кровать, матрас за полцены' },
+      { text: '💰 Скидка 5%', value: 'Скидка 5%' }
+    ],
+    'Кухня': [
+      { text: '🎁 Кухонный стол в подарок', value: 'Кухонный стол в подарок' },
+      { text: '💰 Скидка 5%', value: 'Скидка 5%' }
+    ],
+    'Другое': [
+      { text: '💰 Скидка 5%', value: 'Скидка 5%' }
+    ]
+  };
+
+  // Показать кнопки выбора категории
+  function showCategoryButtons() {
+    const buttons = [
+      { text: '🛋️ Диван', category: 'Диван' },
+      { text: '🛏️ Кровать', category: 'Кровать' },
+      { text: '🍽️ Кухня', category: 'Кухня' },
+      { text: '📦 Другое', category: 'Другое' }
+    ];
     
-    // Простые ответы на основе ключевых слов
-    if (message.includes('привет') || message.includes('здравствуйте') || message.includes('добр')) {
-      return 'Здравствуйте! Я консультант по мебели. Помогу подобрать идеальную мебель для вашего дома. Какая мебель вас интересует?';
-    }
+    // Create container for horizontal layout
+    const container = document.createElement('div');
+    container.style.cssText = 'display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 8px 36px;justify-content:flex-start';
     
-    if (message.includes('диван') || message.includes('кровать') || message.includes('шкаф') || message.includes('кухня') || message.includes('мебель') || message.includes('купить')) {
-      return 'Отлично! У нас есть широкий ассортимент мебели:\n\n• Диваны - от 450 BYN\n• Кровати - от 380 BYN\n• Шкафы - от 520 BYN\n• Кухни - от 1500 BYN\n\nКакой тип мебели вас интересует?';
-    }
+    buttons.forEach(buttonData => {
+      const button = document.createElement('button');
+      button.className = 'category-btn';
+      button.dataset.category = buttonData.category;
+      button.style.cssText = `
+        padding:10px 16px;
+        border:none;
+        border-radius:14px;
+        background:#e3f2fd;
+        color:#1976d2;
+        cursor:pointer;
+        font-size:14px;
+        font-weight:500;
+        transition:all 0.2s ease;
+        white-space:nowrap;
+        flex-shrink:0;
+        min-height:44px;
+      `;
+      button.innerHTML = buttonData.text;
+      
+      // Hover effects
+      button.addEventListener('mouseenter', () => {
+        button.style.background = '#bbdefb';
+        button.style.color = '#0d47a1';
+        button.style.transform = 'translateY(-1px)';
+      });
+      
+      button.addEventListener('mouseleave', () => {
+        button.style.background = '#e3f2fd';
+        button.style.color = '#1976d2';
+        button.style.transform = 'translateY(0)';
+      });
+      
+      // Click handler
+      button.addEventListener('click', () => {
+        container.remove(); // Remove all category buttons
+        showGiftForm(buttonData.category);
+      });
+      
+      container.appendChild(button);
+    });
     
-    if (message.includes('цена') || message.includes('стоимость') || message.includes('сколько')) {
-      return 'Цены на нашу мебель:\n\n• Диваны: от 450 BYN\n• Кровати: от 380 BYN\n• Шкафы: от 520 BYN\n• Кухни: от 1500 BYN\n\nЕсть подарок при заказе от 1500 BYN! Хотите узнать подробности?';
-    }
+    els.body.appendChild(container);
     
-    if (message.includes('подарок') || message.includes('акция') || message.includes('скидка')) {
-      return 'У нас есть специальные предложения:\n\n🎁 Журнальный стол в подарок при заказе дивана от 1500 BYN\n🎁 Кухонный стол в подарок при заказе кухни от 1500 BYN\n🎁 Бесплатная консультация дизайнера\n\nОставьте телефон, и наш менеджер расскажет подробности!';
-    }
+    // Smart scrolling for category buttons
+    setTimeout(() => {
+      const isAtBottom = els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 10;
+      if (isAtBottom) {
+        container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  }
+  
+  // Показать форму с подарками для выбранной категории
+  function showGiftForm(category) {
+    const gifts = GIFTS_BY_CATEGORY[category] || [];
     
-    if (message.includes('телефон') || message.includes('номер') || message.includes('связать')) {
-      return 'Конечно! Оставьте ваш номер телефона, и наш менеджер перезвонит в течение 2 часов в рабочее время. Мы поможем подобрать идеальную мебель!';
-    }
+    const wrap = document.createElement('div'); 
+    wrap.className='vfw-msg bot';
     
-    // Общий ответ
-    return 'Спасибо за ваш вопрос! Я консультант по мебели. Расскажите, какая мебель вас интересует? Могу предложить несколько вариантов с ценами и характеристиками.';
+    const giftsHtml = gifts.map(gift => `
+      <button class="gift-btn" data-gift="${gift.value}" style="padding:12px 16px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:left;transition:all 0.2s;min-height:44px;font-size:16px;width:100%;margin-bottom:8px">
+        ${gift.text}
+      </button>
+    `).join('');
+    
+    wrap.innerHTML = `
+      <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
+      <div class="bubble">
+        <div style="font-weight:600;margin-bottom:6px">Выберите подарок и оставьте контакты</div>
+        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+          <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок:</div>
+          ${giftsHtml}
+          <div style="margin-top:16px;margin-bottom:12px;font-size:14px;color:#666">Выберите мессенджер:</div>
+          <div style="display:flex;gap:8px;margin-bottom:16px">
+            <button class="messenger-btn" data-messenger="WhatsApp" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s;min-height:44px;font-size:14px">
+              💚 WhatsApp
+            </button>
+            <button class="messenger-btn" data-messenger="Telegram" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s;min-height:44px;font-size:14px">
+              🔵 Telegram
+            </button>
+            <button class="messenger-btn" data-messenger="Viber" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s;min-height:44px;font-size:14px">
+              💜 Viber
+            </button>
+        </div>
+          <input id="vfwName" placeholder="Имя" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:8px">
+          <input id="vfwPhone" placeholder="Телефон (+375...)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:8px">
+          <textarea id="vfwWishes" placeholder="Пожелания (необязательно)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;min-height:60px;box-sizing:border-box;margin-bottom:8px;resize:vertical"></textarea>
+          <button class="gift-form-submit" style="padding:12px 16px;border-radius:10px;background:${CONFIG.brand.accent};color:#fff;border:0;min-height:44px;font-size:16px">Получить подарок</button>
+        </div>
+        <div class="vfw-disc">Нажимая "Получить подарок", вы соглашаетесь на обработку персональных данных.</div>
+      </div>
+    `;
+    
+    els.body.appendChild(wrap);
+    
+    setTimeout(() => {
+      const isAtBottom = els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 10;
+      if (isAtBottom) {
+        wrap.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+    
+    let selectedGift = null;
+    let selectedMessenger = null;
+    
+    // Gift selection
+    const giftButtons = wrap.querySelectorAll('.gift-btn');
+    giftButtons.forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        giftButtons.forEach(b => {
+          b.style.borderColor = '#e0e0e0';
+          b.style.backgroundColor = '#fff';
+        });
+        btn.style.borderColor = CONFIG.brand.accent;
+        btn.style.backgroundColor = CONFIG.brand.accent + '10';
+        selectedGift = btn.dataset.gift;
+      });
+    });
+    
+    // Messenger selection
+    const messengerButtons = wrap.querySelectorAll('.messenger-btn');
+    messengerButtons.forEach(btn => {
+      btn.addEventListener('click', ()=>{
+        messengerButtons.forEach(b => {
+          b.style.borderColor = '#e0e0e0';
+          b.style.backgroundColor = '#fff';
+        });
+        btn.style.borderColor = CONFIG.brand.accent;
+        btn.style.backgroundColor = CONFIG.brand.accent + '10';
+        selectedMessenger = btn.dataset.messenger;
+      });
+    });
+    
+    // Form submission
+    wrap.querySelector('.gift-form-submit').addEventListener('click', async ()=>{
+      const sendBtn = wrap.querySelector('.gift-form-submit');
+      const name = wrap.querySelector('#vfwName').value.trim();
+      const phone = wrap.querySelector('#vfwPhone').value.trim();
+      const wishes = wrap.querySelector('#vfwWishes').value.trim();
+      
+      if (!name) {
+        addMsg('bot', 'Пожалуйста, укажите имя.');
+        return;
+      }
+      
+      if (!phone || !normalizePhone(phone)) {
+        addMsg('bot', 'Пожалуйста, введите корректный номер телефона (например, +375XXXXXXXXX).');
+        return;
+      }
+      
+      if (!selectedGift) {
+        addMsg('bot', 'Пожалуйста, выберите подарок.');
+        return;
+      }
+      
+      if (!selectedMessenger) {
+        addMsg('bot', 'Пожалуйста, выберите мессенджер.');
+        return;
+      }
+      
+      sendBtn.disabled = true;
+      sendBtn.style.opacity = '0.6';
+      sendBtn.style.cursor = 'not-allowed';
+      sendBtn.textContent = 'Отправляем...';
+      
+      try {
+        await submitGiftLead(name, phone, category, selectedGift, selectedMessenger, wishes);
+        wrap.remove();
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.style.opacity = '1';
+        sendBtn.style.cursor = 'pointer';
+        sendBtn.textContent = 'Получить подарок';
+      }
+    });
   }
 
-  async function fetchPromptAndCatalog(){
+  async function fetchPrompt(){
     // Use inline content if available, otherwise fetch from URLs
-    let promptPromise, catalogPromise;
+    let promptPromise;
     
     if (CONFIG.promptContent) {
       promptPromise = Promise.resolve(JSON.parse(CONFIG.promptContent));
@@ -1066,49 +1157,11 @@
       }).then(r=>r.json()) : Promise.resolve(null);
     }
     
-    if (CONFIG.catalogContent) {
-      catalogPromise = Promise.resolve(parseCatalogContent(CONFIG.catalogContent));
-    } else {
-      // Используем API каталога вместо статического файла
-      catalogPromise = fetch(CONFIG.openaiEndpoint.replace('/chat', '/catalog'), {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
-        },
-        body: JSON.stringify({
-          action: 'stats' // Получаем базовую информацию о каталоге
-        })
-      }).then(async r => {
-        if (!r.ok) {
-          console.warn('Failed to load catalog from API, using empty catalog');
-          return null;
-        }
-        const data = await r.json();
-        if (!data.success) {
-          console.warn('Catalog API returned error:', data);
-          return null;
-        }
-        return {
-          offers: [],  // Оставляем пустым, товары будут загружаться динамически
-          categories: data.categories || {},
-          totalCount: data.totalOffers || 0,
-          timestamp: data.lastUpdate || new Date().toISOString()
-        };
-      }).catch(e => {
-        console.error('Failed to load catalog:', e);
-        return null;
-      });
-    }
-    
-    const [p, c] = await Promise.allSettled([promptPromise, catalogPromise]);
+    const [p] = await Promise.allSettled([promptPromise]);
     PROMPT = p.status==='fulfilled' ? p.value : null;
-    CATALOG = c.status==='fulfilled' ? c.value : null;
     
-    // Initialize session on server with prompt and catalog
-    if (PROMPT && CATALOG && CONFIG.openaiEndpoint) {
+    // Initialize session on server with prompt only
+    if (PROMPT && CONFIG.openaiEndpoint) {
       fetch(CONFIG.openaiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1116,7 +1169,6 @@
           action: 'init',
           session_id: SESSION_ID,
           prompt: PROMPT,
-          catalog: CATALOG,
           locale: 'ru'
         })
       }).catch(e => {
@@ -1125,28 +1177,6 @@
     }
   }
   
-  function parseCatalogContent(txt) {
-    const isXML = /<\?xml|<yml_catalog/.test(txt);
-    if (isXML){
-      const dom = new DOMParser().parseFromString(txt, 'text/xml');
-      const offers = Array.from(dom.querySelectorAll('offer')).map(of=>{
-        return {
-          id: of.getAttribute('id'),
-          name: of.querySelector('name')?.textContent?.trim(),
-          vendor: of.querySelector('vendor')?.textContent?.trim(),
-          url: of.querySelector('url')?.textContent?.trim(),
-          price: of.querySelector('price')?.textContent?.trim(),
-          currency: of.querySelector('currencyId')?.textContent?.trim(),
-          description: of.querySelector('description')?.textContent?.trim(),
-          mechanism: of.querySelector('mechanism')?.textContent?.trim(),
-          colors: of.querySelector('colors')?.textContent?.trim()
-        };
-      });
-      return { offers };
-    } else {
-      return JSON.parse(txt);
-    }
-  }
 
 
   function incPageViews(){
@@ -1378,7 +1408,7 @@
           if (errorData.error && errorData.error.includes('Session not initialized')) {
             console.log('Session not initialized, trying to reinitialize...');
             // Пробуем инициализировать сессию еще раз
-            await fetchPromptAndCatalog();
+            await fetchPrompt();
             // Повторяем запрос
             const retryRes = await fetchWithRetry(CONFIG.openaiEndpoint, {
               method:'POST',
@@ -1430,7 +1460,13 @@
         saveHistory(history);
       }
       
-      return { text, formMessage: data.formMessage, needsForm: data.needsForm };
+      return { 
+        text, 
+        formMessage: data.formMessage, 
+        needsForm: data.needsForm,
+        isProductQuestion: data.isProductQuestion,
+        detectedCategory: data.detectedCategory
+      };
       
     } catch (error) {
       // Показываем fallback форму только если она еще не была показана в этой сессии
@@ -1465,20 +1501,20 @@
       fallbackFormShown = false;
       
       // Показываем приветствие мгновенно
-      addMsg('bot', 'Здравствуйте! Я консультант по мебели. Чем могу помочь?');
+      addMsg('bot', 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁. Какую мебель рассматриваете?');
       
       // Сохраняем приветственное сообщение в историю
       const history = loadHistory();
-      history.push({ role: 'assistant', content: 'Здравствуйте! Я консультант по мебели. Чем могу помочь?', ts: nowIso() });
+      history.push({ role: 'assistant', content: 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁. Какую мебель рассматриваете?', ts: nowIso() });
       saveHistory(history);
       
-      // Добавляем быстрые кнопки действий мгновенно
-      setTimeout(() => addQuickButtons(), 100);
+      // Показываем кнопки категорий мгновенно
+      setTimeout(() => showCategoryButtons(), 100);
       
       // Загружаем данные в фоне, если они еще не загружены
-      if (!PROMPT || !CATALOG) {
-        fetchPromptAndCatalog().catch(e => {
-          console.warn('Failed to load prompt/catalog:', e);
+      if (!PROMPT) {
+        fetchPrompt().catch(e => {
+          console.warn('Failed to load prompt:', e);
         });
       }
     } else {
@@ -1497,7 +1533,7 @@
         const hasBotMessagesAfter = messagesAfterWelcome.some(m => m.role === 'assistant');
         if (!hasBotMessagesAfter) {
           // Показываем кнопки-подсказки
-          setTimeout(() => addQuickButtons(), 100);
+          setTimeout(() => showCategoryButtons(), 100);
         }
       }
       
@@ -1592,54 +1628,21 @@
         // Новый формат - объект с текстом и формой
         addMsg('bot', response.text);
         
-        // Если есть персонализированное сообщение с формой
+        // Обрабатываем новую логику на основе анализа сообщения
+        if (response.detectedCategory) {
+          // Категория определена из вопроса - сразу форма с подарками
+          showGiftForm(response.detectedCategory);
+        } else if (response.isProductQuestion) {
+          // Вопрос про товары без категории - выбор категории
+          showCategoryButtons();
+          } else {
+          // FAQ вопрос - бот ответил, теперь выбор категории
+          showCategoryButtons();
+        }
+        
+        // Если есть персонализированное сообщение с формой (старая логика для совместимости)
         if (response.formMessage) {
           addMsg('bot', response.formMessage);
-          
-          // Проверяем паузу между показами форм (минимум 2 реплики клиента)
-          console.log('Form pause check:', { lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
-          const isDirectRequest = isDirectFormRequest(response.formMessage);
-          if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
-            // Пауза не прошла - не показываем форму, только сообщение бота
-            console.log('Form paused - not showing form');
-            return;
-          }
-          
-          // Проверяем, это запрос на шоурум или обычная форма
-          const showroomKeywords = ['шоурум', 'шоу-рум', 'шоуруме', 'дизайнеру в шоу-руме'];
-          const isShowroomRequest = showroomKeywords.some(keyword => response.formMessage.toLowerCase().includes(keyword));
-          
-          if (isShowroomRequest) {
-            // Показываем форму записи в шоурум
-            renderShowroomForm();
-          } else {
-            // Показываем обычную форму с подарками
-            renderForm(response.formMessage, [
-              { type: 'offer' },
-              { id: 'name', placeholder: 'Имя', required: true },
-              { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-            ], 'Получить подарок');
-          }
-        } else if (response.needsForm && response.formType === 'gift') {
-          // Показываем форму с подарком при ошибке AI (только если она еще не была показана)
-          if (!fallbackFormShown) {
-            // Проверяем паузу между показами форм (минимум 2 реплики клиента)
-            const isDirectRequest = isDirectFormRequest(response.text);
-            if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
-              // Пауза не прошла - не показываем форму
-              return;
-            }
-            
-            fallbackFormShown = true;
-            renderForm('Выберите подарок и оставьте контакты!', [
-              { type: 'offer' },
-              { id: 'name', placeholder: 'Имя', required: true },
-              { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-            ], 'Получить подарок');
-          }
-        } else if (response.needsForm) {
-          // Показываем стандартную форму
-          maybeOfferPhoneFlow(response.text);
         }
       }
     } catch(e) {
@@ -1952,6 +1955,55 @@
       } else {
         addMsg('bot','Спасибо! Передам вашу заявку дизайнеру, он свяжется с вами для закрепления подарка.');
       }
+    }catch(e){
+      let errorMessage;
+      if (e.message === 'Request timeout') {
+        errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
+      } else if (!navigator.onLine) {
+        errorMessage = 'Похоже, нет подключения к интернету. Попробуйте позже.';
+      } else {
+        errorMessage = 'Не удалось записать номер. Попробуйте ещё раз или укажите позже.';
+      }
+      addMsg('bot', errorMessage);
+    }
+  }
+
+  async function submitGiftLead(name, phone, category, gift, messenger, wishes = '') {
+    // Check if offline
+    if (!navigator.onLine) {
+      addMsg('bot','Похоже, нет подключения к интернету. Попробуйте позже.');
+      return;
+    }
+
+    const leadKey = `${phone}_${category}_${gift}_${Date.now()}`;
+    if (submittedLeads.has(leadKey)) {
+      addMsg('bot','Данные уже отправлены. Дизайнер свяжется с вами.');
+      return;
+    }
+    
+    const page_url = location.href;
+    try{
+      // Use retry logic for lead submission too
+      await fetchWithRetry('./api/lead', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json' },
+        body: JSON.stringify({
+          gas_url: CONFIG.gasEndpoint,
+          timestamp: nowIso(),
+          name,
+          phone,
+          category,
+          gift,
+          messenger,
+          wishes,
+          pretext: 'Запрос подборки мебели с подарком',
+          page_url,
+          session_id: SESSION_ID
+        })
+      }, 2); // 2 попытки для отправки лида
+      submittedLeads.add(leadKey);
+      
+      addMsg('bot','Спасибо! Дизайнер вышлет персональную подборку в выбранный мессенджер в течение 2 часов.');
     }catch(e){
       let errorMessage;
       if (e.message === 'Request timeout') {

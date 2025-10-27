@@ -40,9 +40,9 @@ async function handler(req, res){
   
   if (req.method !== 'POST') return res.status(405).end();
   try{
-    const { gas_url, timestamp, name, phone, pretext, page_url, session_id } = req.body || {};
+    const { gas_url, timestamp, name, phone, pretext, page_url, session_id, category, gift, messenger, wishes } = req.body || {};
     if (!gas_url) return res.status(400).json({ error: 'Missing gas_url' });
-    const payload = { timestamp, name, phone, pretext, page_url, session_id };
+    const payload = { timestamp, name, phone, pretext, page_url, session_id, category, gift, messenger, wishes };
     // Retry логика для Google Apps Script
     const maxRetries = 3;
     let lastError = null;
@@ -103,6 +103,10 @@ async function handler(req, res){
         phone: phone || '',
         pretext: pretext || '',
         page_url: page_url || '',
+        category: category || '',
+        gift: gift || '',
+        messenger: messenger || '',
+        wishes: wishes || '',
         timestamp: timestamp || new Date().toISOString()
       });
     }
