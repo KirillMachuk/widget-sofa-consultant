@@ -9,7 +9,7 @@
   
   const CONFIG = {
     openaiEndpoint: '/api/chat',
-    gasEndpoint: 'https://script.google.com/macros/s/AKfycbyJg7_2DnyoROYCl_TrH4G7jzHTUD8MJnVy7Suf62o4m7zOA9nzPqKSP_pmUKXFaV3T7w/exec',
+    gasEndpoint: 'https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec',
     promptUrl: './Промпт.json',
     triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
