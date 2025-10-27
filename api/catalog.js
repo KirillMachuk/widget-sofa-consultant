@@ -737,29 +737,29 @@ function filterOffers(catalog, query, filters = {}) {
       const descText = (offer.description || '').toLowerCase();
       const paramsText = JSON.stringify(offer.params || {}).toLowerCase();
       
-      // 1. Точное совпадение тканей/материалов (максимальный балл)
+      // 1. Точное совпадение тканей/материалов
       if (offer.params) {
         const fabricParams = ['Ткань', 'Обивка', 'Материал'];
         fabricParams.forEach(paramName => {
           const paramValue = (offer.params[paramName] || '').toLowerCase();
           if (paramValue && fullQueryWords.some(word => paramValue.includes(word))) {
-            relevanceScore += 10; // Максимальный балл за точное совпадение ткани
+            relevanceScore += 5; // Нормализовано с 10 до 5
           }
         });
       }
       
-      // 2. Поиск по цвету с синонимами (+8 баллов)
+      // 2. Поиск по цвету с синонимами
       if (offer.params && offer.params['Цвет']) {
         const offerColor = offer.params['Цвет'].toLowerCase();
         fullQueryWords.forEach(word => {
           const colorSynonyms = getColorSynonyms(word);
           if (colorSynonyms.some(synonym => offerColor.includes(synonym.toLowerCase()))) {
-            relevanceScore += 8;
+            relevanceScore += 5; // Нормализовано с 8 до 5
           }
         });
       }
       
-      // 3. Поиск по механизму с синонимами (+7 баллов)
+      // 3. Поиск по механизму с синонимами
       if (offer.params) {
         const mechanismParams = ['Механизм трансформации', 'Механизм'];
         mechanismParams.forEach(paramName => {
@@ -767,13 +767,13 @@ function filterOffers(catalog, query, filters = {}) {
           fullQueryWords.forEach(word => {
             const mechanismSynonyms = getMechanismSynonyms(word);
             if (mechanismSynonyms.some(synonym => paramValue.includes(synonym.toLowerCase()))) {
-              relevanceScore += 7;
+              relevanceScore += 5; // Нормализовано с 7 до 5
             }
           });
         });
       }
       
-      // 4. Поиск по спальному месту (+6 баллов)
+      // 4. Поиск по спальному месту
       if (sleepingPlaces.length > 0 && offer.params && offer.params['Спальное место, см']) {
         const sleepingPlaceValue = offer.params['Спальное место, см'];
         const numbers = sleepingPlaceValue.match(/\d+/g);
@@ -781,22 +781,22 @@ function filterOffers(catalog, query, filters = {}) {
           const offerPlace = [parseInt(numbers[0]), parseInt(numbers[1])];
           sleepingPlaces.forEach(queryPlace => {
             if (Math.abs(offerPlace[0] - queryPlace[0]) <= 5 && Math.abs(offerPlace[1] - queryPlace[1]) <= 5) {
-              relevanceScore += 6;
+              relevanceScore += 5; // Нормализовано с 6 до 5
             }
           });
         }
       }
       
-      // 5. Поиск по конфигурации (+6 баллов)
+      // 5. Поиск по конфигурации
       if (offer.params && offer.params['Конфигурация']) {
         const configValue = offer.params['Конфигурация'].toLowerCase();
         fullQueryWords.forEach(word => {
           if (word.includes('угловой') && configValue.includes('угловой')) {
-            relevanceScore += 6;
+            relevanceScore += 5; // Нормализовано с 6 до 5
           } else if (word.includes('прямой') && configValue.includes('прямой')) {
-            relevanceScore += 6;
+            relevanceScore += 5; // Нормализовано с 6 до 5
           } else if (word.includes('модульный') && configValue.includes('модуль')) {
-            relevanceScore += 6;
+            relevanceScore += 5; // Нормализовано с 6 до 5
           }
         });
       }
@@ -881,9 +881,9 @@ function filterOffers(catalog, query, filters = {}) {
       
       // 13. Обычный поиск по ключевым словам
       queryWords.forEach(word => {
-        // Совпадение в названии = 3 балла
+        // Совпадение в названии = 5 баллов (категория)
         if (nameText.includes(word)) {
-          relevanceScore += 3;
+          relevanceScore += 5; // Нормализовано с 3 до 5
         }
         // Совпадение в параметрах = 2 балла
         if (paramsText.includes(word)) {
@@ -895,14 +895,18 @@ function filterOffers(catalog, query, filters = {}) {
         }
       });
       
-      // 14. Дополнительный поиск по полным словам (для точных совпадений)
-      fullQueryWords.forEach(word => {
-        if (word.length > 2) {
-          if (nameText.includes(word)) {
-            relevanceScore += 1; // Дополнительный балл за полное совпадение
-          }
+      // 14. Дополнительный поиск по полным словам - убираем (избыточно)
+      
+      // 15. НОВОЕ: Баллы за соответствие бюджету
+      if (priceRange.maxPrice) {
+        const pricePerUnit = getPricePerUnit(offer);
+        const totalPrice = pricePerUnit * requestedQuantity;
+        
+        if (totalPrice <= priceRange.maxPrice) {
+          relevanceScore += 5; // +5 баллов за соответствие бюджету
+          console.log(`💰 ${offer.name}: в бюджете (${totalPrice} <= ${priceRange.maxPrice})`);
         }
-      });
+      }
       
       return { ...offer, relevanceScore };
     }).filter(offer => offer.relevanceScore > 0)
@@ -939,7 +943,7 @@ function filterOffers(catalog, query, filters = {}) {
           fabricParams.forEach(paramName => {
             const paramValue = (offer.params[paramName] || '').toLowerCase();
             if (paramValue && fullQueryWords.some(word => paramValue.includes(word))) {
-              relevanceScore += 10;
+              relevanceScore += 5; // Нормализовано с 10 до 5
             }
           });
         }
@@ -950,7 +954,7 @@ function filterOffers(catalog, query, filters = {}) {
           fullQueryWords.forEach(word => {
             const colorSynonyms = getColorSynonyms(word);
             if (colorSynonyms.some(synonym => offerColor.includes(synonym.toLowerCase()))) {
-              relevanceScore += 8;
+              relevanceScore += 5; // Нормализовано с 8 до 5
             }
           });
         }
@@ -963,7 +967,7 @@ function filterOffers(catalog, query, filters = {}) {
             fullQueryWords.forEach(word => {
               const mechanismSynonyms = getMechanismSynonyms(word);
               if (mechanismSynonyms.some(synonym => paramValue.includes(synonym.toLowerCase()))) {
-                relevanceScore += 7;
+                relevanceScore += 5; // Нормализовано с 7 до 5
               }
             });
           });
@@ -977,7 +981,7 @@ function filterOffers(catalog, query, filters = {}) {
             const offerPlace = [parseInt(numbers[0]), parseInt(numbers[1])];
             sleepingPlaces.forEach(queryPlace => {
               if (Math.abs(offerPlace[0] - queryPlace[0]) <= 5 && Math.abs(offerPlace[1] - queryPlace[1]) <= 5) {
-                relevanceScore += 6;
+                relevanceScore += 5; // Нормализовано с 6 до 5
               }
             });
           }
@@ -988,11 +992,11 @@ function filterOffers(catalog, query, filters = {}) {
           const configValue = offer.params['Конфигурация'].toLowerCase();
           fullQueryWords.forEach(word => {
             if (word.includes('угловой') && configValue.includes('угловой')) {
-              relevanceScore += 6;
+              relevanceScore += 5; // Нормализовано с 6 до 5
             } else if (word.includes('прямой') && configValue.includes('прямой')) {
-              relevanceScore += 6;
+              relevanceScore += 5; // Нормализовано с 6 до 5
             } else if (word.includes('модульный') && configValue.includes('модуль')) {
-              relevanceScore += 6;
+              relevanceScore += 5; // Нормализовано с 6 до 5
             }
           });
         }
@@ -1036,21 +1040,21 @@ function filterOffers(catalog, query, filters = {}) {
           }
         }
         
-        // 9. Поиск со скидкой
-        if (offer.oldPrice && offer.oldPrice > offer.price) {
-          if (fullQueryWords.some(word => ['скидка', 'акция', 'распродажа', 'уценка'].includes(word))) {
-            relevanceScore += 4;
-          }
+      // 9. Поиск со скидкой
+      if (offer.oldPrice && offer.oldPrice > offer.price) {
+        if (fullQueryWords.some(word => ['скидка', 'акция', 'распродажа', 'уценка'].includes(word))) {
+          relevanceScore += 3; // Нормализовано с 4 до 3 (дополнительный критерий)
         }
+      }
         
         // 10. Поиск по материалу каркаса
         if (offer.params && offer.params['Материал каркаса']) {
           const frameMaterial = offer.params['Материал каркаса'].toLowerCase();
           fullQueryWords.forEach(word => {
             if (word.includes('дерево') && (frameMaterial.includes('брус') || frameMaterial.includes('фанера') || frameMaterial.includes('массив'))) {
-              relevanceScore += 4;
+              relevanceScore += 5; // Нормализовано с 4 до 5
             } else if (word.includes('металл') && (frameMaterial.includes('металл') || frameMaterial.includes('сталь'))) {
-              relevanceScore += 4;
+              relevanceScore += 5; // Нормализовано с 4 до 5
             }
           });
         }
@@ -1059,7 +1063,7 @@ function filterOffers(catalog, query, filters = {}) {
         if (maxLoad && offer.params && offer.params['Максимальная нагрузка']) {
           const offerLoad = parseInt(offer.params['Максимальная нагрузка']);
           if (offerLoad >= maxLoad) {
-            relevanceScore += 4;
+            relevanceScore += 5; // Нормализовано с 4 до 5
           }
         }
         
@@ -1068,31 +1072,46 @@ function filterOffers(catalog, query, filters = {}) {
           const stiffness = offer.params['Уровень жесткости'].toLowerCase();
           fullQueryWords.forEach(word => {
             if (word.includes('жесткий') && stiffness.includes('жесткий')) {
-              relevanceScore += 4;
+              relevanceScore += 5; // Нормализовано с 4 до 5
             } else if (word.includes('мягкий') && stiffness.includes('мягкий')) {
-              relevanceScore += 4;
+              relevanceScore += 5; // Нормализовано с 4 до 5
             }
           });
         }
         
         // 13. Обычный поиск по ключевым словам
         queryWords.forEach(word => {
-          if (nameText.includes(word)) relevanceScore += 3;
+          if (nameText.includes(word)) relevanceScore += 5; // Нормализовано с 3 до 5
           if (paramsText.includes(word)) relevanceScore += 2;
           if (descText.includes(word)) relevanceScore += 1;
         });
         
-        // 14. Дополнительный поиск по полным словам
-        fullQueryWords.forEach(word => {
-          if (word.length > 2 && nameText.includes(word)) {
-            relevanceScore += 1;
+        // 14. Дополнительный поиск по полным словам - убираем (избыточно)
+        
+        // 15. НОВОЕ: Баллы за соответствие бюджету
+        if (priceRange.maxPrice) {
+          const pricePerUnit = getPricePerUnit(offer);
+          const totalPrice = pricePerUnit * requestedQuantity;
+          
+          if (totalPrice <= priceRange.maxPrice) {
+            relevanceScore += 5; // +5 баллов за соответствие бюджету
+            console.log(`💰 ${offer.name}: в бюджете (${totalPrice} <= ${priceRange.maxPrice})`);
           }
-        });
+        }
         
         return { ...offer, relevanceScore };
       }).filter(offer => offer.relevanceScore >= 5)
         .sort((a, b) => b.relevanceScore - a.relevanceScore)
         .slice(0, 50); // Ограничить топ-50 самых релевантных
+        
+  console.log(`🎯 После relevanceScore фильтра: ${filtered.length} товаров`);
+  if (filtered.length > 0) {
+    console.log('📊 Топ-5 по relevanceScore:', filtered.slice(0, 5).map(o => ({
+      name: o.name,
+      price: o.price,
+      relevanceScore: o.relevanceScore
+    })));
+  }
     }
   }
   
@@ -1112,53 +1131,7 @@ function filterOffers(catalog, query, filters = {}) {
     };
   });
   
-  // Фильтруем по общей стоимости если указан бюджет
-  if (priceRange.maxPrice) {
-    console.log('🔍 ПЕРЕД фильтром по бюджету:', {
-      count: filtered.length,
-      maxPrice: priceRange.maxPrice,
-      sample: filtered.slice(0, 3).map(o => ({
-        name: o.name,
-        price: o.price,
-        pricePerUnit: o.pricePerUnit,
-        totalPrice: o.totalPrice
-      }))
-    });
-    
-    // Сначала показываем товары В бюджете
-    const inBudget = filtered.filter(o => o.totalPrice <= priceRange.maxPrice);
-    
-    console.log('🔍 ПОСЛЕ фильтра по бюджету:', {
-      before: filtered.length,
-      after: inBudget.length,
-      filtered: inBudget.slice(0, 5).map(o => ({
-        name: o.name,
-        totalPrice: o.totalPrice
-      }))
-    });
-    
-    // Если нашли - отлично
-    if (inBudget.length > 0) {
-      filtered = inBudget;
-      console.log(`💰 В бюджете ${priceRange.maxPrice}: ${filtered.length} товаров`);
-    } else {
-      // Если НЕ нашли - показываем ближайшие выше бюджета (до +20%)
-      const nearBudget = filtered.filter(o => 
-        o.totalPrice <= priceRange.maxPrice * 1.2
-      ).slice(0, 3);
-      
-      if (nearBudget.length > 0) {
-        filtered = nearBudget;
-        console.log(`💰 Выше бюджета, показываем ближайшие: ${filtered.length} товаров`);
-        
-        // Добавляем флаг что это товары выше бюджета
-        filtered = filtered.map(o => ({...o, aboveBudget: true}));
-      } else {
-        filtered = [];
-        console.log(`❌ Нет товаров даже с запасом +20% от бюджета`);
-      }
-    }
-  }
+  // Фильтр по бюджету убран - цена уже учтена в relevanceScore (+5 баллов)
   
   // Сортировка в зависимости от намерения
   if (priceIntent === 'cheapest') {
