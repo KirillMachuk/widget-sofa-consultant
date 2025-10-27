@@ -1,4 +1,33 @@
-// Упрощенная версия api/lead.js без Redis
+// Используем тот же Redis клиент что и для каталога
+const { Redis } = require('@upstash/redis');
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL,
+  token: process.env.KV_REST_API_TOKEN,
+});
+
+// Сохранение контактов в Redis
+async function saveContacts(sessionId, contacts) {
+  try {
+    const chatKey = `chat:${sessionId}`;
+    
+    // Читаем существующую сессию
+    let session = await redis.get(chatKey);
+    if (session) {
+      session.contacts = contacts;
+      session.lastUpdated = new Date().toISOString();
+      
+      // Сохраняем обратно в Redis
+      await redis.set(chatKey, session);
+      console.log('Контакты сохранены в Redis для сессии:', sessionId);
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Ошибка сохранения контактов в Redis:', error);
+    return false;
+  }
+}
+
 async function handler(req, res){
   // Add CORS headers for external domains
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -10,24 +39,20 @@ async function handler(req, res){
   }
   
   if (req.method !== 'POST') return res.status(405).end();
-  
   try{
     const { gas_url, timestamp, name, phone, pretext, page_url, session_id, category, gift, messenger, wishes } = req.body || {};
     if (!gas_url) return res.status(400).json({ error: 'Missing gas_url' });
-    
     const payload = { timestamp, name, phone, pretext, page_url, session_id, category, gift, messenger, wishes };
-    
     // Retry логика для Google Apps Script
     const maxRetries = 3;
     let lastError = null;
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут (уменьшен)
       
       try {
         console.log(`📤 Отправляем лид в GAS (попытка ${attempt}/${maxRetries})`);
-        console.log('Данные:', payload);
         
         const r = await fetch(gas_url, {
           method: 'POST',
@@ -39,8 +64,6 @@ async function handler(req, res){
         clearTimeout(timeoutId);
         
         const text = await r.text();
-        console.log('Ответ от GAS:', text);
-        
         if (!r.ok){
           throw new Error(`GAS upstream error: ${r.status} - ${text.slice(0, 200)}`);
         }
@@ -73,6 +96,21 @@ async function handler(req, res){
       return res.status(502).json({ error: 'All retry attempts failed', details: lastError.message });
     }
     
+    // Сохраняем контакты ПОСЛЕ успешного ответа от GAS
+    if (session_id) {
+      await saveContacts(session_id, {
+        name: name || '',
+        phone: phone || '',
+        pretext: pretext || '',
+        page_url: page_url || '',
+        category: category || '',
+        gift: gift || '',
+        messenger: messenger || '',
+        wishes: wishes || '',
+        timestamp: timestamp || new Date().toISOString()
+      });
+    }
+    
     // Try to parse JSON, fallback to text
     try{ 
       return res.status(200).json({ ok: true, message: 'Lead saved successfully' }); 
@@ -81,7 +119,6 @@ async function handler(req, res){
       return res.status(200).json({ ok: true, message: 'Lead saved successfully' }); 
     }
   }catch(e){
-    console.error('Ошибка в api/lead.js:', e);
     return res.status(500).json({ error: String(e) });
   }
 }
