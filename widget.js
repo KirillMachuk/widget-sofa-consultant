@@ -1015,6 +1015,17 @@
     }, 100);
   }
   
+  // Функция склонения категорий для заголовка
+  function getCategoryGenitive(category) {
+    const genitive = {
+      'Диван': 'дивана',
+      'Кровать': 'кровати',
+      'Кухня': 'кухни',
+      'Другое': 'другой мебели'
+    };
+    return genitive[category] || 'товара';
+  }
+
   // Показать форму с подарками для выбранной категории
   function showGiftForm(category) {
     const gifts = GIFTS_BY_CATEGORY[category] || [];
@@ -1033,23 +1044,23 @@
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">Выберите подарок и оставьте контакты</div>
         <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
-          <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок:</div>
+          <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок при заказе ${getCategoryGenitive(category)}:</div>
           ${giftsHtml}
           <div style="margin-top:16px;margin-bottom:12px;font-size:14px;color:#666">Выберите мессенджер:</div>
           <div style="display:flex;gap:8px;margin-bottom:16px">
             <button class="messenger-btn" data-messenger="WhatsApp" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s;min-height:44px;font-size:14px">
-              💚 WhatsApp
+              WhatsApp
             </button>
             <button class="messenger-btn" data-messenger="Telegram" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s;min-height:44px;font-size:14px">
-              🔵 Telegram
+              Telegram
             </button>
             <button class="messenger-btn" data-messenger="Viber" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s;min-height:44px;font-size:14px">
-              💜 Viber
+              Viber
             </button>
         </div>
           <input id="vfwName" placeholder="Имя" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:8px">
           <input id="vfwPhone" placeholder="Телефон (+375...)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:8px">
-          <textarea id="vfwWishes" placeholder="Пожелания (необязательно)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;min-height:60px;box-sizing:border-box;margin-bottom:8px;resize:vertical"></textarea>
+          <textarea id="vfwWishes" placeholder="Пожелания (необязательно)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;min-height:60px;box-sizing:border-box;margin-bottom:8px;resize:vertical;font-family:inherit"></textarea>
           <button class="gift-form-submit" style="padding:12px 16px;border-radius:10px;background:${CONFIG.brand.accent};color:#fff;border:0;min-height:44px;font-size:16px">Получить подарок</button>
         </div>
         <div class="vfw-disc">Нажимая "Получить подарок", вы соглашаетесь на обработку персональных данных.</div>
@@ -1501,11 +1512,11 @@
       fallbackFormShown = false;
       
       // Показываем приветствие мгновенно
-      addMsg('bot', 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁. Какую мебель рассматриваете?');
+      addMsg('bot', 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁\nКакую мебель рассматриваете?');
       
       // Сохраняем приветственное сообщение в историю
       const history = loadHistory();
-      history.push({ role: 'assistant', content: 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁. Какую мебель рассматриваете?', ts: nowIso() });
+      history.push({ role: 'assistant', content: 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁\nКакую мебель рассматриваете?', ts: nowIso() });
       saveHistory(history);
       
       // Показываем кнопки категорий мгновенно
