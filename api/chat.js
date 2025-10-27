@@ -317,9 +317,19 @@ async function handler(req, res){
         if (historyMessages.length > 1) {
           // Есть история - берем только предыдущие сообщения (не дублируем текущее)
           const previousMessages = historyMessages.slice(0, -1); // Все кроме последнего
-          const historyText = previousMessages.map(m => m.content).join(' ');
-          enrichedQuery = `${historyText} ${user_message}`;
-          console.log('📝 Обогащенный запрос с историей (без дублей):', enrichedQuery.substring(0, 150));
+          const lastPreviousMessage = previousMessages[previousMessages.length - 1]?.content || '';
+          
+          // Проверяем что текущее сообщение не дублирует предыдущее
+          if (lastPreviousMessage === user_message) {
+            // Дубликат - используем только текущее сообщение
+            enrichedQuery = user_message;
+            console.log('⚠️ Обнаружен дубликат, используем только текущее сообщение');
+          } else {
+            // Обогащаем историей
+            const historyText = previousMessages.map(m => m.content).join(' ');
+            enrichedQuery = `${historyText} ${user_message}`;
+            console.log('📝 Обогащенный запрос с историей (без дублей):', enrichedQuery.substring(0, 150));
+          }
         } else {
           // Первое сообщение - используем как есть
           enrichedQuery = user_message;

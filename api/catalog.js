@@ -686,6 +686,13 @@ function filterOffers(catalog, query, filters = {}) {
   const detectedRoom = detectRoom(query);
   const maxLoad = extractMaxLoad(query);
   
+  // Логирование извлеченного priceRange
+  console.log('💰 Извлечен priceRange:', {
+    minPrice: priceRange.minPrice,
+    maxPrice: priceRange.maxPrice,
+    query: query.substring(0, 100)
+  });
+  
   // Фильтр по ценовому диапазону (из filters)
   if (filters.minPrice !== undefined) {
     filtered = filtered.filter(offer => offer.price >= filters.minPrice);
@@ -1083,8 +1090,9 @@ function filterOffers(catalog, query, filters = {}) {
         });
         
         return { ...offer, relevanceScore };
-      }).filter(offer => offer.relevanceScore > 0)
-        .sort((a, b) => b.relevanceScore - a.relevanceScore);
+      }).filter(offer => offer.relevanceScore >= 5)
+        .sort((a, b) => b.relevanceScore - a.relevanceScore)
+        .slice(0, 50); // Ограничить топ-50 самых релевантных
     }
   }
   
@@ -1095,23 +1103,39 @@ function filterOffers(catalog, query, filters = {}) {
   console.log(`🎯 Намерение: ${priceIntent}, количество: ${requestedQuantity}`);
   
   // Добавляем цену за единицу и общую стоимость к каждому товару
-  filtered = filtered.map(offer => ({
-    ...offer,
-    pricePerUnit: getPricePerUnit(offer),
-    totalPrice: getPricePerUnit(offer) * requestedQuantity
-  }));
+  filtered = filtered.map(offer => {
+    const pricePerUnit = getPricePerUnit(offer);
+    return {
+      ...offer,
+      pricePerUnit,
+      totalPrice: pricePerUnit * requestedQuantity
+    };
+  });
   
   // Фильтруем по общей стоимости если указан бюджет
   if (priceRange.maxPrice) {
-    console.log('🔍 До фильтра по бюджету:', filtered.slice(0, 5).map(o => ({
-      name: o.name,
-      pricePerUnit: o.pricePerUnit,
-      totalPrice: o.totalPrice,
-      budget: priceRange.maxPrice
-    })));
+    console.log('🔍 ПЕРЕД фильтром по бюджету:', {
+      count: filtered.length,
+      maxPrice: priceRange.maxPrice,
+      sample: filtered.slice(0, 3).map(o => ({
+        name: o.name,
+        price: o.price,
+        pricePerUnit: o.pricePerUnit,
+        totalPrice: o.totalPrice
+      }))
+    });
     
     // Сначала показываем товары В бюджете
     const inBudget = filtered.filter(o => o.totalPrice <= priceRange.maxPrice);
+    
+    console.log('🔍 ПОСЛЕ фильтра по бюджету:', {
+      before: filtered.length,
+      after: inBudget.length,
+      filtered: inBudget.slice(0, 5).map(o => ({
+        name: o.name,
+        totalPrice: o.totalPrice
+      }))
+    });
     
     // Если нашли - отлично
     if (inBudget.length > 0) {
