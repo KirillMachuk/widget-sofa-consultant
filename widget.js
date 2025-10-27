@@ -2053,13 +2053,13 @@
     const delay = target - minsk;
     setTimeout(() => {
       console.log('Preloading catalog at 18:00 Minsk time');
-      fetchPromptAndCatalog().catch(e => {
-        console.warn('Failed to preload catalog:', e);
+      fetchPrompt().catch(e => {
+        console.warn('Failed to preload prompt:', e);
       });
       // Повторять каждый день
       setInterval(() => {
-        fetchPromptAndCatalog().catch(e => {
-          console.warn('Failed to preload catalog:', e);
+        fetchPrompt().catch(e => {
+          console.warn('Failed to preload prompt:', e);
         });
       }, 24 * 60 * 60 * 1000);
     }, delay);
@@ -2082,8 +2082,8 @@
     }, 15000);
     
     // Загружаем данные в фоне
-    fetchPromptAndCatalog().catch(e => {
-      console.warn('Failed to load prompt/catalog:', e);
+    fetchPrompt().catch(e => {
+      console.warn('Failed to load prompt:', e);
     });
     
     // Настраиваем предзагрузку в 18:00 Минск
