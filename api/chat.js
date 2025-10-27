@@ -193,10 +193,14 @@ async function detectIntent(userMessage) {
     let resultText = '{}';
     
     if (data.output && data.output.length > 0) {
-      // Ищем text в output массиве
-      const textOutput = data.output.find(item => item.type === 'text');
-      if (textOutput && textOutput.text) {
-        resultText = textOutput.text;
+      // Ищем message в output массиве
+      const messageOutput = data.output.find(item => item.type === 'message');
+      if (messageOutput && messageOutput.content && messageOutput.content.length > 0) {
+        // Берем первый content элемент
+        const content = messageOutput.content[0];
+        if (content.type === 'output_text' && content.text) {
+          resultText = content.text;
+        }
       }
     }
     
