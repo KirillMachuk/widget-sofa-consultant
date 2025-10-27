@@ -162,7 +162,7 @@ async function detectIntent(userMessage) {
       body: JSON.stringify({
         model: 'gpt-5-mini',
         input: [{ role: 'system', content: intentPrompt }],  // ✅ Responses API использует 'input' вместо 'messages'
-        max_output_tokens: 150,      // ✅ Responses API параметр
+        max_output_tokens: 300,      // ✅ Увеличиваем для полного JSON ответа
         reasoning: {                  // ✅ Вместо temperature
           effort: 'medium'
         },
@@ -189,7 +189,22 @@ async function detectIntent(userMessage) {
     console.log('🔍 Response structure:', Object.keys(data));
     console.log('🔍 Choices structure:', data.choices?.[0] ? Object.keys(data.choices[0]) : 'no choices');
     
-    const resultText = data.choices?.[0]?.message?.content || '{}';
+    // Responses API использует другую структуру - output массив вместо choices
+    let resultText = '{}';
+    
+    if (data.output && data.output.length > 0) {
+      // Ищем text в output массиве
+      const textOutput = data.output.find(item => item.type === 'text');
+      if (textOutput && textOutput.text) {
+        resultText = textOutput.text;
+      }
+    }
+    
+    // Fallback на старую структуру (если есть choices)
+    if (resultText === '{}' && data.choices?.[0]?.message?.content) {
+      resultText = data.choices[0].message.content;
+    }
+    
     console.log('🔍 Responses API extracted content:', resultText);
     
     // Парсим JSON с обработкой ошибок
