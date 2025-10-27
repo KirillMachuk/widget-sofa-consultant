@@ -900,6 +900,7 @@ function filterOffers(catalog, query, filters = {}) {
       // 15. НОВОЕ: Баллы за соответствие бюджету
       if (priceRange.maxPrice) {
         const pricePerUnit = getPricePerUnit(offer);
+        const requestedQuantity = extractQuantity(query); // Определяем количество здесь
         const totalPrice = pricePerUnit * requestedQuantity;
         
         if (totalPrice <= priceRange.maxPrice) {
@@ -1091,6 +1092,7 @@ function filterOffers(catalog, query, filters = {}) {
         // 15. НОВОЕ: Баллы за соответствие бюджету
         if (priceRange.maxPrice) {
           const pricePerUnit = getPricePerUnit(offer);
+          const requestedQuantity = extractQuantity(query); // Определяем количество здесь
           const totalPrice = pricePerUnit * requestedQuantity;
           
           if (totalPrice <= priceRange.maxPrice) {
