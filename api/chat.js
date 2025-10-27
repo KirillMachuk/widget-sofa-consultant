@@ -207,7 +207,7 @@ async function handler(req, res){
     }
     
     // Handle session initialization (first request with prompt/catalog)
-    if (action === 'init' && prompt && catalog) {
+    if (action === 'init' && prompt) {
       console.log(`[${new Date().toISOString()}] Инициализация сессии:`, session_id);
       
       // Очищаем кэш только если он переполнен
@@ -215,7 +215,7 @@ async function handler(req, res){
       
       sessionCache.set(session_id, { 
         prompt, 
-        catalog, 
+        catalog: catalog || null, 
         locale: locale || 'ru',
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
