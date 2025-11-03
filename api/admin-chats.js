@@ -47,8 +47,22 @@ async function readChats() {
     const validSessions = sessions.filter(session => session !== null);
     console.log(`Прочитано валидных сессий: ${validSessions.length}`);
     
-    // Логируем первую сессию для отладки
+    // Нормализуем данные сессий (защита от старых/некорректных данных)
     if (validSessions.length > 0) {
+      validSessions.forEach(session => {
+        // Нормализуем messages: если не массив - делаем пустым массивом
+        if (!Array.isArray(session.messages)) {
+          console.warn('⚠️ Нормализация messages: не массив, исправляем для', session.sessionId);
+          session.messages = [];
+        }
+        // Нормализуем contacts: если не объект - делаем null
+        if (session.contacts && typeof session.contacts !== 'object') {
+          console.warn('⚠️ Нормализация contacts: не объект, исправляем для', session.sessionId);
+          session.contacts = null;
+        }
+      });
+      
+      // Логируем первую сессию для отладки
       const firstSession = validSessions[0];
       console.log('Пример первой сессии (краткая):', {
         sessionId: firstSession.sessionId,

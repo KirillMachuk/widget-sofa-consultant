@@ -74,6 +74,12 @@ async function saveChat(sessionId, userMessage, botReply) {
       };
     }
     
+    // Защита: проверяем что messages - это массив
+    if (!Array.isArray(session.messages)) {
+      console.warn('⚠️ session.messages не массив, исправляем:', typeof session.messages);
+      session.messages = [];
+    }
+    
     console.log('🔍 saveChat: Добавляем сообщения. Текущее кол-во:', session.messages ? session.messages.length : 0);
     
     // Добавляем сообщения

@@ -27,42 +27,52 @@ async function withRetry(operation, maxRetries = 3, delay = 1000) {
 
 // Безопасные обертки для Redis операций
 const redisClient = {
-  // GET с retry
+  // GET с retry и JSON десериализацией
   async get(key) {
-    return Promise.race([
+    const raw = await Promise.race([
       withRetry(() => redis.get(key)),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis GET timeout after 10s')), 10000)
       )
     ]);
+    if (raw === null || raw === undefined) return null;
+    if (typeof raw === 'string') return JSON.parse(raw);
+    return raw; // Уже десериализовано
   },
 
-  // SET с retry
+  // SET с retry и JSON сериализацией
   async set(key, value, options = {}) {
+    const serialized = JSON.stringify(value);
     return Promise.race([
-      withRetry(() => redis.set(key, value, options)),
+      withRetry(() => redis.set(key, serialized, options)),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis SET timeout after 10s')), 10000)
       )
     ]);
   },
 
-  // SETEX с retry
+  // SETEX с retry и JSON сериализацией
   async setex(key, seconds, value) {
-    return withRetry(() => redis.setex(key, seconds, value));
+    const serialized = JSON.stringify(value);
+    return withRetry(() => redis.setex(key, seconds, serialized));
   },
 
-  // MGET с retry
+  // MGET с retry и JSON десериализацией
   async mget(...keys) {
     console.log('🔍 redisClient.mget: Запрос для', keys.length, 'ключей');
-    const result = await Promise.race([
+    const results = await Promise.race([
       withRetry(() => redis.mget(...keys)),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis MGET timeout after 15s')), 15000)
       )
     ]);
-    console.log('✅ redisClient.mget: Получено', result ? result.length : 0, 'результатов');
-    return result;
+    console.log('✅ redisClient.mget: Получено', results ? results.length : 0, 'результатов');
+    if (!results) return [];
+    return results.map(raw => {
+      if (raw === null || raw === undefined) return null;
+      if (typeof raw === 'string') return JSON.parse(raw);
+      return raw;
+    });
   },
 
   // INCR с retry
