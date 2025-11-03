@@ -18,6 +18,7 @@ async function saveContacts(sessionId, contacts) {
       
       // Сохраняем обратно в Redis
       await redis.set(chatKey, session);
+      await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
       console.log('Контакты сохранены в Redis для сессии:', sessionId);
       return true;
     }
