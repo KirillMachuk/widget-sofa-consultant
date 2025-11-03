@@ -437,9 +437,13 @@ async function handler(req, res){
         formMessage = await generatePersonalizedFormMessage(messages, session);
       }
       
-      // Сохраняем диалог в Redis (не блокируем основной поток)
-      saveChat(session_id, user_message, reply).catch(error => {
-        console.error('Ошибка сохранения диалога (не критично):', error);
+      // Сохраняем диалог в Redis (с детальным логированием)
+      console.log('📝 Вызываем saveChat для сессии:', session_id);
+      saveChat(session_id, user_message, reply).then(() => {
+        console.log('✅ saveChat успешно завершен для:', session_id);
+      }).catch(error => {
+        console.error('❌ Ошибка сохранения диалога:', error);
+        console.error('Stack trace:', error.stack);
       });
       
       return res.status(200).json({ 
