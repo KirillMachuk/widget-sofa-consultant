@@ -29,12 +29,22 @@ async function withRetry(operation, maxRetries = 3, delay = 1000) {
 const redisClient = {
   // GET с retry
   async get(key) {
-    return withRetry(() => redis.get(key));
+    return Promise.race([
+      withRetry(() => redis.get(key)),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Redis GET timeout after 10s')), 10000)
+      )
+    ]);
   },
 
   // SET с retry
   async set(key, value, options = {}) {
-    return withRetry(() => redis.set(key, value, options));
+    return Promise.race([
+      withRetry(() => redis.set(key, value, options)),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Redis SET timeout after 10s')), 10000)
+      )
+    ]);
   },
 
   // SETEX с retry
