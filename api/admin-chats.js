@@ -72,6 +72,10 @@ async function readChats() {
         hasContacts: !!firstSession.contacts,
         contactsKeys: firstSession.contacts ? Object.keys(firstSession.contacts) : 'undefined'
       });
+      // Логируем ПЕРВЫЕ 3 сообщения для диагностики
+      if (firstSession.messages && Array.isArray(firstSession.messages)) {
+        console.log('🔍 Первые сообщения в сессии [0]:', JSON.stringify(firstSession.messages.slice(0, 3), null, 2));
+      }
     }
     
     return validSessions;
