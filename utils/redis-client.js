@@ -27,37 +27,32 @@ async function withRetry(operation, maxRetries = 3, delay = 1000) {
 
 // Безопасные обертки для Redis операций
 const redisClient = {
-  // GET с retry и JSON десериализацией
+  // GET с retry (Upstash автоматически сериализует/десериализует JSON)
   async get(key) {
-    const raw = await Promise.race([
+    return Promise.race([
       withRetry(() => redis.get(key)),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis GET timeout after 10s')), 10000)
       )
     ]);
-    if (raw === null || raw === undefined) return null;
-    if (typeof raw === 'string') return JSON.parse(raw);
-    return raw; // Уже десериализовано
   },
 
-  // SET с retry и JSON сериализацией
+  // SET с retry (Upstash автоматически сериализует/десериализует JSON)
   async set(key, value, options = {}) {
-    const serialized = JSON.stringify(value);
     return Promise.race([
-      withRetry(() => redis.set(key, serialized, options)),
+      withRetry(() => redis.set(key, value, options)),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis SET timeout after 10s')), 10000)
       )
     ]);
   },
 
-  // SETEX с retry и JSON сериализацией
+  // SETEX с retry (Upstash автоматически сериализует/десериализует JSON)
   async setex(key, seconds, value) {
-    const serialized = JSON.stringify(value);
-    return withRetry(() => redis.setex(key, seconds, serialized));
+    return withRetry(() => redis.setex(key, seconds, value));
   },
 
-  // MGET с retry и JSON десериализацией
+  // MGET с retry и логированием
   async mget(...keys) {
     console.log('🔍 redisClient.mget: Запрос для', keys.length, 'ключей');
     const results = await Promise.race([
@@ -67,29 +62,14 @@ const redisClient = {
       )
     ]);
     console.log('✅ redisClient.mget: Получено', results ? results.length : 0, 'результатов');
-    if (!results) return [];
-    return results.map((raw, index) => {
-      if (raw === null || raw === undefined) return null;
-      const rawType = typeof raw;
-      if (rawType === 'string') {
-        try {
-          const parsed = JSON.parse(raw);
-          // Логируем первый результат для диагностики
-          if (index === 0 && parsed && parsed.messages) {
-            console.log('🔍 redisClient.mget [0]: messages type:', typeof parsed.messages, 'isArray:', Array.isArray(parsed.messages));
-          }
-          return parsed;
-        } catch (e) {
-          console.error('❌ JSON.parse error in mget:', e.message);
-          return raw;
-        }
+    // Логируем первый результат для диагностики
+    if (results && results.length > 0 && results[0]) {
+      const first = results[0];
+      if (first && first.messages) {
+        console.log('🔍 redisClient.mget [0]: messages type:', typeof first.messages, 'isArray:', Array.isArray(first.messages));
       }
-      // Логируем первый результат для диагностики
-      if (index === 0 && raw && raw.messages) {
-        console.log('🔍 redisClient.mget [0]: messages type (already parsed):', typeof raw.messages, 'isArray:', Array.isArray(raw.messages));
-      }
-      return raw;
-    });
+    }
+    return results || [];
   },
 
   // INCR с retry
