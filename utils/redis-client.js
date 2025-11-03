@@ -68,9 +68,26 @@ const redisClient = {
     ]);
     console.log('✅ redisClient.mget: Получено', results ? results.length : 0, 'результатов');
     if (!results) return [];
-    return results.map(raw => {
+    return results.map((raw, index) => {
       if (raw === null || raw === undefined) return null;
-      if (typeof raw === 'string') return JSON.parse(raw);
+      const rawType = typeof raw;
+      if (rawType === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          // Логируем первый результат для диагностики
+          if (index === 0 && parsed && parsed.messages) {
+            console.log('🔍 redisClient.mget [0]: messages type:', typeof parsed.messages, 'isArray:', Array.isArray(parsed.messages));
+          }
+          return parsed;
+        } catch (e) {
+          console.error('❌ JSON.parse error in mget:', e.message);
+          return raw;
+        }
+      }
+      // Логируем первый результат для диагностики
+      if (index === 0 && raw && raw.messages) {
+        console.log('🔍 redisClient.mget [0]: messages type (already parsed):', typeof raw.messages, 'isArray:', Array.isArray(raw.messages));
+      }
       return raw;
     });
   },
