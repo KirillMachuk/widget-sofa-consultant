@@ -76,6 +76,16 @@ async function readChats() {
       if (firstSession.messages && Array.isArray(firstSession.messages)) {
         console.log('🔍 Первые сообщения в сессии [0]:', JSON.stringify(firstSession.messages.slice(0, 3), null, 2));
       }
+      
+      // СПЕЦИАЛЬНО логируем сессию s_ak0ient4olimg0vjdh8
+      const targetSession = validSessions.find(s => s.sessionId === 's_ak0ient4olimg0vjdh8');
+      if (targetSession) {
+        console.log('🎯 Найдена целевая сессия s_ak0ient4olimg0vjdh8:');
+        console.log('  - messages.length:', targetSession.messages ? targetSession.messages.length : 0);
+        console.log('  - lastUpdated:', targetSession.lastUpdated);
+      } else {
+        console.log('❌ Сессия s_ak0ient4olimg0vjdh8 НЕ найдена в результатах mget');
+      }
     }
     
     return validSessions;
