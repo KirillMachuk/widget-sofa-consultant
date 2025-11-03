@@ -1043,7 +1043,7 @@
       <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">Выберите подарок и оставьте контакты</div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
           <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок при заказе ${getCategoryGenitive(category)}:</div>
           ${giftsHtml}
           <div style="margin-top:16px;margin-bottom:12px;font-size:14px;color:#666">Выберите мессенджер:</div>
@@ -1058,9 +1058,9 @@
               Viber
             </button>
         </div>
-          <input id="vfwName" placeholder="Имя" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:8px">
-          <input id="vfwPhone" placeholder="Телефон (+375...)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:8px">
-          <textarea id="vfwWishes" placeholder="Пожелания (необязательно)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;min-height:60px;box-sizing:border-box;margin-bottom:8px;resize:vertical;font-family:inherit"></textarea>
+          <input id="vfwName" placeholder="Имя" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:4px">
+          <input id="vfwPhone" placeholder="Телефон (+375...)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;height:44px;box-sizing:border-box;margin-bottom:4px">
+          <textarea id="vfwWishes" placeholder="Пожелания (необязательно)" style="padding:12px 16px;border:1px solid rgba(17,17,17,.12);border-radius:10px;font-size:16px;min-height:60px;box-sizing:border-box;margin-bottom:4px;resize:vertical;font-family:inherit"></textarea>
           <button class="gift-form-submit" style="padding:12px 16px;border-radius:10px;background:${CONFIG.brand.accent};color:#fff;border:0;min-height:44px;font-size:16px">Получить подарок</button>
         </div>
         <div class="vfw-disc">Нажимая "Получить подарок", вы соглашаетесь на обработку персональных данных.</div>
@@ -1794,7 +1794,7 @@
       if (field.type === 'offer') {
         return `
           <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок:</div>
-          <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px">
+          <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px">
             <button class="offer-btn" data-offer="Журнальный стол" style="padding:12px 16px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:left;transition:all 0.2s;min-height:44px;font-size:16px">
               <div style="font-weight:600;color:#333">🎁 Журнальный стол</div>
               <div style="font-size:12px;color:#666">При заказе дивана от 1500 BYN</div>
@@ -1813,7 +1813,7 @@
       <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">${title}</div>
-        <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px">
+        <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
           ${fieldsHtml}
           <button class="form-submit" style="padding:12px 16px;border-radius:10px;background:${CONFIG.brand.accent};color:#fff;border:0;min-height:44px;font-size:16px">${submitText}</button>
         </div>
