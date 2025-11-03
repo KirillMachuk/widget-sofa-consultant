@@ -49,7 +49,15 @@ async function readChats() {
     
     // Логируем первую сессию для отладки
     if (validSessions.length > 0) {
-      console.log('Пример первой сессии:', JSON.stringify(validSessions[0], null, 2));
+      const firstSession = validSessions[0];
+      console.log('Пример первой сессии (краткая):', {
+        sessionId: firstSession.sessionId,
+        hasMessages: !!firstSession.messages,
+        messagesLength: firstSession.messages ? firstSession.messages.length : 'undefined',
+        messagesType: typeof firstSession.messages,
+        hasContacts: !!firstSession.contacts,
+        contactsKeys: firstSession.contacts ? Object.keys(firstSession.contacts) : 'undefined'
+      });
     }
     
     return validSessions;
