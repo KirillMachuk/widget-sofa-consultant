@@ -98,8 +98,18 @@ async function saveChat(sessionId, userMessage, botReply) {
     session.lastUpdated = new Date().toISOString();
     
     // Сохраняем в Redis
+    console.log('🔧 ПЕРЕД redis.set: messages.length =', session.messages.length);
     await redis.set(chatKey, session);
     await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
+    console.log('✅ redis.set выполнен');
+    
+    // ПРОВЕРКА: читаем сразу после записи
+    const verification = await redis.get(chatKey);
+    console.log('🔍 ПРОВЕРКА сразу после SET:');
+    console.log('  - messages type:', typeof verification.messages);
+    console.log('  - messages isArray:', Array.isArray(verification.messages));
+    console.log('  - messages.length:', verification.messages ? verification.messages.length : 'undefined');
+    
     console.log('Диалог сохранен в Redis для сессии:', sessionId);
     console.log('Ключ в Redis:', chatKey);
     console.log('Данные сессии:', JSON.stringify(session, null, 2));
