@@ -54,7 +54,15 @@ const redisClient = {
 
   // MGET с retry
   async mget(...keys) {
-    return withRetry(() => redis.mget(...keys));
+    console.log('🔍 redisClient.mget: Запрос для', keys.length, 'ключей');
+    const result = await Promise.race([
+      withRetry(() => redis.mget(...keys)),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Redis MGET timeout after 15s')), 15000)
+      )
+    ]);
+    console.log('✅ redisClient.mget: Получено', result ? result.length : 0, 'результатов');
+    return result;
   },
 
   // INCR с retry
