@@ -213,13 +213,34 @@ async function handler(req, res){
       // Очищаем кэш только если он переполнен
       cleanupSessionCache();
       
-      sessionCache.set(session_id, { 
+      const sessionData = { 
         prompt, 
         catalog: catalog || null, 
         locale: locale || 'ru',
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
-      });
+      };
+      
+      sessionCache.set(session_id, sessionData);
+      
+      // Сохраняем сессию в Redis сразу при инициализации
+      try {
+        const chatKey = `chat:${session_id}`;
+        const redisSession = {
+          sessionId: session_id,
+          prompt,
+          catalog: catalog || null,
+          locale: locale || 'ru',
+          createdAt: sessionData.createdAt,
+          lastUpdated: sessionData.lastUpdated,
+          messages: []
+        };
+        await redis.set(chatKey, redisSession);
+        console.log('Сессия сохранена в Redis при инициализации:', session_id);
+      } catch (error) {
+        console.error('Ошибка сохранения сессии в Redis при инициализации:', error);
+        // Продолжаем работу даже если не удалось сохранить в Redis
+      }
       
       console.log(`[${new Date().toISOString()}] Сессия инициализирована, размер кэша: ${sessionCache.size}`);
       

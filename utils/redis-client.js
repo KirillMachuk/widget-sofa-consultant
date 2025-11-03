@@ -47,6 +47,11 @@ const redisClient = {
     return withRetry(() => redis.mget(...keys));
   },
 
+  // INCR с retry
+  async incr(key) {
+    return withRetry(() => redis.incr(key));
+  },
+
   // SCAN для безопасного получения ключей (замена keys())
   async scan(cursor = 0, match = '*', count = 100) {
     return withRetry(() => redis.scan(cursor, { match, count }));

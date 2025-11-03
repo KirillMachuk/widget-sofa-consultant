@@ -759,9 +759,31 @@
     hintClose: root.querySelector('#vfwHintClose')
   };
 
+  // Функция для трекинга аналитических событий
+  let pageViewTracked = false;
+  function trackEvent(eventType) {
+    // Отправляем событие асинхронно, не блокируя UI
+    fetch('./api/analytics', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_type: eventType,
+        session_id: SESSION_ID
+      })
+    }).catch(err => {
+      // Игнорируем ошибки аналитики, чтобы не блокировать виджет
+      console.warn('Analytics tracking failed:', err);
+    });
+  }
+
   function openPanel(){
     els.panel.setAttribute('data-open','1');
     disableScroll();
+    // Трекинг открытия виджета (только один раз за сессию)
+    if (!els.panel.hasAttribute('data-widget-opened')) {
+      trackEvent('widget_open');
+      els.panel.setAttribute('data-widget-opened', '1');
+    }
   }
 
   function closePanel(){ 
@@ -1046,7 +1068,7 @@
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
           <div style="margin-bottom:12px;font-size:14px;color:#666">Выберите подарок при заказе ${getCategoryGenitive(category)}:</div>
           ${giftsHtml}
-          <div style="margin-top:16px;margin-bottom:12px;font-size:14px;color:#666">Выберите мессенджер:</div>
+          <div style="margin-top:16px;margin-bottom:12px;font-size:14px;color:#666">Выберите удобный мессенджер:</div>
           <div style="display:flex;gap:8px;margin-bottom:16px">
             <button class="messenger-btn" data-messenger="WhatsApp" style="flex:1;padding:12px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:center;transition:all 0.2s;min-height:44px;font-size:14px">
               WhatsApp
@@ -1959,6 +1981,9 @@
       }, 2); // 2 попытки для отправки лида
       submittedLeads.add(leadKey);
       
+      // Трекинг успешной отправки формы
+      trackEvent('form_submit');
+      
       // Разные сообщения в зависимости от типа запроса
       if (pretext.includes('Консультация дизайнера')) {
         addMsg('bot','Спасибо! Дизайнер свяжется с вами в рабочее время в течение 2 часов для консультации.');
@@ -2015,6 +2040,9 @@
       }, 2); // 2 попытки для отправки лида
       submittedLeads.add(leadKey);
       
+      // Трекинг успешной отправки формы
+      trackEvent('form_submit');
+      
       addMsg('bot','Спасибо! Дизайнер вышлет персональную подборку в выбранный мессенджер в течение 2 часов.');
     }catch(e){
       let errorMessage;
@@ -2069,6 +2097,15 @@
   // Инициализация
   (async function init(){
     checkWidgetVersion();
+    
+    // Трекинг загрузки страницы (только один раз)
+    if (!pageViewTracked) {
+      // Используем небольшую задержку для debounce
+      setTimeout(() => {
+        trackEvent('page_view');
+        pageViewTracked = true;
+      }, 1000);
+    }
     
     // Подключаем триггеры СРАЗУ
     schedulePageCountTrigger();

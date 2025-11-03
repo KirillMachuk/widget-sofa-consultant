@@ -447,6 +447,72 @@
             font-size: 14px;
         }
 
+        .analytics-section {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .analytics-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .analytics-header h2 {
+            font-size: 20px;
+            font-weight: 600;
+            color: #1e293b;
+            margin: 0;
+        }
+
+        .analytics-refresh {
+            cursor: pointer;
+            font-size: 18px;
+            padding: 4px 8px;
+            transition: transform 0.2s;
+        }
+
+        .analytics-refresh:hover {
+            transform: rotate(180deg);
+        }
+
+        .analytics-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+        }
+
+        .analytics-card {
+            background: #f8fafc;
+            border-radius: 8px;
+            padding: 20px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .analytics-label {
+            font-size: 14px;
+            color: #64748b;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
+        .analytics-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .analytics-conversion {
+            font-size: 14px;
+            color: #10b981;
+            font-weight: 600;
+        }
+
         @media (max-width: 768px) {
             .main-content {
                 grid-template-columns: 1fr;
@@ -457,6 +523,10 @@
             }
             
             .contacts-details {
+                grid-template-columns: 1fr;
+            }
+
+            .analytics-cards {
                 grid-template-columns: 1fr;
             }
         }
@@ -487,6 +557,30 @@
                 <div class="header">
                     <h1>Диалоги с ботом</h1>
                     <button class="logout-btn" onclick="logout()">Выйти</button>
+                </div>
+
+                <!-- Раздел аналитики -->
+                <div class="analytics-section">
+                    <div class="analytics-header">
+                        <h2>Аналитика</h2>
+                        <span class="analytics-refresh" onclick="loadAnalytics()" title="Обновить">🔄</span>
+                    </div>
+                    <div class="analytics-cards">
+                        <div class="analytics-card">
+                            <div class="analytics-label">Посещений страницы</div>
+                            <div class="analytics-value" id="analytics-pageViews">—</div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-label">Открытий виджета</div>
+                            <div class="analytics-value" id="analytics-widgetOpens">—</div>
+                            <div class="analytics-conversion" id="analytics-conversionWidget">—</div>
+                        </div>
+                        <div class="analytics-card">
+                            <div class="analytics-label">Заполнено форм</div>
+                            <div class="analytics-value" id="analytics-formSubmits">—</div>
+                            <div class="analytics-conversion" id="analytics-conversionForm">—</div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="filters">
@@ -548,10 +642,11 @@
         // Проверяем авторизацию при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             const token = localStorage.getItem('admin_token');
-            if (token) {
+                if (token) {
                 currentToken = token;
                 showAdminInterface();
                 loadSessions();
+                loadAnalytics();
             } else {
                 showLoginForm();
             }
@@ -583,6 +678,7 @@
                     localStorage.setItem('admin_token', data.token);
                     showAdminInterface();
                     loadSessions();
+                    loadAnalytics();
                 } else {
                     showError(data.message);
                 }
@@ -729,6 +825,43 @@
         function showAdminInterface() {
             document.getElementById('login-form').style.display = 'none';
             document.getElementById('admin-interface').style.display = 'block';
+            // Загружаем аналитику при показе интерфейса
+            loadAnalytics();
+            // Автообновление аналитики каждые 10 секунд
+            if (window.analyticsInterval) {
+                clearInterval(window.analyticsInterval);
+            }
+            window.analyticsInterval = setInterval(loadAnalytics, 10000);
+        }
+
+        // Загрузка аналитики
+        async function loadAnalytics() {
+            try {
+                const response = await fetch('/api/admin-analytics');
+                const data = await response.json();
+                
+                if (data.success && data.analytics) {
+                    const { pageViews, widgetOpens, formSubmits, conversionWidgetOpen, conversionFormSubmit } = data.analytics;
+                    
+                    // Обновляем значения
+                    document.getElementById('analytics-pageViews').textContent = pageViews.toLocaleString('ru-RU');
+                    document.getElementById('analytics-widgetOpens').textContent = widgetOpens.toLocaleString('ru-RU');
+                    document.getElementById('analytics-formSubmits').textContent = formSubmits.toLocaleString('ru-RU');
+                    
+                    // Обновляем конверсии
+                    const widgetConversion = conversionWidgetOpen > 0 
+                        ? `Конверсия: ${conversionWidgetOpen}%` 
+                        : '—';
+                    const formConversion = conversionFormSubmit > 0
+                        ? `Конверсия: ${conversionFormSubmit}%`
+                        : '—';
+                    
+                    document.getElementById('analytics-conversionWidget').textContent = widgetConversion;
+                    document.getElementById('analytics-conversionForm').textContent = formConversion;
+                }
+            } catch (error) {
+                console.error('Ошибка загрузки аналитики:', error);
+            }
         }
 
         // Выход
@@ -736,6 +869,11 @@
             localStorage.removeItem('admin_token');
             currentToken = null;
             currentSession = null;
+            // Останавливаем автообновление аналитики
+            if (window.analyticsInterval) {
+                clearInterval(window.analyticsInterval);
+                window.analyticsInterval = null;
+            }
             showLoginForm();
         }
 
