@@ -443,14 +443,15 @@ async function handler(req, res){
         formMessage = await generatePersonalizedFormMessage(messages, session);
       }
       
-      // Сохраняем диалог в Redis (с детальным логированием)
+      // Сохраняем диалог в Redis (с ожиданием завершения)
       console.log('📝 Вызываем saveChat для сессии:', session_id);
-      saveChat(session_id, user_message, reply).then(() => {
+      try {
+        await saveChat(session_id, user_message, reply);
         console.log('✅ saveChat успешно завершен для:', session_id);
-      }).catch(error => {
+      } catch (error) {
         console.error('❌ Ошибка сохранения диалога:', error);
         console.error('Stack trace:', error.stack);
-      });
+      }
       
       return res.status(200).json({ 
         reply, 
