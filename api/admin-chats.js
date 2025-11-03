@@ -39,11 +39,18 @@ async function readChats() {
     
     // Формируем ключи для получения данных сессий
     const keys = sessionIds.map(id => `chat:${id}`);
+    console.log('Ключи для mget:', keys);
     
     // Читаем все сессии одним запросом
     const sessions = await redisClient.mget(...keys);
+    console.log('Результат mget (кол-во элементов):', sessions ? sessions.length : 0);
     const validSessions = sessions.filter(session => session !== null);
     console.log(`Прочитано валидных сессий: ${validSessions.length}`);
+    
+    // Логируем первую сессию для отладки
+    if (validSessions.length > 0) {
+      console.log('Пример первой сессии:', JSON.stringify(validSessions[0], null, 2));
+    }
     
     return validSessions;
   } catch (error) {
@@ -88,6 +95,14 @@ module.exports = async function handler(req, res) {
         : null,
       hasContacts: !!(session.contacts && (session.contacts.name || session.contacts.phone))
     }));
+    
+    // Логируем статистику перед фильтрацией
+    console.log('До фильтрации:', {
+      total: formattedSessions.length,
+      withMessages: formattedSessions.filter(s => s.messageCount > 0).length,
+      withContacts: formattedSessions.filter(s => s.hasContacts).length,
+      empty: formattedSessions.filter(s => s.messageCount === 0 && !s.hasContacts).length
+    });
     
     // Фильтруем пустые сессии (без сообщений и без контактов)
     const sessionsWithData = formattedSessions.filter(session => 
