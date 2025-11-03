@@ -7,11 +7,33 @@ async function readChats() {
     console.log('🔍 Получаем список сессий из Redis SET...');
     
     // Получаем список ID сессий из Redis SET
-    const sessionIds = await redisClient.smembers('sessions:list');
+    let sessionIds = await redisClient.smembers('sessions:list');
     console.log(`Найдено ID сессий в SET: ${sessionIds ? sessionIds.length : 0}`);
     
+    // Если SET пустой, пытаемся использовать KEYS как fallback (миграция)
     if (!sessionIds || sessionIds.length === 0) {
-      console.log('Нет сессий в SET, возвращаем пустой массив');
+      console.log('SET пустой, пытаемся получить ключи через KEYS...');
+      try {
+        const keys = await redisClient.keys('chat:*');
+        if (keys && keys.length > 0) {
+          console.log(`Найдено ключей через KEYS: ${keys.length}`);
+          // Извлекаем session IDs из ключей
+          sessionIds = keys.map(key => key.replace('chat:', ''));
+          // Попытка заполнить SET (не блокируем если не получится)
+          if (sessionIds.length > 0) {
+            redisClient.sadd('sessions:list', ...sessionIds).catch(err => {
+              console.warn('Не удалось заполнить SET:', err.message);
+            });
+          }
+        }
+      } catch (keysError) {
+        console.error('KEYS тоже не работает:', keysError.message);
+        return [];
+      }
+    }
+    
+    if (!sessionIds || sessionIds.length === 0) {
+      console.log('Нет сессий, возвращаем пустой массив');
       return [];
     }
     
