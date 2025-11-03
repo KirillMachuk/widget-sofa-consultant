@@ -70,8 +70,13 @@ module.exports = async function handler(req, res) {
       hasContacts: !!(session.contacts && (session.contacts.name || session.contacts.phone))
     }));
     
+    // Фильтруем пустые сессии (без сообщений и без контактов)
+    const sessionsWithData = formattedSessions.filter(session => 
+      session.messageCount > 0 || session.hasContacts
+    );
+    
     // Сортировка по дате последнего обновления (самые новые сверху)
-    formattedSessions.sort((a, b) => {
+    sessionsWithData.sort((a, b) => {
       const dateA = new Date(a.lastUpdated || a.createdAt || 0);
       const dateB = new Date(b.lastUpdated || b.createdAt || 0);
       return dateB - dateA; // Сортировка по убыванию (новые сверху)
@@ -79,8 +84,8 @@ module.exports = async function handler(req, res) {
     
     return res.status(200).json({
       success: true,
-      sessions: formattedSessions,
-      total: formattedSessions.length
+      sessions: sessionsWithData,
+      total: sessionsWithData.length
     });
     
   } catch (error) {
