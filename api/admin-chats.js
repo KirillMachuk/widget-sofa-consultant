@@ -140,11 +140,10 @@ module.exports = async function handler(req, res) {
       empty: formattedSessions.filter(s => s.messageCount === 0 && !s.hasContacts).length
     });
     
-    // ВРЕМЕННО: НЕ фильтруем пустые сессии для диагностики
-    // const sessionsWithData = formattedSessions.filter(session => 
-    //   session.messageCount > 0 || session.hasContacts
-    // );
-    const sessionsWithData = formattedSessions; // Показываем все сессии
+    // Фильтруем пустые сессии (без сообщений и без контактов)
+    const sessionsWithData = formattedSessions.filter(session => 
+      session.messageCount > 0 || session.hasContacts
+    );
     
     // Сортировка по дате последнего обновления (самые новые сверху)
     sessionsWithData.sort((a, b) => {
