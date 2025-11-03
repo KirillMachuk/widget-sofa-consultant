@@ -87,6 +87,7 @@ async function saveChat(sessionId, userMessage, botReply) {
     
     // Сохраняем в Redis
     await redis.set(chatKey, session);
+    await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
     console.log('Диалог сохранен в Redis для сессии:', sessionId);
     console.log('Ключ в Redis:', chatKey);
     console.log('Данные сессии:', JSON.stringify(session, null, 2));
@@ -226,17 +227,34 @@ async function handler(req, res){
       // Сохраняем сессию в Redis сразу при инициализации
       try {
         const chatKey = `chat:${session_id}`;
-        const redisSession = {
-          sessionId: session_id,
-          prompt,
-          catalog: catalog || null,
-          locale: locale || 'ru',
-          createdAt: sessionData.createdAt,
-          lastUpdated: sessionData.lastUpdated,
-          messages: []
-        };
-        await redis.set(chatKey, redisSession);
-        console.log('Сессия сохранена в Redis при инициализации:', session_id);
+        
+        // Проверяем, существует ли сессия в Redis
+        const existingSession = await redis.get(chatKey);
+        
+        if (existingSession) {
+          // Сессия уже существует - только обновляем prompt и lastUpdated
+          existingSession.prompt = prompt;
+          existingSession.locale = locale || 'ru';
+          existingSession.lastUpdated = sessionData.lastUpdated;
+          await redis.set(chatKey, existingSession);
+          await redis.expire(chatKey, 30 * 24 * 60 * 60); // Обновляем TTL
+          console.log('Сессия обновлена в Redis:', session_id);
+        } else {
+          // Новая сессия - создаем с пустыми сообщениями
+          const redisSession = {
+            sessionId: session_id,
+            prompt,
+            catalog: catalog || null,
+            locale: locale || 'ru',
+            createdAt: sessionData.createdAt,
+            lastUpdated: sessionData.lastUpdated,
+            messages: []
+          };
+          await redis.set(chatKey, redisSession);
+          await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
+          await redis.sadd('sessions:list', session_id); // Добавляем в список сессий
+          console.log('Новая сессия создана в Redis:', session_id);
+        }
       } catch (error) {
         console.error('Ошибка сохранения сессии в Redis при инициализации:', error);
         // Продолжаем работу даже если не удалось сохранить в Redis

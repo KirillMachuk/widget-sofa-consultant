@@ -52,6 +52,24 @@ const redisClient = {
     return withRetry(() => redis.incr(key));
   },
 
+  // Redis SET операции
+  async sadd(key, ...members) {
+    return withRetry(() => redis.sadd(key, ...members));
+  },
+
+  async smembers(key) {
+    return withRetry(() => redis.smembers(key));
+  },
+
+  async srem(key, ...members) {
+    return withRetry(() => redis.srem(key, ...members));
+  },
+
+  // EXPIRE для установки TTL
+  async expire(key, seconds) {
+    return withRetry(() => redis.expire(key, seconds));
+  },
+
   // SCAN для безопасного получения ключей (замена keys())
   async scan(cursor = 0, match = '*', count = 100) {
     return withRetry(() => redis.scan(cursor, { match, count }), 3, 1000);

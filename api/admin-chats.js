@@ -1,30 +1,27 @@
 // Используем новый Redis клиент с retry логикой
 const redisClient = require('../utils/redis-client');
 
-// Читаем все чаты из Redis с использованием SCAN (неблокирующая операция)
+// Читаем все чаты из Redis используя список сессий из SET
 async function readChats() {
   try {
-    console.log('🔍 Сканируем Redis для поиска сессий...');
+    console.log('🔍 Получаем список сессий из Redis SET...');
     
-    // Добавляем таймаут для всего процесса
-    const keys = await Promise.race([
-      redisClient.getAllKeys('chat:*', 50),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Keys lookup timeout')), 10000)
-      )
-    ]);
+    // Получаем список ID сессий из Redis SET
+    const sessionIds = await redisClient.smembers('sessions:list');
+    console.log(`Найдено ID сессий в SET: ${sessionIds ? sessionIds.length : 0}`);
     
-    console.log(`Найдено ключей в Redis: ${keys.length}`);
-    
-    if (keys.length === 0) {
-      console.log('Нет ключей, возвращаем пустой массив');
+    if (!sessionIds || sessionIds.length === 0) {
+      console.log('Нет сессий в SET, возвращаем пустой массив');
       return [];
     }
+    
+    // Формируем ключи для получения данных сессий
+    const keys = sessionIds.map(id => `chat:${id}`);
     
     // Читаем все сессии одним запросом
     const sessions = await redisClient.mget(...keys);
     const validSessions = sessions.filter(session => session !== null);
-    console.log(`Прочитано сессий: ${validSessions.length}`);
+    console.log(`Прочитано валидных сессий: ${validSessions.length}`);
     
     return validSessions;
   } catch (error) {
