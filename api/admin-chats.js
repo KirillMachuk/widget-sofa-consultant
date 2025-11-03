@@ -6,11 +6,18 @@ async function readChats() {
   try {
     console.log('🔍 Сканируем Redis для поиска сессий...');
     
-    // Используем SCAN вместо keys() для неблокирующей операции
-    const keys = await redisClient.getAllKeys('chat:*', 50); // batch size 50
+    // Добавляем таймаут для всего процесса
+    const keys = await Promise.race([
+      redisClient.getAllKeys('chat:*', 50),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Keys lookup timeout')), 10000)
+      )
+    ]);
+    
     console.log(`Найдено ключей в Redis: ${keys.length}`);
     
     if (keys.length === 0) {
+      console.log('Нет ключей, возвращаем пустой массив');
       return [];
     }
     
@@ -22,6 +29,7 @@ async function readChats() {
     return validSessions;
   } catch (error) {
     console.error('❌ Ошибка чтения чатов из Redis:', error);
+    console.error('Stack:', error.stack);
     return [];
   }
 }
