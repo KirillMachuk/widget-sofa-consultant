@@ -1,39 +1,29 @@
-// Используем тот же Redis клиент что и для каталога
-const { Redis } = require('@upstash/redis');
-
-let redis;
-try {
-  redis = new Redis({
-    url: process.env.KV_REST_API_URL,
-    token: process.env.KV_REST_API_TOKEN,
-  });
-} catch (error) {
-  console.warn('Redis не инициализирован:', error.message);
-  redis = null;
-}
+// Используем единый Redis клиент с retry логикой
+const redis = require('../utils/redis-client');
 
 // Сохранение контактов в Redis
 async function saveContacts(sessionId, contacts) {
-  if (!redis) {
-    console.warn('Redis недоступен, пропускаем сохранение контактов');
-    return false;
-  }
-  
   try {
+    console.log('💾 saveContacts: Сохраняем контакты для сессии:', sessionId);
     const chatKey = `chat:${sessionId}`;
     
     // Читаем существующую сессию
     let session = await redis.get(chatKey);
+    console.log('💾 saveContacts: Сессия найдена:', !!session);
+    
     if (session) {
+      console.log('💾 saveContacts: Текущие контакты:', session.contacts);
       session.contacts = contacts;
       session.lastUpdated = new Date().toISOString();
       
       // Сохраняем обратно в Redis
       await redis.set(chatKey, session);
       await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
-      console.log('Контакты сохранены в Redis для сессии:', sessionId);
+      console.log('✅ Контакты сохранены в Redis для сессии:', sessionId);
+      console.log('✅ Сохраненные контакты:', contacts);
       return true;
     }
+    console.warn('⚠️ Сессия не найдена в Redis для:', sessionId);
     return false;
   } catch (error) {
     console.error('Ошибка сохранения контактов в Redis:', error);
