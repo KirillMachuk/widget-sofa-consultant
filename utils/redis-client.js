@@ -95,6 +95,11 @@ const redisClient = {
     return withRetry(() => redis.expire(key, seconds));
   },
 
+  // DEL для удаления ключа
+  async del(...keys) {
+    return withRetry(() => redis.del(...keys));
+  },
+
   // SCAN для безопасного получения ключей (замена keys())
   async scan(cursor = 0, match = '*', count = 100) {
     return withRetry(() => redis.scan(cursor, { match, count }), 3, 1000);
