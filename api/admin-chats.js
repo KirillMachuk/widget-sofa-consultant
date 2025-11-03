@@ -70,6 +70,13 @@ module.exports = async function handler(req, res) {
       hasContacts: !!(session.contacts && (session.contacts.name || session.contacts.phone))
     }));
     
+    // Сортировка по дате последнего обновления (самые новые сверху)
+    formattedSessions.sort((a, b) => {
+      const dateA = new Date(a.lastUpdated || a.createdAt || 0);
+      const dateB = new Date(b.lastUpdated || b.createdAt || 0);
+      return dateB - dateA; // Сортировка по убыванию (новые сверху)
+    });
+    
     return res.status(200).json({
       success: true,
       sessions: formattedSessions,
