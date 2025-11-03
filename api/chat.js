@@ -55,9 +55,17 @@ async function saveChat(sessionId, userMessage, botReply) {
   try {
     const chatKey = `chat:${sessionId}`;
     
+    console.log('🔍 saveChat: Читаем сессию из Redis, ключ:', chatKey);
     // Читаем существующую сессию
     let session = await redis.get(chatKey);
+    console.log('🔍 saveChat: Прочитано из Redis:', {
+      found: !!session,
+      hasMessages: session && session.messages ? session.messages.length : 'N/A',
+      sessionType: typeof session
+    });
+    
     if (!session) {
+      console.log('⚠️ saveChat: Сессия не найдена, создаем новую');
       session = {
         sessionId,
         createdAt: new Date().toISOString(),
@@ -65,6 +73,8 @@ async function saveChat(sessionId, userMessage, botReply) {
         messages: []
       };
     }
+    
+    console.log('🔍 saveChat: Добавляем сообщения. Текущее кол-во:', session.messages ? session.messages.length : 0);
     
     // Добавляем сообщения
     session.messages.push({
