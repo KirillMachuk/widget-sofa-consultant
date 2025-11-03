@@ -47,12 +47,8 @@ function cleanupSessionCache() {
 // Import rate limiter
 const { checkRateLimit } = require('../utils/rate-limiter');
 
-// Используем тот же Redis клиент что и для каталога
-const { Redis } = require('@upstash/redis');
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+// Используем единый Redis клиент с retry логикой
+const redis = require('../utils/redis-client');
 
 // Сохранение диалога в Redis
 async function saveChat(sessionId, userMessage, botReply) {
