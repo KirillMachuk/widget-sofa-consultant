@@ -260,6 +260,7 @@ async function handler(req, res){
           existingSession.lastUpdated = sessionData.lastUpdated;
           await redis.set(chatKey, existingSession);
           await redis.expire(chatKey, 30 * 24 * 60 * 60); // Обновляем TTL
+          await redis.sadd('sessions:list', session_id); // Убеждаемся что сессия в списке
           console.log('Сессия обновлена в Redis:', session_id);
         } else {
           // Новая сессия - создаем с пустыми сообщениями
