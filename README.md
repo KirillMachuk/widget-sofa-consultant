@@ -109,6 +109,32 @@
 </script>
 ```
 
+### Для Webflow (и других конструкторов):
+
+**⚠️ Важно:** Для платформ-конструкторов (Webflow, Tilda и др.) используйте специальную версию `widget-webflow.js`, которая защищена от CSS конфликтов.
+
+```html
+<script>
+  (function(){
+    var s=document.createElement('script');
+    s.src='https://ваш-домен.com/widget-webflow.js?v=5.1.0';
+    s.defer=true;
+    s.dataset.prompt='https://ваш-домен.com/Промпт.json';
+    s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
+    document.head.appendChild(s);
+  })();
+</script>
+```
+
+**Установка в Webflow:**
+1. Откройте страницу в Webflow Designer
+2. Settings (⚙️) → Custom Code
+3. Добавьте код в "Before </body> tag"
+4. Замените URL на ваши
+5. Publish сайт
+
+📖 **Подробная инструкция:** См. [WEBFLOW_INTEGRATION.md](./WEBFLOW_INTEGRATION.md)
+
 ## ⚙️ Настройка
 
 ### 1. Настройка Google Apps Script
