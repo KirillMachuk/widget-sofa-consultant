@@ -45,6 +45,10 @@
     return window.innerWidth <= 768;
   }
 
+  function isAndroid() {
+    return /Android/i.test(navigator.userAgent);
+  }
+
   function disableScroll() {
     if (isMobile()) {
       document.body.style.overflow = 'hidden';
@@ -257,6 +261,7 @@
       overflow: auto;
       background: #fafafa;
       padding: 12px;
+      scroll-padding-bottom: 100px; /* Отступ для Android клавиатуры */
     }
     
     .vfw-msg {
@@ -676,66 +681,143 @@
   });
   window.addEventListener('orientationchange', updateVH);
   
-  window.visualViewport?.addEventListener('resize', () => {
+  // Обработка клавиатуры для мобильных устройств
+  function handleKeyboardResize() {
     const panel = document.querySelector('.vfw-panel');
     if (!panel) return;
     
     if (!isMobile()) return;
     
-    const vh = window.visualViewport.height;
-    const windowHeight = window.innerHeight;
+    const input = document.getElementById('vfwInput');
+    if (!input) return;
     
-    // Более точное определение открытия клавиатуры
-    const keyboardOpen = vh < windowHeight * 0.75;
-    
-    if (keyboardOpen) {
-      // Когда клавиатура открыта, устанавливаем фиксированную высоту
-      const availableHeight = Math.max(vh * 0.9, 400);
-      panel.style.height = availableHeight + 'px';
-      panel.style.maxHeight = availableHeight + 'px';
+    // Используем разные подходы для iOS и Android
+    if (isAndroid()) {
+      // Для Android используем window.innerHeight и проверку видимости input
+      const windowHeight = window.innerHeight;
+      const inputRect = input.getBoundingClientRect();
+      const inputVisible = inputRect.bottom < windowHeight && inputRect.top > 0;
       
-      // Позиционируем панель так, чтобы поле ввода было видно
-      const inputRect = document.getElementById('vfwInput').getBoundingClientRect();
-      
-      // Если поле ввода слишком высоко, корректируем позицию
-      if (inputRect.top < 100) {
-        const offset = Math.max(0, 100 - inputRect.top);
-        panel.style.transform = `translateY(-${offset}px)`;
+      // Если input не виден (скрыт клавиатурой), скроллим его в центр видимой области
+      if (!inputVisible && inputRect.bottom > windowHeight) {
+        // Вычисляем необходимый скролл
+        const body = document.getElementById('vfwBody');
+        if (body) {
+          // Прокручиваем контейнер чата так, чтобы input был виден
+          const scrollAmount = inputRect.bottom - windowHeight + 100; // +100 для отступа
+          body.scrollTop = body.scrollHeight;
+          
+          // Дополнительно скроллим input в видимую область
+          setTimeout(() => {
+            input.scrollIntoView({ 
+              behavior: 'smooth', 
+              block: 'center',
+              inline: 'nearest'
+            });
+          }, 100);
+        }
       }
     } else {
-      // Когда клавиатура закрыта, возвращаем нормальные стили
-      panel.style.height = '';
-      panel.style.maxHeight = '';
-      panel.style.transform = '';
+      // Для iOS используем visualViewport (работает стабильно)
+      const vh = window.visualViewport?.height || window.innerHeight;
+      const windowHeight = window.innerHeight;
+      
+      const keyboardOpen = vh < windowHeight * 0.75;
+      
+      if (keyboardOpen) {
+        const availableHeight = Math.max(vh * 0.9, 400);
+        panel.style.height = availableHeight + 'px';
+        panel.style.maxHeight = availableHeight + 'px';
+        
+        const inputRect = input.getBoundingClientRect();
+        if (inputRect.top < 100) {
+          const offset = Math.max(0, 100 - inputRect.top);
+          panel.style.transform = `translateY(-${offset}px)`;
+        }
+      } else {
+        panel.style.height = '';
+        panel.style.maxHeight = '';
+        panel.style.transform = '';
+      }
     }
-  });
+  }
+  
+  // Слушаем изменения размера для iOS
+  window.visualViewport?.addEventListener('resize', handleKeyboardResize);
+  
+  // Для Android также слушаем изменения window.innerHeight
+  if (isAndroid()) {
+    let lastHeight = window.innerHeight;
+    const androidKeyboardCheck = () => {
+      const currentHeight = window.innerHeight;
+      // Если высота изменилась значительно (более 150px), вероятно открылась клавиатура
+      if (Math.abs(currentHeight - lastHeight) > 150) {
+        handleKeyboardResize();
+      }
+      lastHeight = currentHeight;
+    };
+    
+    window.addEventListener('resize', androidKeyboardCheck);
+    // Также проверяем при изменении ориентации
+    window.addEventListener('orientationchange', () => {
+      setTimeout(androidKeyboardCheck, 300);
+    });
+  }
   
   const input = document.getElementById('vfwInput');
   input.addEventListener('focus', () => {
-    // Увеличиваем задержку для более стабильной работы
+    // Разная задержка для iOS и Android
+    const delay = isAndroid() ? 500 : 300;
+    
     setTimeout(() => {
       const body = document.getElementById('vfwBody');
       if (body) {
+        // Прокручиваем к концу чата
         body.scrollTo({
           top: body.scrollHeight,
           behavior: 'smooth'
         });
       }
       
-      // Дополнительная проверка позиции панели при фокусе
-      const panel = document.querySelector('.vfw-panel');
-      if (panel && isMobile()) {
-        const vh = window.visualViewport?.height || window.innerHeight;
-        const windowHeight = window.innerHeight;
-        
-        if (vh < windowHeight * 0.75) {
-          const availableHeight = Math.max(vh * 0.9, 400);
-          panel.style.height = availableHeight + 'px';
-          panel.style.maxHeight = availableHeight + 'px';
+      // Для Android используем scrollIntoView для input
+      if (isAndroid()) {
+        setTimeout(() => {
+          input.scrollIntoView({ 
+            behavior: 'smooth', 
+            block: 'center',
+            inline: 'nearest'
+          });
+          // Дополнительная проверка после скролла
+          setTimeout(handleKeyboardResize, 200);
+        }, 100);
+      } else {
+        // Для iOS используем visualViewport логику
+        const panel = document.querySelector('.vfw-panel');
+        if (panel && isMobile()) {
+          const vh = window.visualViewport?.height || window.innerHeight;
+          const windowHeight = window.innerHeight;
+          
+          if (vh < windowHeight * 0.75) {
+            const availableHeight = Math.max(vh * 0.9, 400);
+            panel.style.height = availableHeight + 'px';
+            panel.style.maxHeight = availableHeight + 'px';
+          }
         }
       }
-    }, 300); // Увеличиваем задержку для более стабильной работы
+    }, delay);
   });
+  
+  // Дополнительная обработка для Android при blur (закрытие клавиатуры)
+  if (isAndroid()) {
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        const panel = document.querySelector('.vfw-panel');
+        if (panel) {
+          panel.style.transform = '';
+        }
+      }, 300);
+    });
+  }
   
   root.style.display = 'block';
   root.style.visibility = 'visible';
