@@ -120,8 +120,8 @@
       position: fixed;
       right: 20px;
       bottom: 20px;
-      width: 424px;
-      max-width: 584px;
+      width: clamp(344px, 26.5rem, min(424px, calc(100vw - 40px)));
+      max-width: min(584px, calc(100vw - 40px));
       min-width: 344px;
       height: 90vh;
       max-height: 90vh;
@@ -170,7 +170,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        width: 100vw;
+        width: 100%;
         height: calc(var(--vh, 1vh) * 100);
         max-width: none;
         min-width: auto;
