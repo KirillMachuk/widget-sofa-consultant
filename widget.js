@@ -261,7 +261,6 @@
       overflow: auto;
       background: #fafafa;
       padding: 12px;
-      scroll-padding-bottom: 100px; /* Отступ для Android клавиатуры */
     }
     
     .vfw-msg {
@@ -698,20 +697,18 @@
       const inputRect = input.getBoundingClientRect();
       const inputVisible = inputRect.bottom < windowHeight && inputRect.top > 0;
       
-      // Если input не виден (скрыт клавиатурой), скроллим его в центр видимой области
+      // Если input не виден (скрыт клавиатурой), скроллим его в видимую область
       if (!inputVisible && inputRect.bottom > windowHeight) {
-        // Вычисляем необходимый скролл
         const body = document.getElementById('vfwBody');
         if (body) {
-          // Прокручиваем контейнер чата так, чтобы input был виден
-          const scrollAmount = inputRect.bottom - windowHeight + 100; // +100 для отступа
+          // Прокручиваем контейнер чата к концу
           body.scrollTop = body.scrollHeight;
           
-          // Дополнительно скроллим input в видимую область
+          // Для Android используем scrollIntoView с 'end' вместо 'center' чтобы не было лишнего отступа
           setTimeout(() => {
             input.scrollIntoView({ 
               behavior: 'smooth', 
-              block: 'center',
+              block: 'end',
               inline: 'nearest'
             });
           }, 100);
@@ -729,11 +726,8 @@
         panel.style.height = availableHeight + 'px';
         panel.style.maxHeight = availableHeight + 'px';
         
-        const inputRect = input.getBoundingClientRect();
-        if (inputRect.top < 100) {
-          const offset = Math.max(0, 100 - inputRect.top);
-          panel.style.transform = `translateY(-${offset}px)`;
-        }
+        // Убираем лишние трансформации - используем только изменение высоты панели
+        // Это обеспечит правильное позиционирование без лишних отступов
       } else {
         panel.style.height = '';
         panel.style.maxHeight = '';
@@ -784,7 +778,7 @@
         setTimeout(() => {
           input.scrollIntoView({ 
             behavior: 'smooth', 
-            block: 'center',
+            block: 'end',
             inline: 'nearest'
           });
           // Дополнительная проверка после скролла
@@ -792,17 +786,8 @@
         }, 100);
       } else {
         // Для iOS используем visualViewport логику
-        const panel = document.querySelector('.vfw-panel');
-        if (panel && isMobile()) {
-          const vh = window.visualViewport?.height || window.innerHeight;
-          const windowHeight = window.innerHeight;
-          
-          if (vh < windowHeight * 0.75) {
-            const availableHeight = Math.max(vh * 0.9, 400);
-            panel.style.height = availableHeight + 'px';
-            panel.style.maxHeight = availableHeight + 'px';
-          }
-        }
+        // Панель автоматически подстроится через handleKeyboardResize
+        // Не нужно дополнительно менять высоту здесь
       }
     }, delay);
   });
