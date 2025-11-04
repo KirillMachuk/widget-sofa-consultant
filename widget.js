@@ -1323,6 +1323,48 @@
     });
   }
 
+  function setupScrollToBottomTrigger() {
+    let scrollTimeout;
+    
+    function checkScrollToBottom() {
+      // Проверяем, достаточно ли высока страница для скролла
+      const pageHeight = document.documentElement.scrollHeight;
+      const viewportHeight = window.innerHeight;
+      
+      // Если страница слишком короткая, не показываем
+      if (pageHeight <= viewportHeight * 1.2) {
+        return;
+      }
+      
+      const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+      const scrollHeight = document.documentElement.scrollHeight;
+      const clientHeight = window.innerHeight;
+      
+      // Вычисляем процент прокрутки
+      const scrollPercent = (scrollTop + clientHeight) / scrollHeight;
+      
+      // Если прокручено 95% или больше
+      if (scrollPercent >= 0.95) {
+        handleScrollToBottom();
+      }
+    }
+    
+    // Throttle для оптимизации производительности
+    window.addEventListener('scroll', () => {
+      if (scrollTimeout) {
+        return;
+      }
+      
+      scrollTimeout = setTimeout(() => {
+        checkScrollToBottom();
+        scrollTimeout = null;
+      }, 100);
+    }, { passive: true });
+    
+    // Проверяем при загрузке (на случай, если страница уже прокручена)
+    setTimeout(checkScrollToBottom, 1000);
+  }
+
   let lastTriggerAt = 0;
   function canTrigger(){ return Date.now() - lastTriggerAt > CONFIG.triggerMinIntervalMs; }
   function markTriggered(){ lastTriggerAt = Date.now(); }
@@ -1330,6 +1372,7 @@
   let hintsAutoHideTimer = null;
   let hintsCooldownTimer = null;
   let exitIntentTriggered = false;
+  let scrollToBottomTriggered = false;
   
   function showHintsWithAutoHide(text) {
     
@@ -1375,6 +1418,28 @@
     }, 20000);
   }
   
+  function showScrollToBottomHints() {
+    
+    if (hintsAutoHideTimer) { clearTimeout(hintsAutoHideTimer); hintsAutoHideTimer = null; }
+    if (hintsCooldownTimer) { clearTimeout(hintsCooldownTimer); hintsCooldownTimer = null; }
+    
+    if (els.hintSingle) {
+      const hintContent = els.hintSingle.querySelector('.vfw-hint-content');
+      if (hintContent) {
+        hintContent.innerHTML = 'Нужна помощь с выбором? 👋<br>Вышлю подборку мебели прямо в мессенджер со скидкой или подарком на выбор!';
+      }
+    }
+    
+    setTimeout(() => {
+      els.hints.setAttribute('data-show','1');
+    }, 100);
+    
+    hintsAutoHideTimer = setTimeout(() => {
+      hideHints();
+      startHintsCooldown();
+    }, 20000);
+  }
+  
   function hideHints() {
     els.hints.removeAttribute('data-show');
     if (hintsAutoHideTimer) { clearTimeout(hintsAutoHideTimer); hintsAutoHideTimer = null; }
@@ -1397,6 +1462,15 @@
       exitIntentTriggered = true;
     }
   }
+  
+  function handleScrollToBottom() {
+    if (els.panel.getAttribute('data-open') !== '1' && !scrollToBottomTriggered && canTrigger() && canShowHints()) {
+      hideHints();
+      showScrollToBottomHints();
+      scrollToBottomTriggered = true;
+      markTriggered();
+    }
+  }
 
 
   function schedulePageCountTrigger(){
@@ -1406,7 +1480,7 @@
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting && els.panel.getAttribute('data-open') !== '1' && canShowHints()) {
-            showHintsWithAutoHide('Привет! 👋\nХотите подборку мебели для вашего интерьера со скидкой или подарком на выбор прямо в мессенджер?');
+            showHintsWithAutoHide('Вижу, вам интересна мебель! 💡\nПодберу варианты специально для вас со скидкой или подарком!');
             markTriggered();
             observer.disconnect();
           }
@@ -1592,8 +1666,9 @@
     openPanel();
     hideHints();
     startHintsCooldown();
-    // Сбрасываем флаг exit-intent при открытии панели
+    // Сбрасываем флаги триггеров при открытии панели
     exitIntentTriggered = false;
+    scrollToBottomTriggered = false;
     
     // Показываем приветствие СРАЗУ без ожидания загрузки данных
     if (!widgetOpenedInSession) {
@@ -2178,11 +2253,12 @@
     schedulePageCountTrigger();
     watchSpaRouting();
     setupExitIntent();
+    setupScrollToBottomTrigger();
     
     // Показываем приветственную подсказку через 15 секунд
     setTimeout(() => {
       if (els.panel.getAttribute('data-open') !== '1' && canShowHints()) {
-        showHintsWithAutoHide('Привет! 👋\nХотите подборку мебели для вашего интерьера со скидкой или подарком на выбор прямо в мессенджер?');
+        showHintsWithAutoHide('Привет! 👋\nХотите подборку мебели для вашего интерьера со скидкой или подарком на выбор?');
       }
     }, 15000);
     
