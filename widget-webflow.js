@@ -106,7 +106,20 @@
         if (CONFIG.baseUrl) {
           CONFIG.leadEndpoint = CONFIG.baseUrl + 'api/lead';
         } else {
-          CONFIG.leadEndpoint = './api/lead'; // Fallback to relative
+          // If baseUrl is empty, try to use Vercel URL if script is loaded from Vercel
+          const scriptSrc = current.src || '';
+          if (scriptSrc.includes('vercel.app') || scriptSrc.includes('widget-nine-murex')) {
+            // Extract Vercel domain from script src
+            try {
+              const scriptUrl = new URL(scriptSrc);
+              CONFIG.leadEndpoint = scriptUrl.origin + '/api/lead';
+              console.log('[Widget] Using Vercel lead endpoint:', CONFIG.leadEndpoint);
+            } catch(e) {
+              CONFIG.leadEndpoint = './api/lead'; // Fallback to relative
+            }
+          } else {
+            CONFIG.leadEndpoint = './api/lead'; // Fallback to relative
+          }
         }
       } else if (!CONFIG.leadEndpoint.startsWith('http')) {
         if (CONFIG.baseUrl) {
@@ -119,8 +132,25 @@
             // Relative path without prefix
             CONFIG.leadEndpoint = CONFIG.baseUrl + CONFIG.leadEndpoint;
           }
+        } else {
+          // If baseUrl is empty and leadEndpoint is relative, try to extract from script src
+          const scriptSrc = current.src || '';
+          if (scriptSrc.includes('vercel.app') || scriptSrc.includes('widget-nine-murex')) {
+            try {
+              const scriptUrl = new URL(scriptSrc);
+              if (CONFIG.leadEndpoint.startsWith('./')) {
+                CONFIG.leadEndpoint = scriptUrl.origin + '/' + CONFIG.leadEndpoint.substring(2);
+              } else if (CONFIG.leadEndpoint.startsWith('/')) {
+                CONFIG.leadEndpoint = scriptUrl.origin + CONFIG.leadEndpoint;
+              } else {
+                CONFIG.leadEndpoint = scriptUrl.origin + '/' + CONFIG.leadEndpoint;
+              }
+              console.log('[Widget] Using Vercel lead endpoint (from relative):', CONFIG.leadEndpoint);
+            } catch(e) {
+              // Keep relative path as is
+            }
+          }
         }
-        // If baseUrl is empty, keep relative path
       }
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
@@ -259,16 +289,15 @@
     /* Индикатор онлайн - защита от деформации */
     .vfw-online-indicator {
       position: absolute !important;
-      bottom: 0px !important;
-      right: 0px !important;
-      width: 14px !important;
-      height: 14px !important;
-      min-width: 14px !important;
-      min-height: 14px !important;
-      max-width: 14px !important;
-      max-height: 14px !important;
+      bottom: 2px !important;
+      right: 2px !important;
+      width: 18px !important;
+      height: 18px !important;
+      min-width: 18px !important;
+      min-height: 18px !important;
+      max-width: 18px !important;
+      max-height: 18px !important;
       background: #10b981 !important;
-      border: 2px solid #fff !important;
       border-radius: 50% !important;
       box-sizing: border-box !important;
       aspect-ratio: 1 / 1 !important;
@@ -336,12 +365,12 @@
       }
       
       .vfw-online-indicator {
-        width: 16px !important;
-        height: 16px !important;
-        min-width: 16px !important;
-        min-height: 16px !important;
-        max-width: 16px !important;
-        max-height: 16px !important;
+        width: 20px !important;
+        height: 20px !important;
+        min-width: 20px !important;
+        min-height: 20px !important;
+        max-width: 20px !important;
+        max-height: 20px !important;
       }
       
       .vfw-panel {
@@ -2308,6 +2337,57 @@
     );
   }
 
+  // Helper function to submit lead directly to GAS (fallback)
+  async function submitLeadDirectToGAS(payload) {
+    console.log('[Widget] Attempting direct GAS submission:', CONFIG.gasEndpoint);
+    console.log('[Widget] Direct GAS payload:', payload);
+    
+    if (!CONFIG.gasEndpoint) {
+      throw new Error('GAS endpoint is not configured');
+    }
+    
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд для GAS
+    
+    try {
+      const res = await fetch(CONFIG.gasEndpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      const text = await res.text();
+      console.log('[Widget] Direct GAS response status:', res.status);
+      console.log('[Widget] Direct GAS response text:', text.substring(0, 200));
+      
+      if (!res.ok) {
+        throw new Error(`GAS error: ${res.status} - ${text.substring(0, 200)}`);
+      }
+      
+      // Try to parse JSON response
+      try {
+        const json = JSON.parse(text);
+        if (json.ok === false) {
+          throw new Error(`GAS returned error: ${json.error || 'Unknown error'}`);
+        }
+      } catch(e) {
+        // If response is not JSON, check if it looks like success
+        if (!text.toLowerCase().includes('ok') && !text.toLowerCase().includes('success')) {
+          console.warn('[Widget] GAS response may indicate error:', text.substring(0, 200));
+        }
+      }
+      
+      return true;
+    } catch (error) {
+      clearTimeout(timeoutId);
+      console.error('[Widget] Direct GAS submission error:', error);
+      throw error;
+    }
+  }
+
   async function submitLead(name, phone, pretext){
     // Check if offline
     if (!navigator.onLine) {
@@ -2322,53 +2402,108 @@
     }
     
     const page_url = location.href;
-    try{
-      console.log('[Widget] Sending lead to:', CONFIG.leadEndpoint);
-      console.log('[Widget] Lead data:', { name, phone, pretext, gas_url: CONFIG.gasEndpoint });
-      
-      // Use retry logic for lead submission too
-      const res = await fetchWithRetry(CONFIG.leadEndpoint, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          gas_url: CONFIG.gasEndpoint,
-          timestamp: nowIso(),
-          name,
-          phone,
-          pretext,
-          page_url,
-          session_id: SESSION_ID
-        })
-      }, 2); // 2 попытки для отправки лида
-      
-      console.log('[Widget] Lead response status:', res.status);
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => '');
-        console.error('[Widget] Lead API error response:', errorText);
+    const payload = {
+      timestamp: nowIso(),
+      name,
+      phone,
+      pretext,
+      page_url,
+      session_id: SESSION_ID
+    };
+    
+    let submitted = false;
+    
+    try {
+      // Try to submit via API endpoint first
+      if (CONFIG.leadEndpoint) {
+        try {
+          console.log('[Widget] Attempting lead submission via API endpoint:', CONFIG.leadEndpoint);
+          console.log('[Widget] Lead data:', { name, phone, pretext, gas_url: CONFIG.gasEndpoint, page_url });
+          
+          const apiPayload = {
+            ...payload,
+            gas_url: CONFIG.gasEndpoint
+          };
+          
+          // Use retry logic for lead submission too
+          const res = await fetchWithRetry(CONFIG.leadEndpoint, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(apiPayload)
+          }, 2); // 2 попытки для отправки лида
+          
+          console.log('[Widget] Lead API response status:', res.status);
+          console.log('[Widget] Lead API response headers:', Object.fromEntries(res.headers.entries()));
+          
+          if (!res.ok) {
+            const errorText = await res.text().catch(() => '');
+            console.error('[Widget] Lead API error response:', errorText);
+            throw new Error(`API endpoint returned ${res.status}: ${errorText.substring(0, 200)}`);
+          }
+          
+          // Check response content
+          try {
+            const responseData = await res.json();
+            console.log('[Widget] Lead API response data:', responseData);
+            if (responseData.error) {
+              throw new Error(`API endpoint error: ${responseData.error}`);
+            }
+          } catch(e) {
+            // Response might not be JSON, that's okay if status is 200
+            if (res.status !== 200) {
+              throw e;
+            }
+          }
+          
+          submitted = true;
+          console.log('[Widget] Lead successfully submitted via API endpoint');
+          
+        } catch(e) {
+          console.warn('[Widget] Lead submission via API endpoint failed:', e.message);
+          console.warn('[Widget] Falling back to direct GAS submission');
+        }
       }
-      submittedLeads.add(leadKey);
       
-      // Трекинг успешной отправки формы
-      trackEvent('form_submit');
-      
-      // Разные сообщения в зависимости от типа запроса
-      if (pretext.includes('Консультация дизайнера')) {
-        addMsg('bot','Спасибо! Дизайнер свяжется с вами в рабочее время в течение 2 часов для консультации.');
-      } else if (pretext.includes('Запись в шоурум')) {
-        addMsg('bot','Спасибо! Записал ваши данные. Дизайнер свяжется с вами в течение пары часов в рабочее время.');
-      } else {
-        addMsg('bot','Спасибо! Передам вашу заявку дизайнеру, он свяжется с вами для закрепления подарка.');
+      // Fallback to direct GAS submission if API endpoint failed or not available
+      if (!submitted) {
+        try {
+          console.log('[Widget] Using fallback: direct GAS submission');
+          await submitLeadDirectToGAS(payload);
+          submitted = true;
+          console.log('[Widget] Lead successfully submitted directly to GAS');
+        } catch(e) {
+          console.error('[Widget] Direct GAS submission also failed:', e);
+          throw e; // Re-throw to be caught by outer catch
+        }
       }
-    }catch(e){
-      console.error('[Widget] Lead submission error:', e);
+      
+      if (submitted) {
+        submittedLeads.add(leadKey);
+        
+        // Трекинг успешной отправки формы
+        trackEvent('form_submit');
+        
+        // Разные сообщения в зависимости от типа запроса
+        if (pretext.includes('Консультация дизайнера')) {
+          addMsg('bot','Спасибо! Дизайнер свяжется с вами в рабочее время в течение 2 часов для консультации.');
+        } else if (pretext.includes('Запись в шоурум')) {
+          addMsg('bot','Спасибо! Записал ваши данные. Дизайнер свяжется с вами в течение пары часов в рабочее время.');
+        } else {
+          addMsg('bot','Спасибо! Передам вашу заявку дизайнеру, он свяжется с вами для закрепления подарка.');
+        }
+      }
+    } catch(e) {
+      console.error('[Widget] Lead submission error (all methods failed):', e);
       console.error('[Widget] Error details:', {
         message: e.message,
         stack: e.stack,
-        endpoint: CONFIG.leadEndpoint
+        endpoint: CONFIG.leadEndpoint,
+        gasEndpoint: CONFIG.gasEndpoint,
+        baseUrl: CONFIG.baseUrl
       });
       
       let errorMessage;
-      if (e.message === 'Request timeout') {
+      if (e.message === 'Request timeout' || e.name === 'AbortError') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
       } else if (!navigator.onLine) {
         errorMessage = 'Похоже, нет подключения к интернету. Попробуйте позже.';
@@ -2393,50 +2528,105 @@
     }
     
     const page_url = location.href;
-    try{
-      console.log('[Widget] Sending gift lead to:', CONFIG.leadEndpoint);
-      console.log('[Widget] Gift lead data:', { name, phone, category, gift, messenger, gas_url: CONFIG.gasEndpoint });
-      
-      // Use retry logic for lead submission too
-      const res = await fetchWithRetry(CONFIG.leadEndpoint, {
-        method:'POST',
-        headers:{ 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          gas_url: CONFIG.gasEndpoint,
-          timestamp: nowIso(),
-          name,
-          phone,
-          category,
-          gift,
-          messenger,
-          wishes,
-          pretext: 'Запрос подборки мебели с подарком',
-          page_url,
-          session_id: SESSION_ID
-        })
-      }, 2); // 2 попытки для отправки лида
-      
-      console.log('[Widget] Gift lead response status:', res.status);
-      if (!res.ok) {
-        const errorText = await res.text().catch(() => '');
-        console.error('[Widget] Gift lead API error response:', errorText);
+    const payload = {
+      timestamp: nowIso(),
+      name,
+      phone,
+      category,
+      gift,
+      messenger,
+      wishes,
+      pretext: 'Запрос подборки мебели с подарком',
+      page_url,
+      session_id: SESSION_ID
+    };
+    
+    let submitted = false;
+    
+    try {
+      // Try to submit via API endpoint first
+      if (CONFIG.leadEndpoint) {
+        try {
+          console.log('[Widget] Attempting gift lead submission via API endpoint:', CONFIG.leadEndpoint);
+          console.log('[Widget] Gift lead data:', { name, phone, category, gift, messenger, wishes, gas_url: CONFIG.gasEndpoint, page_url });
+          
+          const apiPayload = {
+            ...payload,
+            gas_url: CONFIG.gasEndpoint
+          };
+          
+          // Use retry logic for lead submission too
+          const res = await fetchWithRetry(CONFIG.leadEndpoint, {
+            method:'POST',
+            headers:{ 'Content-Type':'application/json' },
+            body: JSON.stringify(apiPayload)
+          }, 2); // 2 попытки для отправки лида
+          
+          console.log('[Widget] Gift lead API response status:', res.status);
+          console.log('[Widget] Gift lead API response headers:', Object.fromEntries(res.headers.entries()));
+          
+          if (!res.ok) {
+            const errorText = await res.text().catch(() => '');
+            console.error('[Widget] Gift lead API error response:', errorText);
+            throw new Error(`API endpoint returned ${res.status}: ${errorText.substring(0, 200)}`);
+          }
+          
+          // Check response content
+          try {
+            const responseData = await res.json();
+            console.log('[Widget] Gift lead API response data:', responseData);
+            if (responseData.error) {
+              throw new Error(`API endpoint error: ${responseData.error}`);
+            }
+          } catch(e) {
+            // Response might not be JSON, that's okay if status is 200
+            if (res.status !== 200) {
+              throw e;
+            }
+          }
+          
+          submitted = true;
+          console.log('[Widget] Gift lead successfully submitted via API endpoint');
+          
+        } catch(e) {
+          console.warn('[Widget] Gift lead submission via API endpoint failed:', e.message);
+          console.warn('[Widget] Falling back to direct GAS submission');
+        }
       }
-      submittedLeads.add(leadKey);
       
-      // Трекинг успешной отправки формы
-      trackEvent('form_submit');
+      // Fallback to direct GAS submission if API endpoint failed or not available
+      if (!submitted) {
+        try {
+          console.log('[Widget] Using fallback: direct GAS submission for gift lead');
+          await submitLeadDirectToGAS(payload);
+          submitted = true;
+          console.log('[Widget] Gift lead successfully submitted directly to GAS');
+        } catch(e) {
+          console.error('[Widget] Direct GAS submission also failed:', e);
+          throw e; // Re-throw to be caught by outer catch
+        }
+      }
       
-      addMsg('bot','Спасибо! Дизайнер вышлет персональную подборку в мессенджер в самое ближайшее время.');
-    }catch(e){
-      console.error('[Widget] Gift lead submission error:', e);
+      if (submitted) {
+        submittedLeads.add(leadKey);
+        
+        // Трекинг успешной отправки формы
+        trackEvent('form_submit');
+        
+        addMsg('bot','Спасибо! Дизайнер вышлет персональную подборку в мессенджер в самое ближайшее время.');
+      }
+    } catch(e) {
+      console.error('[Widget] Gift lead submission error (all methods failed):', e);
       console.error('[Widget] Error details:', {
         message: e.message,
         stack: e.stack,
-        endpoint: CONFIG.leadEndpoint
+        endpoint: CONFIG.leadEndpoint,
+        gasEndpoint: CONFIG.gasEndpoint,
+        baseUrl: CONFIG.baseUrl
       });
       
       let errorMessage;
-      if (e.message === 'Request timeout') {
+      if (e.message === 'Request timeout' || e.name === 'AbortError') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
       } else if (!navigator.onLine) {
         errorMessage = 'Похоже, нет подключения к интернету. Попробуйте позже.';
