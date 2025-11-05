@@ -1,6 +1,6 @@
 (function(){
   // Widget version - increment this when making changes
-  const WIDGET_VERSION = '5.0.0';
+  const WIDGET_VERSION = '5.1.0';
   
   if (window.VFW_LOADED) {
     return;
@@ -1269,7 +1269,6 @@
           action: 'init',
           session_id: SESSION_ID,
           prompt: PROMPT,
-          catalog: null, // Каталог больше не используется
           locale: 'ru'
         })
       }).catch(e => {
@@ -1555,7 +1554,7 @@
     
     // Если нет API endpoint, используем локальную обработку
     if (!CONFIG.openaiEndpoint) {
-      const reply = generateLocalReply(userText, PROMPT, CATALOG);
+      const reply = generateLocalReply(userText, PROMPT, null);
       return { reply, formMessage: null };
     }
     
@@ -2210,32 +2209,6 @@
   }
 
 
-  // Опциональная предзагрузка каталога в 18:00 Минск
-  function schedulePreload() {
-    const now = new Date();
-    const minsk = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Minsk' }));
-    const target = new Date(minsk);
-    target.setHours(18, 0, 0, 0);
-    
-    if (minsk > target) {
-      target.setDate(target.getDate() + 1); // Завтра в 18:00
-    }
-    
-    const delay = target - minsk;
-    setTimeout(() => {
-      console.log('Preloading catalog at 18:00 Minsk time');
-      fetchPrompt().catch(e => {
-        console.warn('Failed to preload prompt:', e);
-      });
-      // Повторять каждый день
-      setInterval(() => {
-        fetchPrompt().catch(e => {
-          console.warn('Failed to preload prompt:', e);
-        });
-      }, 24 * 60 * 60 * 1000);
-    }, delay);
-  }
-
   // Инициализация
   (async function init(){
     checkWidgetVersion();
@@ -2266,8 +2239,5 @@
     fetchPrompt().catch(e => {
       console.warn('Failed to load prompt:', e);
     });
-    
-    // Настраиваем предзагрузку в 18:00 Минск
-    schedulePreload();
   })();
 })();

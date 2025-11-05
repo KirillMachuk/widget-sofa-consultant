@@ -1,4 +1,4 @@
-// Используем тот же Redis клиент что и для каталога
+// Используем Redis клиент для работы с сессиями
 const { Redis } = require('@upstash/redis');
 const redis = new Redis({
   url: process.env.KV_REST_API_URL,

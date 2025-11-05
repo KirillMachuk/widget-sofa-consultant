@@ -50,27 +50,6 @@ async function checkRedis() {
   }
 }
 
-// Проверка каталога
-async function checkCatalog() {
-  try {
-    const catalog = await redisClient.get('catalog:main');
-    if (catalog) {
-      const catalogData = JSON.parse(catalog);
-      const age = Date.now() - new Date(catalogData.timestamp).getTime();
-      const ageHours = Math.floor(age / (1000 * 60 * 60));
-      
-      return {
-        status: 'healthy',
-        message: `Catalog available (${catalogData.totalCount} items, ${ageHours}h old)`
-      };
-    } else {
-      return { status: 'warning', message: 'Catalog not cached' };
-    }
-  } catch (error) {
-    return { status: 'error', message: error.message };
-  }
-}
-
 // Основной health check handler
 async function handler(req, res) {
   // CORS headers
@@ -90,10 +69,9 @@ async function handler(req, res) {
     const startTime = Date.now();
     
     // Параллельно проверяем все компоненты
-    const [openaiStatus, redisStatus, catalogStatus] = await Promise.all([
+    const [openaiStatus, redisStatus] = await Promise.all([
       checkOpenAI(),
-      checkRedis(),
-      checkCatalog()
+      checkRedis()
     ]);
     
     const responseTime = Date.now() - startTime;
@@ -101,8 +79,7 @@ async function handler(req, res) {
     // Определяем общий статус
     const overallStatus = 
       openaiStatus.status === 'healthy' && 
-      redisStatus.status === 'healthy' && 
-      catalogStatus.status !== 'error' ? 'healthy' : 'degraded';
+      redisStatus.status === 'healthy' ? 'healthy' : 'degraded';
     
     const healthData = {
       status: overallStatus,
@@ -110,8 +87,7 @@ async function handler(req, res) {
       responseTime: `${responseTime}ms`,
       services: {
         openai: openaiStatus,
-        redis: redisStatus,
-        catalog: catalogStatus
+        redis: redisStatus
       },
       environment: {
         nodeVersion: process.version,

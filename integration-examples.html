@@ -55,10 +55,9 @@
         <pre><code>&lt;script&gt;
   (function(){
     var s=document.createElement('script');
-    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.1.0';
     s.defer=true;
     s.dataset.prompt='https://ваш-username.github.io/ваш-репозиторий/Промпт.json';
-    s.dataset.catalog='https://ваш-username.github.io/ваш-репозиторий/Каталог.json';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     document.head.appendChild(s);
   })();
@@ -71,10 +70,9 @@
         <pre><code>&lt;script&gt;
   (function(){
     var s=document.createElement('script');
-    s.src='https://ваш-проект.vercel.app/widget.js?v=5.0.0';
+    s.src='https://ваш-проект.vercel.app/widget.js?v=5.1.0';
     s.defer=true;
     s.dataset.prompt='https://ваш-проект.vercel.app/Промпт.json';
-    s.dataset.catalog='https://ваш-проект.vercel.app/Каталог.json';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     document.head.appendChild(s);
   })();
@@ -87,10 +85,9 @@
         <pre><code>&lt;script&gt;
   (function(){
     var s=document.createElement('script');
-    s.src='./widget.js?v=5.0.0';
+    s.src='./widget.js?v=5.1.0';
     s.defer=true;
     s.dataset.prompt='./Промпт.json';
-    s.dataset.catalog='./Каталог.json';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     document.head.appendChild(s);
   })();
@@ -103,10 +100,9 @@
         <pre><code>&lt;script&gt;
   (function(){
     var s=document.createElement('script');
-    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.1.0';
     s.defer=true;
     s.dataset.prompt='https://ваш-username.github.io/ваш-репозиторий/Промпт.json';
-    s.dataset.catalog='https://ваш-username.github.io/ваш-репозиторий/Каталог.json';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     s.dataset.api='https://ваш-домен.com/api/chat'; // Кастомный API endpoint
     document.head.appendChild(s);
@@ -116,14 +112,13 @@
 
     <div class="example">
         <h2>5. Интеграция с встроенными данными</h2>
-        <p>Если вы хотите встроить промпт и каталог прямо в код:</p>
+        <p>Если вы хотите встроить промпт прямо в код:</p>
         <pre><code>&lt;script&gt;
   (function(){
     var s=document.createElement('script');
-    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.1.0';
     s.defer=true;
     s.dataset.promptContent='{"role_and_task": "Ваш промпт..."}';
-    s.dataset.catalogContent='{"offers": [{"name": "Товар 1"}]}';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     document.head.appendChild(s);
   })();
@@ -139,10 +134,9 @@ function add_widget_script() {
         echo '&lt;script&gt;
           (function(){
             var s=document.createElement("script");
-            s.src="https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0";
+            s.src="https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.1.0";
             s.defer=true;
             s.dataset.prompt="https://ваш-username.github.io/ваш-репозиторий/Промпт.json";
-            s.dataset.catalog="https://ваш-username.github.io/ваш-репозиторий/Каталог.json";
             s.dataset.gas="https://script.google.com/macros/s/ВАШ-GAS-URL/exec";
             document.head.appendChild(s);
           })();
@@ -158,10 +152,9 @@ add_action('wp_head', 'add_widget_script');</code></pre>
         <pre><code>&lt;script&gt;
   (function(){
     var s=document.createElement('script');
-    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.0.0';
+    s.src='https://ваш-username.github.io/ваш-репозиторий/widget.js?v=5.1.0';
     s.defer=true;
     s.dataset.prompt='https://ваш-username.github.io/ваш-репозиторий/Промпт.json';
-    s.dataset.catalog='https://ваш-username.github.io/ваш-репозиторий/Каталог.json';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     document.head.appendChild(s);
   })();
@@ -181,7 +174,7 @@ add_action('wp_head', 'add_widget_script');</code></pre>
     </div>
 
     <div class="warning">
-        <strong>💡 Совет:</strong> После каждого обновления виджета не забудьте изменить версию в URL (например, с v=5.0.0 на v=5.0.1) для принудительного обновления кэша браузера.
+        <strong>💡 Совет:</strong> После каждого обновления виджета не забудьте изменить версию в URL (например, с v=5.1.0 на v=5.1.1) для принудительного обновления кэша браузера.
     </div>
 </body>
 </html>

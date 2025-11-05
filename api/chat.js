@@ -217,7 +217,7 @@ async function handler(req, res){
   if (req.method !== 'POST') return res.status(405).end();
   
   try{
-    const { action, session_id, user_message, history_tail, prompt, catalog, locale, aggressive_mode, user_messages_after_last_form } = req.body || {};
+    const { action, session_id, user_message, history_tail, prompt, locale, aggressive_mode, user_messages_after_last_form } = req.body || {};
     
     // Rate limiting для chat endpoint (после получения session_id)
     const rateLimitResult = await checkRateLimit(req);
@@ -229,7 +229,7 @@ async function handler(req, res){
       });
     }
     
-    // Handle session initialization (first request with prompt/catalog)
+    // Handle session initialization (first request with prompt)
     if (action === 'init' && prompt) {
       console.log(`[${new Date().toISOString()}] Инициализация сессии:`, session_id);
       
@@ -238,7 +238,6 @@ async function handler(req, res){
       
       const sessionData = { 
         prompt, 
-        catalog: catalog || null, 
         locale: locale || 'ru',
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
@@ -267,7 +266,6 @@ async function handler(req, res){
           const redisSession = {
             sessionId: session_id,
             prompt,
-            catalog: catalog || null,
             locale: locale || 'ru',
             createdAt: sessionData.createdAt,
             lastUpdated: sessionData.lastUpdated,

@@ -1,7 +1,7 @@
 {
   "name": "widget",
-  "version": "5.0.0",
-  "description": "Интерактивный виджет-бот для консультации по диванам с интеграцией в Google Sheets",
+  "version": "5.1.0",
+  "description": "Интерактивный виджет-бот для консультации по мебели с FAQ ответами и сбором лидов в Google Sheets",
   "private": true,
   "engines": {
     "node": "22.x"
