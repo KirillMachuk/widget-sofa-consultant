@@ -77,29 +77,63 @@
         }
       }
       
+      // Ensure baseUrl ends with / for consistency (do this before building URLs)
+      if (CONFIG.baseUrl && !CONFIG.baseUrl.endsWith('/')) {
+        CONFIG.baseUrl += '/';
+      }
+      
       // Build absolute URL for API endpoints if relative
       if (CONFIG.openaiEndpoint && !CONFIG.openaiEndpoint.startsWith('http')) {
-        if (CONFIG.openaiEndpoint.startsWith('/')) {
-          CONFIG.openaiEndpoint = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.openaiEndpoint;
+        if (!CONFIG.baseUrl) {
+          console.warn('[Widget] baseUrl is empty, cannot build absolute API endpoint');
         } else {
-          CONFIG.openaiEndpoint = CONFIG.baseUrl + CONFIG.openaiEndpoint;
+          if (CONFIG.openaiEndpoint.startsWith('/')) {
+            // Absolute path from root - remove leading slash and append
+            CONFIG.openaiEndpoint = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.openaiEndpoint;
+          } else if (CONFIG.openaiEndpoint.startsWith('./')) {
+            // Relative path - remove ./ prefix
+            CONFIG.openaiEndpoint = CONFIG.baseUrl + CONFIG.openaiEndpoint.substring(2);
+          } else {
+            // Relative path without prefix
+            CONFIG.openaiEndpoint = CONFIG.baseUrl + CONFIG.openaiEndpoint;
+          }
         }
       }
       
       // Build absolute URL for lead endpoint
       if (!CONFIG.leadEndpoint) {
-        CONFIG.leadEndpoint = CONFIG.baseUrl + 'api/lead';
-      } else if (!CONFIG.leadEndpoint.startsWith('http')) {
-        if (CONFIG.leadEndpoint.startsWith('./')) {
-          CONFIG.leadEndpoint = CONFIG.baseUrl + CONFIG.leadEndpoint.substring(2);
-        } else if (CONFIG.leadEndpoint.startsWith('/')) {
-          CONFIG.leadEndpoint = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.leadEndpoint;
+        // Default: build from baseUrl
+        if (CONFIG.baseUrl) {
+          CONFIG.leadEndpoint = CONFIG.baseUrl + 'api/lead';
         } else {
-          CONFIG.leadEndpoint = CONFIG.baseUrl + CONFIG.leadEndpoint;
+          CONFIG.leadEndpoint = './api/lead'; // Fallback to relative
         }
+      } else if (!CONFIG.leadEndpoint.startsWith('http')) {
+        if (CONFIG.baseUrl) {
+          if (CONFIG.leadEndpoint.startsWith('./')) {
+            CONFIG.leadEndpoint = CONFIG.baseUrl + CONFIG.leadEndpoint.substring(2);
+          } else if (CONFIG.leadEndpoint.startsWith('/')) {
+            // Absolute path from root
+            CONFIG.leadEndpoint = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.leadEndpoint;
+          } else {
+            // Relative path without prefix
+            CONFIG.leadEndpoint = CONFIG.baseUrl + CONFIG.leadEndpoint;
+          }
+        }
+        // If baseUrl is empty, keep relative path
       }
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
+      
+      // Debug logging
+      console.log('[Widget] Config loaded:', {
+        baseUrl: CONFIG.baseUrl,
+        avatarUrl: CONFIG.avatarUrl,
+        openaiEndpoint: CONFIG.openaiEndpoint,
+        leadEndpoint: CONFIG.leadEndpoint,
+        promptUrl: CONFIG.promptUrl,
+        gasEndpoint: CONFIG.gasEndpoint
+      });
     }catch(e){
       console.warn('Widget config error:', e);
     }
@@ -252,7 +286,7 @@
       min-width: 344px;
       height: 90vh;
       max-height: 90vh;
-      background: ${CONFIG.brand.bg};
+      background: #fff;
       border-radius: ${CONFIG.brand.radius}px;
       box-shadow: 0 24px 64px rgba(0,0,0,.20);
       display: flex;
@@ -389,7 +423,7 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      background: ${CONFIG.brand.bg};
+      background: #fff;
       flex-shrink: 0;
     }
     
@@ -416,7 +450,7 @@
     .vfw-body {
       flex: 1;
       overflow: auto;
-      background: ${CONFIG.brand.bg};
+      background: #fafafa;
       padding: 12px;
     }
     
@@ -448,6 +482,7 @@
       line-height: 1.3;
       border: 1px solid rgba(17,17,17,.06);
       font-size: 15px;
+      color: #111;
     }
     
     .vfw-msg .bubble .vfw-link {
@@ -463,7 +498,7 @@
     }
     
     .vfw-msg.bot .bubble {
-      background: ${CONFIG.brand.bg};
+      background: #f1f2f2;
     }
     
     .vfw-msg.user {
@@ -480,7 +515,7 @@
     .vfw-compose {
       padding: 10px;
       border-top: 1px solid rgba(17,17,17,.06);
-      background: ${CONFIG.brand.bg};
+      background: #fff;
       flex-shrink: 0;
     }
     
@@ -570,7 +605,7 @@
       display: none;
       padding: 8px 10px;
       border-top: 1px solid rgba(17,17,17,.06);
-      background: ${CONFIG.brand.bg};
+      background: #fff;
       gap: 8px;
       flex-direction: column;
     }
@@ -615,7 +650,7 @@
       line-height: 1.3;
       border: 1px solid rgba(17,17,17,.06);
       font-size: 15px;
-      background: ${CONFIG.brand.bg};
+      background: #f1f2f2;
       position: relative;
     }
     
@@ -670,8 +705,8 @@
     .vfw-hint {
       max-width: min(25vw, 560px);
       min-width: 200px;
-      background: ${CONFIG.brand.bg};
-      color: ${CONFIG.brand.text};
+      background: #fff;
+      color: #111;
       border-radius: 22px;
       padding: 12px 40px 12px 12px;
       box-shadow: 0 18px 48px rgba(0,0,0,.25);
@@ -1718,6 +1753,7 @@
     }
     
     try {
+      console.log('[Widget] Sending chat request to:', CONFIG.openaiEndpoint);
       const res = await fetchWithRetry(CONFIG.openaiEndpoint, {
         method:'POST',
         headers:{ 
@@ -1726,6 +1762,7 @@
         },
         body: JSON.stringify(payload)
       });
+      console.log('[Widget] Chat response status:', res.status);
       
       let data;
       try{
@@ -1735,11 +1772,20 @@
       }
       
       if (!res.ok){
+        console.error('[Widget] Chat API error:', res.status, res.statusText);
+        const errorText = await res.text().catch(() => '');
+        console.error('[Widget] Chat API error response:', errorText);
+        
         // Если ошибка 400 и сессия не инициализирована - пробуем инициализировать
         if (res.status === 400) {
-          const errorData = await res.json().catch(() => ({}));
+          let errorData;
+          try {
+            errorData = JSON.parse(errorText);
+          } catch {
+            errorData = {};
+          }
           if (errorData.error && errorData.error.includes('Session not initialized')) {
-            console.log('Session not initialized, trying to reinitialize...');
+            console.log('[Widget] Session not initialized, trying to reinitialize...');
             // Пробуем инициализировать сессию еще раз
             await fetchPrompt();
             // Повторяем запрос
@@ -1802,6 +1848,13 @@
       };
       
     } catch (error) {
+      console.error('[Widget] Chat API exception:', error);
+      console.error('[Widget] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        endpoint: CONFIG.openaiEndpoint
+      });
+      
       // Показываем fallback форму только если она еще не была показана в этой сессии
       if (!fallbackFormShown) {
         fallbackFormShown = true; // Устанавливаем флаг сразу
@@ -2265,8 +2318,11 @@
     
     const page_url = location.href;
     try{
+      console.log('[Widget] Sending lead to:', CONFIG.leadEndpoint);
+      console.log('[Widget] Lead data:', { name, phone, pretext, gas_url: CONFIG.gasEndpoint });
+      
       // Use retry logic for lead submission too
-      await fetchWithRetry(CONFIG.leadEndpoint, {
+      const res = await fetchWithRetry(CONFIG.leadEndpoint, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
@@ -2279,6 +2335,12 @@
           session_id: SESSION_ID
         })
       }, 2); // 2 попытки для отправки лида
+      
+      console.log('[Widget] Lead response status:', res.status);
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '');
+        console.error('[Widget] Lead API error response:', errorText);
+      }
       submittedLeads.add(leadKey);
       
       // Трекинг успешной отправки формы
@@ -2293,6 +2355,13 @@
         addMsg('bot','Спасибо! Передам вашу заявку дизайнеру, он свяжется с вами для закрепления подарка.');
       }
     }catch(e){
+      console.error('[Widget] Lead submission error:', e);
+      console.error('[Widget] Error details:', {
+        message: e.message,
+        stack: e.stack,
+        endpoint: CONFIG.leadEndpoint
+      });
+      
       let errorMessage;
       if (e.message === 'Request timeout') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
@@ -2320,8 +2389,11 @@
     
     const page_url = location.href;
     try{
+      console.log('[Widget] Sending gift lead to:', CONFIG.leadEndpoint);
+      console.log('[Widget] Gift lead data:', { name, phone, category, gift, messenger, gas_url: CONFIG.gasEndpoint });
+      
       // Use retry logic for lead submission too
-      await fetchWithRetry(CONFIG.leadEndpoint, {
+      const res = await fetchWithRetry(CONFIG.leadEndpoint, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
@@ -2338,6 +2410,12 @@
           session_id: SESSION_ID
         })
       }, 2); // 2 попытки для отправки лида
+      
+      console.log('[Widget] Gift lead response status:', res.status);
+      if (!res.ok) {
+        const errorText = await res.text().catch(() => '');
+        console.error('[Widget] Gift lead API error response:', errorText);
+      }
       submittedLeads.add(leadKey);
       
       // Трекинг успешной отправки формы
@@ -2345,6 +2423,13 @@
       
       addMsg('bot','Спасибо! Дизайнер вышлет персональную подборку в мессенджер в самое ближайшее время.');
     }catch(e){
+      console.error('[Widget] Gift lead submission error:', e);
+      console.error('[Widget] Error details:', {
+        message: e.message,
+        stack: e.stack,
+        endpoint: CONFIG.leadEndpoint
+      });
+      
       let errorMessage;
       if (e.message === 'Request timeout') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
