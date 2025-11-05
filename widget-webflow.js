@@ -14,22 +14,95 @@
     promptUrl: './Промпт.json',
     triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
-    brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 }
+    brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 },
+    baseUrl: '',
+    avatarUrl: '',
+    leadEndpoint: ''
   };
+
+  // Function to extract base URL from script source
+  function getBaseUrl() {
+    try {
+      const current = document.currentScript || Array.from(document.scripts).slice(-1)[0];
+      if (!current || !current.src) return '';
+      
+      const url = new URL(current.src);
+      // Remove filename from pathname to get base directory
+      const pathname = url.pathname.substring(0, url.pathname.lastIndexOf('/') + 1);
+      return url.origin + pathname;
+    } catch(e) {
+      return '';
+    }
+  }
 
   // Read configuration from script dataset
   (function(){
     try{
       const current = document.currentScript || Array.from(document.scripts).slice(-1)[0];
       if (!current) return;
+      
+      // Extract base URL first
+      CONFIG.baseUrl = getBaseUrl();
+      
+      // Read dataset configuration
       CONFIG.promptUrl = current.dataset.prompt || CONFIG.promptUrl;
       CONFIG.gasEndpoint = current.dataset.gas || CONFIG.gasEndpoint;
       if (current.dataset.api) CONFIG.openaiEndpoint = current.dataset.api;
+      if (current.dataset.leadApi) CONFIG.leadEndpoint = current.dataset.leadApi;
+      if (current.dataset.avatarUrl) CONFIG.avatarUrl = current.dataset.avatarUrl;
       
       if (current.dataset.promptContent) CONFIG.promptContent = current.dataset.promptContent;
       
+      // Build absolute URLs if relative paths are used
+      if (CONFIG.promptUrl && !CONFIG.promptUrl.startsWith('http')) {
+        if (CONFIG.promptUrl.startsWith('./')) {
+          CONFIG.promptUrl = CONFIG.baseUrl + CONFIG.promptUrl.substring(2);
+        } else if (CONFIG.promptUrl.startsWith('/')) {
+          CONFIG.promptUrl = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.promptUrl;
+        } else {
+          CONFIG.promptUrl = CONFIG.baseUrl + CONFIG.promptUrl;
+        }
+      }
+      
+      // Build absolute URL for avatar if not set
+      if (!CONFIG.avatarUrl) {
+        CONFIG.avatarUrl = CONFIG.baseUrl + 'images/consultant.jpg';
+      } else if (!CONFIG.avatarUrl.startsWith('http')) {
+        if (CONFIG.avatarUrl.startsWith('./')) {
+          CONFIG.avatarUrl = CONFIG.baseUrl + CONFIG.avatarUrl.substring(2);
+        } else if (CONFIG.avatarUrl.startsWith('/')) {
+          CONFIG.avatarUrl = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.avatarUrl;
+        } else {
+          CONFIG.avatarUrl = CONFIG.baseUrl + CONFIG.avatarUrl;
+        }
+      }
+      
+      // Build absolute URL for API endpoints if relative
+      if (CONFIG.openaiEndpoint && !CONFIG.openaiEndpoint.startsWith('http')) {
+        if (CONFIG.openaiEndpoint.startsWith('/')) {
+          CONFIG.openaiEndpoint = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.openaiEndpoint;
+        } else {
+          CONFIG.openaiEndpoint = CONFIG.baseUrl + CONFIG.openaiEndpoint;
+        }
+      }
+      
+      // Build absolute URL for lead endpoint
+      if (!CONFIG.leadEndpoint) {
+        CONFIG.leadEndpoint = CONFIG.baseUrl + 'api/lead';
+      } else if (!CONFIG.leadEndpoint.startsWith('http')) {
+        if (CONFIG.leadEndpoint.startsWith('./')) {
+          CONFIG.leadEndpoint = CONFIG.baseUrl + CONFIG.leadEndpoint.substring(2);
+        } else if (CONFIG.leadEndpoint.startsWith('/')) {
+          CONFIG.leadEndpoint = CONFIG.baseUrl.replace(/\/$/, '') + CONFIG.leadEndpoint;
+        } else {
+          CONFIG.leadEndpoint = CONFIG.baseUrl + CONFIG.leadEndpoint;
+        }
+      }
+      
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
-    }catch(e){}
+    }catch(e){
+      console.warn('Widget config error:', e);
+    }
   })();
 
   function getOrSetSessionId(){
@@ -179,7 +252,7 @@
       min-width: 344px;
       height: 90vh;
       max-height: 90vh;
-      background: #fff;
+      background: ${CONFIG.brand.bg};
       border-radius: ${CONFIG.brand.radius}px;
       box-shadow: 0 24px 64px rgba(0,0,0,.20);
       display: flex;
@@ -316,7 +389,7 @@
       align-items: center;
       justify-content: center;
       cursor: pointer;
-      background: #fff;
+      background: ${CONFIG.brand.bg};
       flex-shrink: 0;
     }
     
@@ -343,7 +416,7 @@
     .vfw-body {
       flex: 1;
       overflow: auto;
-      background: #fafafa;
+      background: ${CONFIG.brand.bg};
       padding: 12px;
     }
     
@@ -390,7 +463,7 @@
     }
     
     .vfw-msg.bot .bubble {
-      background: #f1f2f2;
+      background: ${CONFIG.brand.bg};
     }
     
     .vfw-msg.user {
@@ -407,7 +480,7 @@
     .vfw-compose {
       padding: 10px;
       border-top: 1px solid rgba(17,17,17,.06);
-      background: #fff;
+      background: ${CONFIG.brand.bg};
       flex-shrink: 0;
     }
     
@@ -497,7 +570,7 @@
       display: none;
       padding: 8px 10px;
       border-top: 1px solid rgba(17,17,17,.06);
-      background: #fff;
+      background: ${CONFIG.brand.bg};
       gap: 8px;
       flex-direction: column;
     }
@@ -542,7 +615,7 @@
       line-height: 1.3;
       border: 1px solid rgba(17,17,17,.06);
       font-size: 15px;
-      background: #f1f2f2;
+      background: ${CONFIG.brand.bg};
       position: relative;
     }
     
@@ -597,8 +670,8 @@
     .vfw-hint {
       max-width: min(25vw, 560px);
       min-width: 200px;
-      background: #fff;
-      color: #111;
+      background: ${CONFIG.brand.bg};
+      color: ${CONFIG.brand.text};
       border-radius: 22px;
       padding: 12px 40px 12px 12px;
       box-shadow: 0 18px 48px rgba(0,0,0,.25);
@@ -700,7 +773,7 @@
   root.className = 'vfw-root';
   root.innerHTML = `
     <button class="vfw-btn" id="vfwBtn" aria-label="Открыть чат" style="position:relative !important;width:84px !important;height:84px !important;min-width:84px !important;min-height:84px !important;max-width:84px !important;max-height:84px !important;border-radius:50% !important;aspect-ratio:1/1 !important;padding:0 !important;margin:0 !important;">
-      <img src="./images/consultant.jpg" alt="Консультант" style="width:64px !important;height:64px !important;min-width:64px !important;min-height:64px !important;max-width:64px !important;max-height:64px !important;border-radius:50% !important;object-fit:cover !important;aspect-ratio:1/1 !important;border:2px solid rgba(255,255,255,0.3) !important;display:block !important;margin:0 !important;padding:0 !important;">
+      <img src="${CONFIG.avatarUrl}" alt="Консультант" style="width:64px !important;height:64px !important;min-width:64px !important;min-height:64px !important;max-width:64px !important;max-height:64px !important;border-radius:50% !important;object-fit:cover !important;aspect-ratio:1/1 !important;border:2px solid rgba(255,255,255,0.3) !important;display:block !important;margin:0 !important;padding:0 !important;">
       <span class="vfw-online-indicator"></span>
     </button>
     <div class="vfw-hints" id="vfwHints">
@@ -716,7 +789,7 @@
     <div class="vfw-panel" id="vfwPanel" role="dialog" aria-modal="true">
       <div class="vfw-header">
         <div style="display:flex;align-items:center;gap:10px">
-          <img src="./images/consultant.jpg" alt="Аватар" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid rgba(17,17,17,.1)">
+          <img src="${CONFIG.avatarUrl}" alt="Аватар" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid rgba(17,17,17,.1)">
           <div class="vfw-title">Евгений, ваш консультант</div>
         </div>
         <div class="vfw-actions">
@@ -914,7 +987,8 @@
   let pageViewTracked = false;
   function trackEvent(eventType) {
     // Отправляем событие асинхронно, не блокируя UI
-    fetch('./api/analytics', {
+    const analyticsUrl = CONFIG.baseUrl ? CONFIG.baseUrl + 'api/analytics' : './api/analytics';
+    fetch(analyticsUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -963,7 +1037,7 @@
     row.className='vfw-row';
     
     if (role==='bot'){
-      row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div><div class="bubble"></div></div>`;
+      row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="${CONFIG.avatarUrl}" alt="bot"></div><div class="bubble"></div></div>`;
     } else {
       row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div></div>`;
     }
@@ -1063,7 +1137,7 @@
     const typingRow = document.createElement('div');
     typingRow.className = 'vfw-typing';
     typingRow.innerHTML = `
-      <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="${CONFIG.avatarUrl}" alt="bot"></div>
       <div class="bubble">
         <div class="vfw-typing-dots">
           <div class="vfw-typing-dot"></div>
@@ -1213,7 +1287,7 @@
     `).join('');
     
     wrap.innerHTML = `
-      <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="${CONFIG.avatarUrl}" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">Выберите подарок и оставьте контакты</div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
@@ -2058,7 +2132,7 @@
     }).join('');
     
     wrap.innerHTML = `
-      <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="${CONFIG.avatarUrl}" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">${title}</div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
@@ -2192,7 +2266,7 @@
     const page_url = location.href;
     try{
       // Use retry logic for lead submission too
-      await fetchWithRetry('./api/lead', {
+      await fetchWithRetry(CONFIG.leadEndpoint, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
@@ -2247,7 +2321,7 @@
     const page_url = location.href;
     try{
       // Use retry logic for lead submission too
-      await fetchWithRetry('./api/lead', {
+      await fetchWithRetry(CONFIG.leadEndpoint, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
