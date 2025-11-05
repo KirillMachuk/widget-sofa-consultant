@@ -268,7 +268,9 @@
       max-width: 18px !important;
       max-height: 18px !important;
       background: #10b981 !important;
+      border: 2px solid #fff !important;
       border-radius: 50% !important;
+      box-sizing: border-box !important;
       aspect-ratio: 1 / 1 !important;
       box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4) !important;
       margin: 0 !important;
@@ -407,6 +409,7 @@
     
     .vfw-title {
       font-weight: 600;
+      color: #111 !important;
     }
     
     .vfw-actions {
@@ -621,12 +624,14 @@
       border: 1px solid rgba(17,17,17,.12);
       cursor: pointer;
       font-size: 16px;
+      color: #111 !important;
+      background: #fff !important;
     }
     
     .vfw-confirm .danger {
-      background: #dc3545;
-      color: #fff;
-      border-color: #dc3545;
+      background: #dc3545 !important;
+      color: #fff !important;
+      border-color: #dc3545 !important;
       order: -1;
     }
     
