@@ -2346,10 +2346,18 @@
       throw new Error('GAS endpoint is not configured');
     }
     
+    // Validate GAS endpoint URL
+    try {
+      new URL(CONFIG.gasEndpoint);
+    } catch(e) {
+      throw new Error('Invalid GAS endpoint URL: ' + CONFIG.gasEndpoint);
+    }
+    
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд для GAS
     
     try {
+      console.log('[Widget] Sending POST request to GAS:', CONFIG.gasEndpoint);
       const res = await fetch(CONFIG.gasEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2361,29 +2369,51 @@
       
       const text = await res.text();
       console.log('[Widget] Direct GAS response status:', res.status);
-      console.log('[Widget] Direct GAS response text:', text.substring(0, 200));
+      console.log('[Widget] Direct GAS response headers:', Object.fromEntries(res.headers.entries()));
+      console.log('[Widget] Direct GAS response text:', text.substring(0, 500));
       
       if (!res.ok) {
-        throw new Error(`GAS error: ${res.status} - ${text.substring(0, 200)}`);
+        const errorDetails = `GAS error: ${res.status} ${res.statusText} - ${text.substring(0, 200)}`;
+        console.error('[Widget]', errorDetails);
+        throw new Error(errorDetails);
       }
       
       // Try to parse JSON response
       try {
         const json = JSON.parse(text);
+        console.log('[Widget] GAS JSON response:', json);
         if (json.ok === false) {
           throw new Error(`GAS returned error: ${json.error || 'Unknown error'}`);
         }
-      } catch(e) {
+        return true;
+      } catch(parseError) {
         // If response is not JSON, check if it looks like success
-        if (!text.toLowerCase().includes('ok') && !text.toLowerCase().includes('success')) {
+        const textLower = text.toLowerCase();
+        if (textLower.includes('ok') || textLower.includes('success') || res.status === 200) {
+          console.log('[Widget] GAS response indicates success (non-JSON)');
+          return true;
+        } else {
           console.warn('[Widget] GAS response may indicate error:', text.substring(0, 200));
+          // Still return true if status is 200, as GAS might return HTML
+          if (res.status === 200) {
+            return true;
+          }
+          throw new Error(`Unexpected GAS response: ${text.substring(0, 200)}`);
         }
       }
-      
-      return true;
     } catch (error) {
       clearTimeout(timeoutId);
       console.error('[Widget] Direct GAS submission error:', error);
+      console.error('[Widget] Error type:', error.name);
+      console.error('[Widget] Error message:', error.message);
+      
+      // Provide more specific error messages
+      if (error.name === 'AbortError') {
+        throw new Error('Request timeout: GAS did not respond within 15 seconds');
+      } else if (error.message && (error.message.includes('Failed to fetch') || error.message.includes('NetworkError'))) {
+        throw new Error('Network error: Failed to fetch from GAS endpoint. This might be a CORS issue or network problem.');
+      }
+      
       throw error;
     }
   }
@@ -2392,6 +2422,18 @@
     // Check if offline
     if (!navigator.onLine) {
       addMsg('bot','Похоже, нет подключения к интернету. Попробуйте позже.');
+      return;
+    }
+
+    // Check if gasEndpoint is configured
+    if (!CONFIG.gasEndpoint) {
+      console.error('[Widget] GAS endpoint is not configured!');
+      console.error('[Widget] Current CONFIG:', {
+        gasEndpoint: CONFIG.gasEndpoint,
+        leadEndpoint: CONFIG.leadEndpoint,
+        baseUrl: CONFIG.baseUrl
+      });
+      addMsg('bot','Не удалось записать номер. Попробуйте ещё раз или укажите позже.');
       return;
     }
 
@@ -2410,6 +2452,13 @@
       page_url,
       session_id: SESSION_ID
     };
+    
+    console.log('[Widget] Starting lead submission process', {
+      leadEndpoint: CONFIG.leadEndpoint,
+      gasEndpoint: CONFIG.gasEndpoint,
+      baseUrl: CONFIG.baseUrl,
+      payload: { name, phone, pretext: pretext.substring(0, 50) }
+    });
     
     let submitted = false;
     
@@ -2465,14 +2514,33 @@
       }
       
       // Fallback to direct GAS submission if API endpoint failed or not available
+      // Also try direct GAS if leadEndpoint is empty
       if (!submitted) {
+        if (!CONFIG.gasEndpoint) {
+          throw new Error('GAS endpoint is not configured and API endpoint is not available');
+        }
+        
         try {
           console.log('[Widget] Using fallback: direct GAS submission');
+          console.log('[Widget] GAS endpoint:', CONFIG.gasEndpoint);
           await submitLeadDirectToGAS(payload);
           submitted = true;
           console.log('[Widget] Lead successfully submitted directly to GAS');
         } catch(e) {
-          console.error('[Widget] Direct GAS submission also failed:', e);
+          console.error('[Widget] Direct GAS submission failed:', e);
+          console.error('[Widget] GAS submission error details:', {
+            message: e.message,
+            name: e.name,
+            stack: e.stack,
+            gasEndpoint: CONFIG.gasEndpoint
+          });
+          
+          // Check for CORS errors
+          if (e.message && (e.message.includes('CORS') || e.message.includes('Failed to fetch') || e.message.includes('NetworkError'))) {
+            console.error('[Widget] CORS or network error detected - this might be a cross-origin issue');
+            throw new Error('CORS_ERROR: ' + e.message);
+          }
+          
           throw e; // Re-throw to be caught by outer catch
         }
       }
@@ -2494,19 +2562,26 @@
       }
     } catch(e) {
       console.error('[Widget] Lead submission error (all methods failed):', e);
-      console.error('[Widget] Error details:', {
+      console.error('[Widget] Full error details:', {
         message: e.message,
+        name: e.name,
         stack: e.stack,
         endpoint: CONFIG.leadEndpoint,
         gasEndpoint: CONFIG.gasEndpoint,
-        baseUrl: CONFIG.baseUrl
+        baseUrl: CONFIG.baseUrl,
+        payload: { name, phone, pretext: pretext.substring(0, 50) }
       });
       
       let errorMessage;
-      if (e.message === 'Request timeout' || e.name === 'AbortError') {
+      if (e.message && e.message.includes('CORS_ERROR')) {
+        console.error('[Widget] CORS error detected - direct GAS submission may be blocked by browser');
+        errorMessage = 'Не удалось записать номер из-за ограничений безопасности. Попробуйте ещё раз или укажите позже.';
+      } else if (e.message === 'Request timeout' || e.name === 'AbortError') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
       } else if (!navigator.onLine) {
         errorMessage = 'Похоже, нет подключения к интернету. Попробуйте позже.';
+      } else if (e.message && e.message.includes('GAS endpoint is not configured')) {
+        errorMessage = 'Не удалось записать номер. Попробуйте ещё раз или укажите позже.';
       } else {
         errorMessage = 'Не удалось записать номер. Попробуйте ещё раз или укажите позже.';
       }
@@ -2518,6 +2593,18 @@
     // Check if offline
     if (!navigator.onLine) {
       addMsg('bot','Похоже, нет подключения к интернету. Попробуйте позже.');
+      return;
+    }
+
+    // Check if gasEndpoint is configured
+    if (!CONFIG.gasEndpoint) {
+      console.error('[Widget] GAS endpoint is not configured for gift lead!');
+      console.error('[Widget] Current CONFIG:', {
+        gasEndpoint: CONFIG.gasEndpoint,
+        leadEndpoint: CONFIG.leadEndpoint,
+        baseUrl: CONFIG.baseUrl
+      });
+      addMsg('bot','Не удалось записать номер. Попробуйте ещё раз или укажите позже.');
       return;
     }
 
@@ -2540,6 +2627,13 @@
       page_url,
       session_id: SESSION_ID
     };
+    
+    console.log('[Widget] Starting gift lead submission process', {
+      leadEndpoint: CONFIG.leadEndpoint,
+      gasEndpoint: CONFIG.gasEndpoint,
+      baseUrl: CONFIG.baseUrl,
+      payload: { name, phone, category, gift }
+    });
     
     let submitted = false;
     
@@ -2595,14 +2689,33 @@
       }
       
       // Fallback to direct GAS submission if API endpoint failed or not available
+      // Also try direct GAS if leadEndpoint is empty
       if (!submitted) {
+        if (!CONFIG.gasEndpoint) {
+          throw new Error('GAS endpoint is not configured and API endpoint is not available');
+        }
+        
         try {
           console.log('[Widget] Using fallback: direct GAS submission for gift lead');
+          console.log('[Widget] GAS endpoint:', CONFIG.gasEndpoint);
           await submitLeadDirectToGAS(payload);
           submitted = true;
           console.log('[Widget] Gift lead successfully submitted directly to GAS');
         } catch(e) {
-          console.error('[Widget] Direct GAS submission also failed:', e);
+          console.error('[Widget] Direct GAS submission failed for gift lead:', e);
+          console.error('[Widget] GAS submission error details:', {
+            message: e.message,
+            name: e.name,
+            stack: e.stack,
+            gasEndpoint: CONFIG.gasEndpoint
+          });
+          
+          // Check for CORS errors
+          if (e.message && (e.message.includes('CORS') || e.message.includes('Failed to fetch') || e.message.includes('NetworkError'))) {
+            console.error('[Widget] CORS or network error detected - this might be a cross-origin issue');
+            throw new Error('CORS_ERROR: ' + e.message);
+          }
+          
           throw e; // Re-throw to be caught by outer catch
         }
       }
@@ -2617,19 +2730,26 @@
       }
     } catch(e) {
       console.error('[Widget] Gift lead submission error (all methods failed):', e);
-      console.error('[Widget] Error details:', {
+      console.error('[Widget] Full error details:', {
         message: e.message,
+        name: e.name,
         stack: e.stack,
         endpoint: CONFIG.leadEndpoint,
         gasEndpoint: CONFIG.gasEndpoint,
-        baseUrl: CONFIG.baseUrl
+        baseUrl: CONFIG.baseUrl,
+        payload: { name, phone, category, gift }
       });
       
       let errorMessage;
-      if (e.message === 'Request timeout' || e.name === 'AbortError') {
+      if (e.message && e.message.includes('CORS_ERROR')) {
+        console.error('[Widget] CORS error detected - direct GAS submission may be blocked by browser');
+        errorMessage = 'Не удалось записать номер из-за ограничений безопасности. Попробуйте ещё раз или укажите позже.';
+      } else if (e.message === 'Request timeout' || e.name === 'AbortError') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
       } else if (!navigator.onLine) {
         errorMessage = 'Похоже, нет подключения к интернету. Попробуйте позже.';
+      } else if (e.message && e.message.includes('GAS endpoint is not configured')) {
+        errorMessage = 'Не удалось записать номер. Попробуйте ещё раз или укажите позже.';
       } else {
         errorMessage = 'Не удалось записать номер. Попробуйте ещё раз или укажите позже.';
       }
