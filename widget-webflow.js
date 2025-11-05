@@ -259,14 +259,14 @@
     /* Индикатор онлайн - защита от деформации */
     .vfw-online-indicator {
       position: absolute !important;
-      bottom: 2px !important;
-      right: 2px !important;
-      width: 18px !important;
-      height: 18px !important;
-      min-width: 18px !important;
-      min-height: 18px !important;
-      max-width: 18px !important;
-      max-height: 18px !important;
+      bottom: 0px !important;
+      right: 0px !important;
+      width: 14px !important;
+      height: 14px !important;
+      min-width: 14px !important;
+      min-height: 14px !important;
+      max-width: 14px !important;
+      max-height: 14px !important;
       background: #10b981 !important;
       border: 2px solid #fff !important;
       border-radius: 50% !important;
@@ -336,12 +336,12 @@
       }
       
       .vfw-online-indicator {
-        width: 20px !important;
-        height: 20px !important;
-        min-width: 20px !important;
-        min-height: 20px !important;
-        max-width: 20px !important;
-        max-height: 20px !important;
+        width: 16px !important;
+        height: 16px !important;
+        min-width: 16px !important;
+        min-height: 16px !important;
+        max-width: 16px !important;
+        max-height: 16px !important;
       }
       
       .vfw-panel {
