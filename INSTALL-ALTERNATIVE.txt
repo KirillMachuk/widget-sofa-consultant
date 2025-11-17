@@ -1,0 +1,88 @@
+═══════════════════════════════════════════════════════════════
+  АЛЬТЕРНАТИВНЫЙ СПОСОБ УСТАНОВКИ (БЕЗ FTP)
+═══════════════════════════════════════════════════════════════
+
+Если у вас НЕТ доступа к файлам через FTP, используйте этот способ:
+
+┌─────────────────────────────────────────────────────────────┐
+│ СПОСОБ: Через модуль Custom HTML в админке OpenCart         │
+└─────────────────────────────────────────────────────────────┘
+
+ШАГ 1: Найдите модуль
+─────────────────────
+1. Войдите в админ-панель: https://nm-shop.by/admin/
+2. Перейдите: Extensions → Extensions
+3. Выберите тип: Modules
+4. Найдите модуль: "Custom HTML" или "HTML Content"
+
+ШАГ 2: Настройте модуль
+───────────────────────
+1. Нажмите Edit (карандаш) или Install
+2. Настройки:
+   - Status: Enabled (Включено)
+   - Position: Header (или "Before </head>")
+   - Sort Order: 1
+3. В поле HTML вставьте код ниже
+4. Нажмите Save
+
+ШАГ 3: Очистите кеш
+───────────────────
+1. Extensions → Modifications → Refresh
+2. Dashboard → Clear cache
+
+═══════════════════════════════════════════════════════════════
+  КОД ДЛЯ ВСТАВКИ (скопируйте весь блок ниже)
+═══════════════════════════════════════════════════════════════
+
+<link rel="preconnect" href="https://widget-nine-murex.vercel.app" crossorigin>
+<link rel="preconnect" href="https://api.openai.com" crossorigin>
+
+<script>
+(function() {
+  if (window.nmShopWidgetLoaded) return;
+  
+  const TEST_PAGE_URL = '/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro';
+  const isTestPage = window.location.href.includes(TEST_PAGE_URL);
+  
+  if (!isTestPage) {
+    console.log('[Widget] Not test page:', window.location.href);
+    return;
+  }
+  
+  console.log('[Widget] Loaded on test page');
+  window.nmShopWidgetLoaded = true;
+  
+  const s = document.createElement('script');
+  s.src = 'https://widget-nine-murex.vercel.app/widget.js?v=5.1.0';
+  s.defer = true;
+  s.async = true;
+  s.dataset.api = 'https://widget-nine-murex.vercel.app/api/chat';
+  s.dataset.prompt = 'https://widget-nine-murex.vercel.app/prompt.json';
+  s.dataset.gas = 'https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec';
+  s.onerror = () => console.warn('[Widget] Failed to load widget.js');
+  document.head.appendChild(s);
+})();
+</script>
+
+<style>
+.vfw-root { z-index: 9999999 !important; }
+@media (max-width: 768px) {
+  .vfw-root { bottom: 80px !important; }
+}
+.vfw-panel { z-index: 9999999 !important; }
+</style>
+
+═══════════════════════════════════════════════════════════════
+  ПРОВЕРКА
+═══════════════════════════════════════════════════════════════
+
+1. Откройте: https://nm-shop.by/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/
+2. Виджет должен появиться в правом нижнем углу
+3. Откройте консоль (F12) - должно быть: [Widget] Loaded on test page
+4. На других страницах виджета быть НЕ должно
+
+═══════════════════════════════════════════════════════════════
+
+Если модуль Custom HTML не найден, см. файл ALTERNATIVE-INSTALL.md
+для других способов установки.
+
