@@ -8,36 +8,95 @@
   window.VFW_LOADED = true;
   
   const CONFIG = {
-    openaiEndpoint: '/api/chat',
-    leadEndpoint: '/api/lead',
-    promptUrl: './Промпт.json',
+    openaiEndpoint: null, // Will be set from dataset or default
+    leadEndpoint: null, // Will be set from dataset or default
+    promptUrl: null, // Will be set from dataset or default
     triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
     brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 }
   };
   const DEBUG = Boolean(window.VFW_DEBUG);
 
+  // Get widget base URL from script src for absolute paths
+  function getWidgetBaseUrl() {
+    try {
+      const current = document.currentScript || Array.from(document.scripts).slice(-1)[0];
+      if (current && current.src) {
+        const url = new URL(current.src);
+        return url.origin + url.pathname.substring(0, url.pathname.lastIndexOf('/') + 1);
+      }
+    } catch(e) {
+      if (DEBUG) console.warn('Failed to get widget base URL:', e);
+    }
+    // Fallback to current origin if script src not available
+    return window.location.origin + '/';
+  }
+  
+  const WIDGET_BASE_URL = getWidgetBaseUrl();
+
   // Read configuration from script dataset
   (function(){
     try{
       const current = document.currentScript || Array.from(document.scripts).slice(-1)[0];
       if (!current) return;
-      CONFIG.promptUrl = current.dataset.prompt || CONFIG.promptUrl;
-      if (current.dataset.api) CONFIG.openaiEndpoint = current.dataset.api;
-      if (current.dataset.lead) CONFIG.leadEndpoint = current.dataset.lead;
+      let promptUrl = current.dataset.prompt || CONFIG.promptUrl;
+      // Convert relative URLs to absolute
+      if (promptUrl && promptUrl.startsWith('./')) {
+        promptUrl = WIDGET_BASE_URL + promptUrl.substring(2);
+      } else if (promptUrl && !promptUrl.startsWith('http')) {
+        promptUrl = WIDGET_BASE_URL + promptUrl;
+      }
+      CONFIG.promptUrl = promptUrl;
+      if (current.dataset.api) {
+        let apiUrl = current.dataset.api;
+        // Convert relative URLs to absolute
+        if (apiUrl.startsWith('./')) {
+          apiUrl = WIDGET_BASE_URL + apiUrl.substring(2);
+        } else if (!apiUrl.startsWith('http')) {
+          apiUrl = WIDGET_BASE_URL + apiUrl;
+        }
+        CONFIG.openaiEndpoint = apiUrl;
+      } else {
+        // Default to absolute path
+        CONFIG.openaiEndpoint = WIDGET_BASE_URL + 'api/chat';
+      }
+      
+      if (current.dataset.lead) {
+        let leadUrl = current.dataset.lead;
+        if (leadUrl.startsWith('./')) {
+          leadUrl = WIDGET_BASE_URL + leadUrl.substring(2);
+        } else if (!leadUrl.startsWith('http')) {
+          leadUrl = WIDGET_BASE_URL + leadUrl;
+        }
+        CONFIG.leadEndpoint = leadUrl;
+      } else {
+        CONFIG.leadEndpoint = WIDGET_BASE_URL + 'api/lead';
+      }
       
       if (current.dataset.promptContent) CONFIG.promptContent = current.dataset.promptContent;
+      
+      // Set default promptUrl if not provided
+      if (!CONFIG.promptUrl) {
+        CONFIG.promptUrl = WIDGET_BASE_URL + 'Промпт.json';
+      }
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
     }catch(e){}
   })();
 
+  // FIXED: Generate unique session_id including origin to prevent conflicts between different sites
   function getOrSetSessionId(){
-    const key='vf_session_id';
-    const m=document.cookie.match(/(?:^|; )vf_session_id=([^;]+)/);
+    const key='vf_session_id_external';
+    // Include origin in session ID to make it unique per site
+    const originHash = btoa(location.origin).replace(/[+/=]/g, '').substring(0, 8);
+    const originKey = `${key}_${originHash}`;
+    
+    const m=document.cookie.match(new RegExp(`(?:^|; )${originKey}=([^;]+)`));
     if (m) return m[1];
-    const id = 's_'+Math.random().toString(36).slice(2)+Date.now().toString(36);
-    document.cookie=`${key}=${id}; path=/; max-age=${60*60*24*365}`;
+    
+    // Create unique ID: origin hash + timestamp + random
+    const id = `s_${originHash}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
+    document.cookie=`${originKey}=${id}; path=/; max-age=${60*60*24*365}`;
     return id;
   }
   const SESSION_ID = getOrSetSessionId();
@@ -71,29 +130,39 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    /* Основные стили виджета */
+    /* CSS Reset для изоляции виджета от стилей сайта-хозяина */
+    .vfw-root, .vfw-root * {
+      box-sizing: border-box !important;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
+    }
+    
+    /* Основные стили виджета с изоляцией */
     .vfw-root {
-      position: fixed;
-      right: 60px;
-      bottom: 60px;
-      z-index: 999999;
-      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      position: fixed !important;
+      right: 60px !important;
+      bottom: 60px !important;
+      z-index: 999999 !important;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
+      all: initial;
+      display: block !important;
     }
     
     .vfw-btn {
-      width: 84px;
-      height: 84px;
-      border-radius: 50%;
-      background: ${CONFIG.brand.text};
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 6px 24px rgba(0,0,0,.16);
-      cursor: pointer;
-      transition: transform .12s ease;
-      border: none;
-      touch-action: manipulation;
+      width: 84px !important;
+      height: 84px !important;
+      border-radius: 50% !important;
+      background: ${CONFIG.brand.text} !important;
+      color: #fff !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      box-shadow: 0 6px 24px rgba(0,0,0,.16) !important;
+      cursor: pointer !important;
+      transition: transform .12s ease !important;
+      border: none !important;
+      touch-action: manipulation !important;
+      margin: 0 !important;
+      padding: 0 !important;
     }
     
     .vfw-btn:hover {
@@ -116,35 +185,37 @@
       box-shadow: 0 2px 8px rgba(16, 185, 129, 0.4);
     }
     
-    /* Основная панель виджета */
+    /* Основная панель виджета с изоляцией */
     .vfw-panel {
-      position: fixed;
-      right: 20px;
-      bottom: 20px;
-      width: clamp(344px, 26.5rem, min(424px, calc(100vw - 40px)));
-      max-width: min(584px, calc(100vw - 40px));
-      min-width: 344px;
-      height: 90vh;
-      max-height: 90vh;
-      background: #fff;
-      border-radius: ${CONFIG.brand.radius}px;
-      box-shadow: 0 24px 64px rgba(0,0,0,.20);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-      border: 1px solid rgba(17,17,17,.06);
-      z-index: 999999;
-      box-sizing: border-box;
-      transform: translateY(100%);
-      opacity: 0;
-      transition: all 0.3s ease;
-      visibility: hidden;
+      position: fixed !important;
+      right: 20px !important;
+      bottom: 20px !important;
+      width: clamp(344px, 26.5rem, min(424px, calc(100vw - 40px))) !important;
+      max-width: min(584px, calc(100vw - 40px)) !important;
+      min-width: 344px !important;
+      height: 90vh !important;
+      max-height: 90vh !important;
+      background: #fff !important;
+      border-radius: ${CONFIG.brand.radius}px !important;
+      box-shadow: 0 24px 64px rgba(0,0,0,.20) !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+      border: 1px solid rgba(17,17,17,.06) !important;
+      z-index: 999999 !important;
+      box-sizing: border-box !important;
+      transform: translateY(100%) !important;
+      opacity: 0 !important;
+      transition: all 0.3s ease !important;
+      visibility: hidden !important;
+      margin: 0 !important;
+      padding: 0 !important;
     }
     
     .vfw-panel[data-open="1"] {
-      transform: translateY(0);
-      opacity: 1;
-      visibility: visible;
+      transform: translateY(0) !important;
+      opacity: 1 !important;
+      visibility: visible !important;
     }
     
     /* Мобильные стили */
@@ -617,7 +688,7 @@
   root.className = 'vfw-root';
   root.innerHTML = `
     <button class="vfw-btn" id="vfwBtn" aria-label="Открыть чат" style="position:relative">
-      <img src="./images/consultant.jpg" alt="Консультант" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);">
+      <img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="Консультант" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);">
       <span class="vfw-online-indicator"></span>
     </button>
     <div class="vfw-hints" id="vfwHints">
@@ -633,7 +704,7 @@
     <div class="vfw-panel" id="vfwPanel" role="dialog" aria-modal="true">
       <div class="vfw-header">
         <div style="display:flex;align-items:center;gap:10px">
-          <img src="./images/consultant.jpg" alt="Аватар" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid rgba(17,17,17,.1)">
+          <img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="Аватар" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid rgba(17,17,17,.1)">
           <div class="vfw-title">Евгений, ваш консультант</div>
         </div>
         <div class="vfw-actions">
@@ -831,7 +902,8 @@
   let pageViewTracked = false;
   function trackEvent(eventType) {
     // Отправляем событие асинхронно, не блокируя UI
-    fetch('./api/analytics', {
+    const analyticsUrl = CONFIG.openaiEndpoint ? CONFIG.openaiEndpoint.replace('/chat', '/analytics') : WIDGET_BASE_URL + 'api/analytics';
+    fetch(analyticsUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -880,7 +952,7 @@
     row.className='vfw-row';
     
     if (role==='bot'){
-      row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div><div class="bubble"></div></div>`;
+      row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div><div class="bubble"></div></div>`;
     } else {
       row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div></div>`;
     }
@@ -980,7 +1052,7 @@
     const typingRow = document.createElement('div');
     typingRow.className = 'vfw-typing';
     typingRow.innerHTML = `
-      <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div class="vfw-typing-dots">
           <div class="vfw-typing-dot"></div>
@@ -1130,7 +1202,7 @@
     `).join('');
     
     wrap.innerHTML = `
-      <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">Выберите подарок и оставьте контакты</div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
@@ -1974,7 +2046,7 @@
     }).join('');
     
     wrap.innerHTML = `
-      <div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">${title}</div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
@@ -2108,7 +2180,8 @@
     const page_url = location.href;
     try{
       // Use retry logic for lead submission too
-      await fetchWithRetry(CONFIG.leadEndpoint, {
+      const leadUrl = CONFIG.leadEndpoint || (CONFIG.openaiEndpoint ? CONFIG.openaiEndpoint.replace('/chat', '/lead') : WIDGET_BASE_URL + 'api/lead');
+      await fetchWithRetry(leadUrl, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({
@@ -2162,7 +2235,8 @@
     const page_url = location.href;
     try{
       // Use retry logic for lead submission too
-      await fetchWithRetry(CONFIG.leadEndpoint, {
+      const leadUrl = CONFIG.leadEndpoint || (CONFIG.openaiEndpoint ? CONFIG.openaiEndpoint.replace('/chat', '/lead') : WIDGET_BASE_URL + 'api/lead');
+      await fetchWithRetry(leadUrl, {
         method:'POST',
         headers:{ 'Content-Type':'application/json' },
         body: JSON.stringify({

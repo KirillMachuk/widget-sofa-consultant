@@ -1,6 +1,8 @@
 // Используем единый Redis клиент с retry логикой
 const redis = require('../utils/redis-client');
 
+const GAS_URL = process.env.GAS_URL;
+
 // Сохранение контактов в Redis
 async function saveContacts(sessionId, contacts) {
   try {
@@ -50,13 +52,13 @@ async function handler(req, res){
   }
   
   try{
-    const { gas_url, timestamp, name, phone, pretext, page_url, session_id, category, gift, messenger, wishes } = req.body || {};
-    console.log('📊 Данные запроса:', { gas_url, name, phone, category, gift, messenger, wishes });
-    
-    if (!gas_url) {
-      console.log('❌ Отсутствует gas_url');
-      return res.status(400).json({ error: 'Missing gas_url' });
+    if (!GAS_URL) {
+      console.error('❌ Не задан GAS_URL в переменных окружения');
+      return res.status(500).json({ error: 'Server misconfiguration' });
     }
+    
+    const { timestamp, name, phone, pretext, page_url, session_id, category, gift, messenger, wishes } = req.body || {};
+    console.log('📊 Данные запроса:', { name, phone, category, gift, messenger, wishes });
     
     const payload = { timestamp, name, phone, pretext, page_url, session_id, category, gift, messenger, wishes };
     console.log('📦 Payload для GAS:', payload);
@@ -66,28 +68,55 @@ async function handler(req, res){
     
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут (уменьшен)
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут для GAS
       
       try {
         console.log(`📤 Отправляем лид в GAS (попытка ${attempt}/${maxRetries})`);
         
-        const r = await fetch(gas_url, {
+        const r = await fetch(GAS_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
           body: JSON.stringify(payload),
           signal: controller.signal
+          // GAS endpoints should handle CORS themselves
         });
         
         clearTimeout(timeoutId);
         
-        const text = await r.text();
-        if (!r.ok){
-          throw new Error(`GAS upstream error: ${r.status} - ${text.slice(0, 200)}`);
+        // GAS может возвращать разные форматы ответов
+        let responseData;
+        try {
+          const text = await r.text();
+          try {
+            responseData = JSON.parse(text);
+          } catch {
+            // Если не JSON, проверяем текст
+            if (text.includes('ok') || text.includes('success') || r.ok) {
+              responseData = { ok: true };
+            } else {
+              responseData = { ok: false, text };
+            }
+          }
+        } catch (parseError) {
+          console.warn('Ошибка парсинга ответа GAS:', parseError);
+          // Если статус 200, считаем успехом
+          if (r.ok || r.status === 0) {
+            responseData = { ok: true };
+          } else {
+            throw new Error(`GAS upstream error: ${r.status}`);
+          }
         }
         
-        console.log(`✅ Лид успешно отправлен в GAS (попытка ${attempt})`);
-        lastError = null; // Сброс ошибки при успехе
-        break; // Выходим из цикла retry
+        if (responseData.ok || r.ok || r.status === 0) {
+          console.log(`✅ Лид успешно отправлен в GAS (попытка ${attempt})`);
+          lastError = null; // Сброс ошибки при успехе
+          break; // Выходим из цикла retry
+        } else {
+          throw new Error(`GAS returned error: ${JSON.stringify(responseData)}`);
+        }
         
       } catch (error) {
         clearTimeout(timeoutId);
