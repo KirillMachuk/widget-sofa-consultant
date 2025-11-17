@@ -1,0 +1,76 @@
+<!-- 
+  Код интеграции виджета чат-бота для OpenCart сайта nm-shop.by
+  
+  ИНСТРУКЦИЯ ПО УСТАНОВКЕ:
+  
+  1. Откройте файл header.twig вашей темы:
+     catalog/view/theme/[НАЗВАНИЕ_ТЕМЫ]/template/common/header.twig
+     
+  2. Найдите строку </head> (обычно в конце файла)
+  
+  3. Вставьте код ПЕРЕД </head>
+  
+  4. Очистите кеш OpenCart:
+     - Extensions → Modifications → Refresh
+     - Dashboard → Clear cache
+     - Или удалите папку system/storage/cache/ через FTP
+  
+  5. Проверьте работу виджета на сайте
+  
+  ВАЖНО: 
+  - Не вставляйте код дважды
+  - Убедитесь, что код вставлен ПЕРЕД </head>, а не после
+  - После обновления темы OpenCart код нужно будет вставить заново
+-->
+
+{# Preconnect для ускорения загрузки #}
+<link rel="preconnect" href="https://widget-nine-murex.vercel.app">
+<link rel="preconnect" href="https://api.openai.com">
+
+{# Chat Widget для nm-shop.by #}
+<script>
+(function() {
+  // Защита от двойной загрузки
+  if (window.nmShopWidgetLoaded) return;
+  window.nmShopWidgetLoaded = true;
+  
+  // Исключение страниц (опционально - раскомментируйте если нужно)
+  // if (window.location.pathname.includes('/checkout/') || 
+  //     window.location.pathname.includes('/account/login')) {
+  //   return; // не показывать на checkout и login
+  // }
+  
+  var s = document.createElement('script');
+  s.src = 'https://widget-nine-murex.vercel.app/widget.js?v=5.1.0';
+  s.defer = true;
+  s.dataset.api = 'https://widget-nine-murex.vercel.app/api/chat';
+  s.dataset.prompt = 'https://widget-nine-murex.vercel.app/Промпт.json';
+  s.dataset.gas = 'https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec';
+  s.onerror = function() {
+    console.warn('Chat widget failed to load');
+  };
+  document.head.appendChild(s);
+})();
+</script>
+
+{# Дополнительные стили для совместимости с OpenCart #}
+<style>
+/* Убеждаемся, что виджет выше всех элементов OpenCart */
+.vfw-root {
+  z-index: 9999999 !important;
+}
+
+/* На мобильных поднимаем кнопку выше нижнего меню (если есть) */
+@media (max-width: 768px) {
+  .vfw-root {
+    bottom: 80px !important; /* если есть нижнее меню OpenCart */
+  }
+}
+
+/* Защита от конфликтов с модальными окнами OpenCart */
+.vfw-panel {
+  z-index: 9999999 !important;
+}
+</style>
+<!-- End Chat Widget -->
+
