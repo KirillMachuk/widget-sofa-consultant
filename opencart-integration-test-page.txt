@@ -1,13 +1,16 @@
 <!-- 
   Код для тестирования виджета на ОДНОЙ странице nm-shop.by
-  Используйте этот код для проверки работы перед установкой на весь сайт
+  
+  ТЕСТОВАЯ СТРАНИЦА: https://nm-shop.by/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/
+  URL: /kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/
   
   ИНСТРУКЦИЯ:
-  1. Выберите страницу для тестирования (например, главная или конкретный товар)
-  2. Определите URL страницы (например: /index.php?route=common/home или /product/123)
-  3. В коде ниже замените '/ваш-url-страницы' на реальный URL
-  4. Вставьте код в header.twig ПЕРЕД </head>
-  5. После тестирования замените на полную версию (opencart-integration-simple.txt)
+  1. Вставьте код в header.twig ПЕРЕД </head>
+  2. Очистите кеш OpenCart (Extensions → Modifications → Refresh)
+  3. Откройте тестовую страницу и проверьте работу виджета
+  4. После успешного теста замените на полную версию (opencart-integration-simple.txt)
+  
+  Подробная инструкция: см. TEST-SINGLE-PAGE.md или QUICK-TEST.md
 -->
 
 <link rel="preconnect" href="https://widget-nine-murex.vercel.app">
@@ -18,13 +21,10 @@
   // Защита от двойной загрузки
   if (window.nmShopWidgetLoaded) return;
   
-  // ⚠️ ВАЖНО: Укажите URL страницы для тестирования
-  // Примеры:
-  // - Главная: '/index.php?route=common/home' или '/'
-  // - Товар: '/index.php?route=product/product&product_id=123'
-  // - Категория: '/index.php?route=product/category&path=20'
+  // ⚠️ ВАЖНО: URL страницы для тестирования
+  // Тестируем на странице: https://nm-shop.by/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/
   
-  const TEST_PAGE_URL = '/'; // ← ЗАМЕНИТЕ на URL вашей тестовой страницы
+  const TEST_PAGE_URL = '/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/';
   
   // Проверка: показывать виджет только на указанной странице
   const currentPath = window.location.pathname + window.location.search;
@@ -60,4 +60,5 @@
 }
 .vfw-panel { z-index: 9999999 !important; }
 </style>
+
 
