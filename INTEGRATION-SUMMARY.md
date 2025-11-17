@@ -37,7 +37,7 @@
 **Все endpoints проверены:**
 - ✅ Widget JS: `https://widget-nine-murex.vercel.app/widget.js`
 - ✅ API Chat: `https://widget-nine-murex.vercel.app/api/chat`
-- ✅ Промпт: `https://widget-nine-murex.vercel.app/Промпт.json`
+- ✅ Промпт: `https://widget-nine-murex.vercel.app/prompt.json`
 - ✅ GAS: `https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec`
 
 ## 📁 Структура файлов для интеграции
@@ -124,4 +124,5 @@ Widget/
 **Дата создания:** 2025
 **Версия виджета:** 5.1.0
 **Статус:** ✅ Готово к интеграции
+
 

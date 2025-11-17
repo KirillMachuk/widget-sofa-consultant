@@ -12,7 +12,7 @@
 
 - [x] Widget JS: `https://widget-nine-murex.vercel.app/widget.js`
 - [x] API Chat: `https://widget-nine-murex.vercel.app/api/chat`
-- [x] Промпт: `https://widget-nine-murex.vercel.app/Промпт.json`
+- [x] Промпт: `https://widget-nine-murex.vercel.app/prompt.json`
 - [x] GAS: `https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec`
 
 ## 🎨 Адаптация для OpenCart
@@ -69,4 +69,5 @@
 **Статус:** ✅ Файлы готовы к использованию
 
 **Следующий шаг:** Интеграция в OpenCart на nm-shop.by
+
 

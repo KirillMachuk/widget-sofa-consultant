@@ -95,7 +95,7 @@
     var s=document.createElement('script');
     s.src='https://ваш-домен.vercel.app/widget.js?v=5.1.0';
     s.defer=true;
-    s.dataset.prompt='https://ваш-домен.vercel.app/Промпт.json';
+    s.dataset.prompt='https://ваш-домен.vercel.app/prompt.json';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     document.head.appendChild(s);
   })();
@@ -110,7 +110,7 @@
     var s=document.createElement('script');
     s.src='./widget.js?v=5.1.0';
     s.defer=true;
-    s.dataset.prompt='./Промпт.json';
+    s.dataset.prompt='./prompt.json';
     s.dataset.gas='https://script.google.com/macros/s/ВАШ-GAS-URL/exec';
     document.head.appendChild(s);
   })();
@@ -170,7 +170,7 @@ function doPost(e) {
 ### 3. Настройка виджета
 
 Отредактируйте файлы:
-- `Промпт.json` - настройки бота и компании (FAQ информация, подарки по категориям)
+- `prompt.json` - настройки бота и компании (FAQ информация, подарки по категориям)
 - `widget.js` (строка 16) - цвета и стиль виджета
 
 ## 📁 Структура проекта
@@ -184,7 +184,7 @@ function doPost(e) {
 │   └── consultant.jpg   # Изображение консультанта
 ├── index.html           # Тестовая страница
 ├── widget.js           # Основной код виджета
-├── Промпт.json         # Настройки бота
+├── prompt.json         # Настройки бота
 ├── package.json        # Зависимости проекта
 ├── vercel.json         # Конфигурация Vercel
 └── README.md           # Документация

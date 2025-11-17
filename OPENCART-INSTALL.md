@@ -10,7 +10,7 @@
 ### URL виджета:
 - **Widget JS**: `https://widget-nine-murex.vercel.app/widget.js`
 - **API Chat**: `https://widget-nine-murex.vercel.app/api/chat`
-- **Промпт**: `https://widget-nine-murex.vercel.app/Промпт.json`
+- **Промпт**: `https://widget-nine-murex.vercel.app/prompt.json`
 - **Google Apps Script**: `https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec`
 
 ---
@@ -259,7 +259,7 @@ https://widget-nine-murex.vercel.app/api/health
 
 ### Как изменить тексты бота:
 
-1. Откройте файл `Промпт.json` в репозитории
+1. Откройте файл `prompt.json` в репозитории
 2. Измените нужные секции
 3. Commit → push → обновления применятся сразу
 4. Очистите кеш OpenCart
@@ -316,4 +316,5 @@ https://widget-nine-murex.vercel.app/api/health
 ---
 
 **Готово!** Виджет должен работать стабильно на nm-shop.by 🎉
+
 

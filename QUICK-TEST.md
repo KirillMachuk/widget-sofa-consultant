@@ -42,3 +42,4 @@ catalog/view/theme/[ТЕМА]/template/common/header.twig
 
 **Готово!** После успешного теста замените код на полную версию из `opencart-integration-simple.txt` 🎉
 
+

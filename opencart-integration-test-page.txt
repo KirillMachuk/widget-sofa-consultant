@@ -13,42 +13,32 @@
   Подробная инструкция: см. TEST-SINGLE-PAGE.md или QUICK-TEST.md
 -->
 
-<link rel="preconnect" href="https://widget-nine-murex.vercel.app">
-<link rel="preconnect" href="https://api.openai.com">
+<link rel="preconnect" href="https://widget-nine-murex.vercel.app" crossorigin>
+<link rel="preconnect" href="https://api.openai.com" crossorigin>
 
 <script>
 (function() {
-  // Защита от двойной загрузки
   if (window.nmShopWidgetLoaded) return;
   
-  // ⚠️ ВАЖНО: URL страницы для тестирования
-  // Тестируем на странице: https://nm-shop.by/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/
-  
-  const TEST_PAGE_URL = '/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/';
-  
-  // Проверка: показывать виджет только на указанной странице
-  const currentPath = window.location.pathname + window.location.search;
-  const isTestPage = currentPath === TEST_PAGE_URL || 
-                     currentPath.startsWith(TEST_PAGE_URL) ||
-                     window.location.href.includes(TEST_PAGE_URL);
+  const TEST_PAGE_URL = '/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro';
+  const isTestPage = window.location.href.includes(TEST_PAGE_URL);
   
   if (!isTestPage) {
-    console.log('Chat widget: тестовая страница не совпадает, виджет не загружается');
-    return; // Не загружаем виджет на других страницах
+    console.log('[Widget] Not test page:', window.location.href);
+    return;
   }
   
-  console.log('Chat widget: загрузка на тестовой странице:', currentPath);
+  console.log('[Widget] Loaded on test page');
   window.nmShopWidgetLoaded = true;
   
-  var s = document.createElement('script');
+  const s = document.createElement('script');
   s.src = 'https://widget-nine-murex.vercel.app/widget.js?v=5.1.0';
   s.defer = true;
+  s.async = true;
   s.dataset.api = 'https://widget-nine-murex.vercel.app/api/chat';
-  s.dataset.prompt = 'https://widget-nine-murex.vercel.app/Промпт.json';
+  s.dataset.prompt = 'https://widget-nine-murex.vercel.app/prompt.json';
   s.dataset.gas = 'https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec';
-  s.onerror = function() { 
-    console.warn('Chat widget failed to load'); 
-  };
+  s.onerror = () => console.warn('[Widget] Failed to load widget.js');
   document.head.appendChild(s);
 })();
 </script>

@@ -24,13 +24,12 @@
 -->
 
 {# Preconnect для ускорения загрузки #}
-<link rel="preconnect" href="https://widget-nine-murex.vercel.app">
-<link rel="preconnect" href="https://api.openai.com">
+<link rel="preconnect" href="https://widget-nine-murex.vercel.app" crossorigin>
+<link rel="preconnect" href="https://api.openai.com" crossorigin>
 
 {# Chat Widget для nm-shop.by #}
 <script>
 (function() {
-  // Защита от двойной загрузки
   if (window.nmShopWidgetLoaded) return;
   window.nmShopWidgetLoaded = true;
   
@@ -40,15 +39,14 @@
   //   return; // не показывать на checkout и login
   // }
   
-  var s = document.createElement('script');
+  const s = document.createElement('script');
   s.src = 'https://widget-nine-murex.vercel.app/widget.js?v=5.1.0';
   s.defer = true;
+  s.async = true;
   s.dataset.api = 'https://widget-nine-murex.vercel.app/api/chat';
-  s.dataset.prompt = 'https://widget-nine-murex.vercel.app/Промпт.json';
+  s.dataset.prompt = 'https://widget-nine-murex.vercel.app/prompt.json';
   s.dataset.gas = 'https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec';
-  s.onerror = function() {
-    console.warn('Chat widget failed to load');
-  };
+  s.onerror = () => console.warn('[Widget] Failed to load widget.js');
   document.head.appendChild(s);
 })();
 </script>

@@ -1,0 +1,222 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8">
+    <title>Тест виджета widget-external.js</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+    <style>
+      /* Симуляция стилей сайта-хозяина для проверки изоляции */
+      body {
+        font-family: Comic Sans MS, cursive;
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4);
+        color: #333;
+        margin: 0;
+        padding: 20px;
+      }
+      
+      * {
+        box-sizing: content-box;
+        margin: 10px;
+        padding: 10px;
+      }
+      
+      button {
+        background: red !important;
+        color: yellow !important;
+        border: 5px solid blue !important;
+      }
+      
+      .test-content {
+        max-width: 800px;
+        margin: 0 auto;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 30px;
+        border-radius: 10px;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      }
+      
+      h1 {
+        color: #ff6b6b;
+        text-align: center;
+      }
+      
+      .test-section {
+        margin: 30px 0;
+        padding: 20px;
+        background: #f8f9fa;
+        border-radius: 8px;
+      }
+      
+      .test-section h2 {
+        color: #4ecdc4;
+        margin-bottom: 15px;
+      }
+      
+      .test-button {
+        background: #4ecdc4;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        margin: 10px 5px;
+      }
+      
+      .test-button:hover {
+        background: #45b8b0;
+      }
+      
+      .log {
+        background: #2d3436;
+        color: #00ff00;
+        padding: 15px;
+        border-radius: 5px;
+        font-family: monospace;
+        font-size: 12px;
+        max-height: 300px;
+        overflow-y: auto;
+        margin-top: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="test-content">
+      <h1>🧪 Тестирование widget-external.js</h1>
+      
+      <div class="test-section">
+        <h2>1. Проверка загрузки виджета</h2>
+        <p>Виджет должен загрузиться и отображаться в правом нижнем углу, несмотря на конфликтующие стили сайта.</p>
+        <div id="widget-status" style="padding: 10px; background: #e8f5e9; border-radius: 5px; margin-top: 10px;">
+          Ожидание загрузки виджета...
+        </div>
+      </div>
+      
+      <div class="test-section">
+        <h2>2. Тест интеграции с GAS</h2>
+        <p>Нажмите кнопку ниже, чтобы отправить тестовый лид в Google Sheets:</p>
+        <button class="test-button" onclick="testGASIntegration()">Отправить тестовый лид в GAS</button>
+        <div id="gas-result" style="margin-top: 10px;"></div>
+      </div>
+      
+      <div class="test-section">
+        <h2>3. Тест ответов от OpenAI</h2>
+        <p>Откройте виджет и отправьте вопрос: <strong>"какие есть диваны?"</strong></p>
+        <p>Проверьте, что бот отвечает корректно.</p>
+        <button class="test-button" onclick="openWidget()">Открыть виджет</button>
+      </div>
+      
+      <div class="test-section">
+        <h2>4. Лог событий</h2>
+        <div id="event-log" class="log">Логи будут отображаться здесь...</div>
+      </div>
+    </div>
+    
+    <script>
+      function log(message, type = 'info') {
+        const logEl = document.getElementById('event-log');
+        const timestamp = new Date().toLocaleTimeString();
+        const colors = {
+          info: '#00ff00',
+          error: '#ff0000',
+          success: '#00ff88',
+          warning: '#ffff00'
+        };
+        logEl.innerHTML += `<div style="color: ${colors[type] || colors.info}">[${timestamp}] ${message}</div>`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+      
+      // Проверка загрузки виджета
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          const widget = document.querySelector('.vfw-root');
+          if (widget) {
+            document.getElementById('widget-status').innerHTML = 
+              '<span style="color: green;">✅ Виджет загружен успешно!</span>';
+            log('Виджет загружен и отображается', 'success');
+          } else {
+            document.getElementById('widget-status').innerHTML = 
+              '<span style="color: red;">❌ Виджет не найден</span>';
+            log('Виджет не найден на странице', 'error');
+          }
+        }, 2000);
+      });
+      
+      // Тест интеграции с GAS
+      async function testGASIntegration() {
+        const resultEl = document.getElementById('gas-result');
+        resultEl.innerHTML = '<p style="color: blue;">Отправка тестового лида...</p>';
+        log('Начало теста GAS интеграции', 'info');
+        
+        try {
+          // Получаем базовый URL виджета
+          const widgetScript = Array.from(document.scripts).find(s => s.src.includes('widget-external'));
+          const widgetBaseUrl = widgetScript ? widgetScript.src.substring(0, widgetScript.src.lastIndexOf('/') + 1) : window.location.origin + '/';
+          const leadUrl = widgetBaseUrl + 'api/lead';
+          
+          log(`Используется URL: ${leadUrl}`, 'info');
+          
+          const response = await fetch(leadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              gas_url: 'https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec',
+              timestamp: new Date().toISOString(),
+              name: 'Тестовый пользователь',
+              phone: '+375291234567',
+              pretext: 'Тест интеграции widget-external.js',
+              page_url: window.location.href,
+              session_id: 'test_session_' + Date.now()
+            })
+          });
+          
+          const data = await response.json();
+          
+          if (response.ok && data.ok) {
+            resultEl.innerHTML = '<p style="color: green;">✅ Лид успешно отправлен в GAS!</p>';
+            log('Лид успешно отправлен в GAS', 'success');
+            log(`Ответ: ${JSON.stringify(data)}`, 'info');
+          } else {
+            resultEl.innerHTML = `<p style="color: red;">❌ Ошибка: ${data.error || 'Неизвестная ошибка'}</p>`;
+            log(`Ошибка отправки лида: ${data.error || 'Неизвестная ошибка'}`, 'error');
+          }
+        } catch (error) {
+          resultEl.innerHTML = `<p style="color: red;">❌ Ошибка: ${error.message}</p>`;
+          log(`Ошибка: ${error.message}`, 'error');
+        }
+      }
+      
+      // Открыть виджет
+      function openWidget() {
+        const widgetBtn = document.querySelector('.vfw-btn');
+        if (widgetBtn) {
+          widgetBtn.click();
+          log('Виджет открыт программно', 'info');
+        } else {
+          log('Кнопка виджета не найдена', 'error');
+        }
+      }
+      
+      // Логирование событий виджета
+      window.addEventListener('error', (e) => {
+        log(`Ошибка JavaScript: ${e.message}`, 'error');
+      });
+      
+      log('Тестовая страница загружена', 'success');
+    </script>
+    
+    <script>
+      (function(){
+        var s=document.createElement('script');
+        s.src='./widget-external.js?v=5.1.0';
+        s.defer=true;
+        s.dataset.prompt='./prompt.json';
+        s.dataset.gas='https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec';
+        document.head.appendChild(s);
+        console.log('Widget script added to page');
+      })();
+    </script>
+  </body>
+</html>
+
+

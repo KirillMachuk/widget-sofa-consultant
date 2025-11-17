@@ -77,7 +77,7 @@
       
       // Set default promptUrl if not provided
       if (!CONFIG.promptUrl) {
-        CONFIG.promptUrl = WIDGET_BASE_URL + 'Промпт.json';
+        CONFIG.promptUrl = WIDGET_BASE_URL + 'prompt.json';
       }
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;

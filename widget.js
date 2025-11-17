@@ -10,7 +10,7 @@
   const CONFIG = {
     openaiEndpoint: '/api/chat',
     leadEndpoint: '/api/lead',
-    promptUrl: './Промпт.json',
+    promptUrl: './prompt.json',
     triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
     brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 }
