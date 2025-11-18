@@ -150,9 +150,9 @@
     }
     
     .vfw-avatar-lg {
-      width: 76px;
-      height: 76px;
-      border: 2px solid rgba(255,255,255,0.3);
+      width: 80px !important;
+      height: 80px !important;
+      border: 2px solid rgba(255,255,255,0.3) !important;
     }
     
     .vfw-avatar-sm {
@@ -162,10 +162,16 @@
     }
     
     .vfw-avatar-img {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      display: block;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      display: block !important;
+    }
+    
+    .vfw-avatar-lg .vfw-avatar-img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
     }
     
     .vfw-avatar-fallback {
@@ -248,8 +254,8 @@
       }
       
       .vfw-avatar-lg {
-        width: 88px;
-        height: 88px;
+        width: 92px !important;
+        height: 92px !important;
       }
       
       .vfw-online-indicator {
@@ -288,8 +294,8 @@
       }
       
       .vfw-avatar-lg {
-        width: 82px;
-        height: 82px;
+        width: 84px !important;
+        height: 84px !important;
       }
     }
     
