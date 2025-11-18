@@ -108,10 +108,19 @@
       
       if (current.dataset.promptContent) CONFIG.promptContent = current.dataset.promptContent;
       
-      // Преобразуем относительные пути в абсолютные (если не заданы через dataset)
-      if (!current.dataset.prompt) CONFIG.promptUrl = resolveApiUrl(CONFIG.promptUrl);
-      if (!current.dataset.api) CONFIG.openaiEndpoint = resolveApiUrl(CONFIG.openaiEndpoint);
-      if (!current.dataset.lead) CONFIG.leadEndpoint = resolveApiUrl(CONFIG.leadEndpoint);
+      // Преобразуем относительные пути в абсолютные (всегда, даже если заданы через dataset)
+      // Это гарантирует, что на внешних сайтах всегда используются абсолютные URL
+      CONFIG.promptUrl = resolveApiUrl(CONFIG.promptUrl);
+      CONFIG.openaiEndpoint = resolveApiUrl(CONFIG.openaiEndpoint);
+      CONFIG.leadEndpoint = resolveApiUrl(CONFIG.leadEndpoint);
+      
+      if (DEBUG) {
+        console.log('[Widget] Resolved endpoints:', {
+          promptUrl: CONFIG.promptUrl,
+          openaiEndpoint: CONFIG.openaiEndpoint,
+          leadEndpoint: CONFIG.leadEndpoint
+        });
+      }
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
     }catch(e){}
@@ -1793,14 +1802,17 @@
 
   // Функция для retry запросов с таймаутом
   async function fetchWithRetry(url, options, maxRetries = 2) {
+    if (DEBUG) console.log('[Widget] fetchWithRetry: URL:', url, 'Method:', options?.method || 'GET');
     for (let i = 0; i < maxRetries; i++) {
       try {
         const res = await Promise.race([
           fetch(url, options),
           timeout(30000)
         ]);
+        if (DEBUG) console.log('[Widget] fetchWithRetry: Ответ получен, статус:', res.status, 'URL:', url);
         return res;
       } catch (error) {
+        if (DEBUG) console.error('[Widget] fetchWithRetry: Ошибка (попытка', i + 1, 'из', maxRetries, '):', error.message, 'URL:', url);
         if (i === maxRetries - 1) throw error;
         await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1))); // Экспоненциальная задержка
       }
@@ -2383,6 +2395,9 @@
     }
     
     const page_url = location.href;
+    if (DEBUG) console.log('[Widget] submitLead: Используем endpoint:', CONFIG.leadEndpoint);
+    if (DEBUG) console.log('[Widget] submitLead: Данные:', { name, phone, pretext, page_url, session_id: SESSION_ID });
+    
     try{
       // Use retry logic for lead submission too
       await fetchWithRetry(CONFIG.leadEndpoint, {
@@ -2411,6 +2426,10 @@
         addMsg('bot','Спасибо! Передам вашу заявку дизайнеру, он свяжется с вами для закрепления подарка.');
       }
     }catch(e){
+      console.error('[Widget] submitLead: Ошибка отправки лида:', e);
+      console.error('[Widget] submitLead: Использовался endpoint:', CONFIG.leadEndpoint);
+      console.error('[Widget] submitLead: Данные запроса:', { name, phone, pretext, page_url, session_id: SESSION_ID });
+      
       let errorMessage;
       if (e.message === 'Request timeout') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
@@ -2437,6 +2456,9 @@
     }
     
     const page_url = location.href;
+    if (DEBUG) console.log('[Widget] submitGiftLead: Используем endpoint:', CONFIG.leadEndpoint);
+    if (DEBUG) console.log('[Widget] submitGiftLead: Данные:', { name, phone, category, gift, messenger, wishes, page_url, session_id: SESSION_ID });
+    
     try{
       // Use retry logic for lead submission too
       await fetchWithRetry(CONFIG.leadEndpoint, {
@@ -2462,6 +2484,10 @@
       
       addMsg('bot','Спасибо! Дизайнер вышлет персональную подборку в мессенджер в самое ближайшее время.');
     }catch(e){
+      console.error('[Widget] submitGiftLead: Ошибка отправки лида:', e);
+      console.error('[Widget] submitGiftLead: Использовался endpoint:', CONFIG.leadEndpoint);
+      console.error('[Widget] submitGiftLead: Данные запроса:', { name, phone, category, gift, messenger, wishes, page_url, session_id: SESSION_ID });
+      
       let errorMessage;
       if (e.message === 'Request timeout') {
         errorMessage = 'Запрос выполняется слишком долго. Проверьте подключение к интернету.';
