@@ -24,7 +24,7 @@
         },
         {
           "key": "Access-Control-Allow-Headers",
-          "value": "Content-Type, Authorization, cache-control"
+          "value": "Content-Type, Authorization, cache-control, Pragma"
         }
       ]
     },

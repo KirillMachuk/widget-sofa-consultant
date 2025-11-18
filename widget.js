@@ -46,7 +46,30 @@
   const DEFAULT_AVATAR_URL = SCRIPT_BASE_URL
     ? `${SCRIPT_BASE_URL}images/consultant.jpg`
     : 'https://widget-nine-murex.vercel.app/images/consultant.jpg';
+  const DEFAULT_WIDGET_URL = 'https://widget-nine-murex.vercel.app';
   const DEBUG = Boolean(window.VFW_DEBUG);
+  
+  // Функция для преобразования относительных путей в абсолютные URL
+  function resolveApiUrl(path) {
+    if (!path) return path;
+    // Если уже абсолютный URL - возвращаем как есть
+    if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('//')) {
+      return path.startsWith('//') ? `https:${path}` : path;
+    }
+    // Определяем базовый URL и нормализуем его (убираем слэш в конце если есть)
+    let baseUrl = SCRIPT_BASE_URL || DEFAULT_WIDGET_URL;
+    baseUrl = baseUrl.replace(/\/$/, ''); // Убираем слэш в конце если есть
+    // Если путь начинается с / - это абсолютный путь от корня
+    if (path.startsWith('/')) {
+      return `${baseUrl}${path}`;
+    }
+    // Если путь начинается с ./ - убираем ./ и добавляем к базовому URL
+    if (path.startsWith('./')) {
+      return `${baseUrl}/${path.substring(2)}`;
+    }
+    // Иначе просто добавляем к базовому URL
+    return `${baseUrl}/${path}`;
+  }
   
   // Функция для получения абсолютного URL аватара
   function getAvatarUrl() {
@@ -84,6 +107,11 @@
       CONFIG.rightOffset = parsePixelValue(current.dataset.rightOffset) || CONFIG.rightOffset;
       
       if (current.dataset.promptContent) CONFIG.promptContent = current.dataset.promptContent;
+      
+      // Преобразуем относительные пути в абсолютные (если не заданы через dataset)
+      if (!current.dataset.prompt) CONFIG.promptUrl = resolveApiUrl(CONFIG.promptUrl);
+      if (!current.dataset.api) CONFIG.openaiEndpoint = resolveApiUrl(CONFIG.openaiEndpoint);
+      if (!current.dataset.lead) CONFIG.leadEndpoint = resolveApiUrl(CONFIG.leadEndpoint);
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
     }catch(e){}
@@ -1076,7 +1104,8 @@
   let pageViewTracked = false;
   function trackEvent(eventType) {
     // Отправляем событие асинхронно, не блокируя UI
-    fetch('./api/analytics', {
+    const analyticsUrl = resolveApiUrl('./api/analytics');
+    fetch(analyticsUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
