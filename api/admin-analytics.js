@@ -16,11 +16,15 @@ module.exports = async function handler(req, res) {
   }
   
   try {
-    // Получаем значения счетчиков из Redis
+    // Получаем параметр source из query string
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const source = url.searchParams.get('source') || 'test';
+    
+    // Получаем значения счетчиков из Redis для указанного источника
     const [pageViews, widgetOpens, formSubmits] = await Promise.all([
-      redisClient.get('analytics:page_view').catch(() => 0),
-      redisClient.get('analytics:widget_open').catch(() => 0),
-      redisClient.get('analytics:form_submit').catch(() => 0)
+      redisClient.get(`analytics:page_view:${source}`).catch(() => 0),
+      redisClient.get(`analytics:widget_open:${source}`).catch(() => 0),
+      redisClient.get(`analytics:form_submit:${source}`).catch(() => 0)
     ]);
     
     // Преобразуем в числа
@@ -39,6 +43,7 @@ module.exports = async function handler(req, res) {
     
     return res.status(200).json({
       success: true,
+      source: source,
       analytics: {
         pageViews: pageViewsCount,
         widgetOpens: widgetOpensCount,

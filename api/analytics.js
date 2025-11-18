@@ -4,6 +4,17 @@ const redisClient = require('../utils/redis-client');
 // Список допустимых типов событий
 const ALLOWED_EVENTS = ['page_view', 'widget_open', 'form_submit'];
 
+// Функция для определения источника из запроса
+function detectSource(req) {
+  // Пробуем получить из referer
+  const referer = req.headers.referer || req.headers.origin || '';
+  if (referer && referer.includes('nm-shop.by')) {
+    return 'nm-shop';
+  }
+  // По умолчанию 'test' для Vercel виджета
+  return 'test';
+}
+
 module.exports = async function handler(req, res) {
   // Add CORS headers
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -29,16 +40,20 @@ module.exports = async function handler(req, res) {
       });
     }
     
-    // Инкрементируем счетчик в Redis
-    const analyticsKey = `analytics:${event_type}`;
+    // Определяем источник из referer запроса
+    const source = detectSource(req);
+    
+    // Инкрементируем счетчик в Redis с учетом источника
+    const analyticsKey = `analytics:${event_type}:${source}`;
     
     try {
       // Используем INCR для атомарного инкремента
       // Если ключ не существует, INCR инициализирует его со значением 1
       const currentValue = await redisClient.incr(analyticsKey);
       
-      console.log(`Аналитика: ${event_type} инкрементирован`, {
+      console.log(`Аналитика: ${event_type} инкрементирован для источника ${source}`, {
         session_id,
+        source,
         newValue: currentValue,
         timestamp: new Date().toISOString()
       });

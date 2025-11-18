@@ -700,6 +700,7 @@
             localStorage.setItem('admin_source', source);
             updateSourceButtons();
             loadSessions();
+            loadAnalytics();
         }
 
         // Обновление состояния кнопок
@@ -896,7 +897,9 @@
         // Загрузка аналитики
         async function loadAnalytics() {
             try {
-                const response = await fetch('/api/admin-analytics');
+                const params = new URLSearchParams();
+                params.append('source', currentSource);
+                const response = await fetch(`/api/admin-analytics?${params.toString()}`);
                 const data = await response.json();
                 
                 if (data.success && data.analytics) {

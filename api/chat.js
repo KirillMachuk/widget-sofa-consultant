@@ -211,6 +211,17 @@ async function analyzeUserMessage(userMessage) {
   }
 }
 
+// Функция для определения источника из запроса
+function detectSource(req) {
+  // Пробуем получить из referer
+  const referer = req.headers.referer || req.headers.origin || '';
+  if (referer && referer.includes('nm-shop.by')) {
+    return 'nm-shop';
+  }
+  // По умолчанию 'test' для Vercel виджета
+  return 'test';
+}
+
 async function handler(req, res){
   // Add CORS headers for external domains
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -256,9 +267,9 @@ async function handler(req, res){
       try {
         const chatKey = `chat:${session_id}`;
         
-        // Определяем источник из запроса (можно добавить в body или определить по другим признакам)
-        // По умолчанию 'test', но можно определить по другим данным
-        const source = 'test'; // TODO: можно определить по referer или другим данным
+        // Определяем источник из referer запроса
+        const source = detectSource(req);
+        console.log('🔍 Определен источник сессии:', source, 'referer:', req.headers.referer || req.headers.origin || 'не указан');
         
         // Проверяем, существует ли сессия в Redis
         const existingSession = await redis.get(chatKey);
