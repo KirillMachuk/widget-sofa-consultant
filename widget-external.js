@@ -606,6 +606,22 @@
       align-items: flex-end;
     }
     
+    .vfw-typing .vfw-avatar {
+      width: 28px !important;
+      height: 28px !important;
+      border-radius: 50%;
+      overflow: hidden;
+      margin-right: 8px;
+      flex: 0 0 28px !important;
+      border: 1px solid rgba(17,17,17,.08);
+    }
+    
+    .vfw-typing .vfw-avatar img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    
     .vfw-typing .bubble {
       max-width: 78%;
       padding: 10px 12px;
@@ -1178,23 +1194,14 @@
     row.className='vfw-row';
     
     if (role==='bot'){
-      row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div><div class="bubble"></div></div>`;
+      row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="https://widget-nine-murex.vercel.app/images/consultant.jpg" alt="bot"></div><div class="bubble"></div></div>`;
     } else {
-      const initials = (CONFIG.avatarInitials || 'NM').toString().slice(0, 3).toUpperCase();
-      row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div><div class="vfw-avatar"><img class="vfw-avatar-img" alt="Пользователь"><span class="vfw-avatar-fallback" aria-hidden="true">${initials}</span></div></div>`;
+      row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div></div>`;
     }
     
     const safeText = escapeHtml(text);
     row.querySelector('.bubble').innerHTML = safeText;
     els.body.appendChild(row);
-    
-    // Применяем правильную загрузку аватара для сообщений пользователя
-    if (role === 'user') {
-      const avatarContainer = row.querySelector('.vfw-avatar');
-      if (avatarContainer) {
-        applyAvatarToContainer(avatarContainer);
-      }
-    }
     
     setTimeout(() => {
       const isAtBottom = els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 10;
@@ -1287,7 +1294,7 @@
     const typingRow = document.createElement('div');
     typingRow.className = 'vfw-typing';
     typingRow.innerHTML = `
-      <div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="https://widget-nine-murex.vercel.app/images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div class="vfw-typing-dots">
           <div class="vfw-typing-dot"></div>
@@ -1437,7 +1444,7 @@
     `).join('');
     
     wrap.innerHTML = `
-      <div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="https://widget-nine-murex.vercel.app/images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">Выберите подарок и оставьте контакты</div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
@@ -2284,7 +2291,7 @@
     }).join('');
     
     wrap.innerHTML = `
-      <div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div>
+      <div class="vfw-avatar"><img src="https://widget-nine-murex.vercel.app/images/consultant.jpg" alt="bot"></div>
       <div class="bubble">
         <div style="font-weight:600;margin-bottom:6px">${title}</div>
         <div style="display:flex;flex-direction:column;gap:4px;margin-top:8px">
