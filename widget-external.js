@@ -389,7 +389,7 @@
       margin: 16px 0;
     }
     
-    .vfw-avatar {
+    .vfw-msg .vfw-avatar {
       width: 28px;
       height: 28px;
       border-radius: 50%;
@@ -399,7 +399,7 @@
       border: 1px solid rgba(17,17,17,.08);
     }
     
-    .vfw-avatar img {
+    .vfw-msg .vfw-avatar img {
       width: 100%;
       height: 100%;
       object-fit: cover;
@@ -662,7 +662,9 @@
       display: block !important;
     }
     
-    .vfw-avatar-lg .vfw-avatar-img {
+    .vfw-avatar-lg .vfw-avatar-img,
+    #vfwBtnAvatar .vfw-avatar-img,
+    .vfw-btn .vfw-avatar-lg .vfw-avatar-img {
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
@@ -670,6 +672,8 @@
       border-radius: 50% !important;
       min-width: 100% !important;
       min-height: 100% !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
     }
     
     .vfw-avatar-fallback {
