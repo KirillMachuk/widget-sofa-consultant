@@ -9,6 +9,10 @@ async function saveContacts(sessionId, contacts) {
     console.log('💾 saveContacts: Сохраняем контакты для сессии:', sessionId);
     const chatKey = `chat:${sessionId}`;
     
+    // Определяем источник из page_url
+    const source = contacts.page_url && contacts.page_url.includes('nm-shop.by') ? 'nm-shop' : 'test';
+    const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
+    
     // Читаем существующую сессию
     let session = await redis.get(chatKey);
     console.log('💾 saveContacts: Сессия найдена:', !!session);
@@ -16,17 +20,34 @@ async function saveContacts(sessionId, contacts) {
     if (session) {
       console.log('💾 saveContacts: Текущие контакты:', session.contacts);
       session.contacts = contacts;
+      session.source = source; // Сохраняем источник
       session.lastUpdated = new Date().toISOString();
       
       // Сохраняем обратно в Redis
       await redis.set(chatKey, session);
       await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
-      console.log('✅ Контакты сохранены в Redis для сессии:', sessionId);
+      // Добавляем в соответствующий список сессий
+      await redis.sadd(sessionsListKey, sessionId);
+      console.log('✅ Контакты сохранены в Redis для сессии:', sessionId, 'источник:', source);
       console.log('✅ Сохраненные контакты:', contacts);
       return true;
+    } else {
+      // Создаем новую сессию если её нет
+      console.log('⚠️ Сессия не найдена, создаем новую с контактами');
+      session = {
+        sessionId: sessionId,
+        source: source,
+        contacts: contacts,
+        createdAt: new Date().toISOString(),
+        lastUpdated: new Date().toISOString(),
+        messages: []
+      };
+      await redis.set(chatKey, session);
+      await redis.expire(chatKey, 30 * 24 * 60 * 60);
+      await redis.sadd(sessionsListKey, sessionId);
+      console.log('✅ Новая сессия создана с контактами, источник:', source);
+      return true;
     }
-    console.warn('⚠️ Сессия не найдена в Redis для:', sessionId);
-    return false;
   } catch (error) {
     console.error('Ошибка сохранения контактов в Redis:', error);
     return false;
@@ -112,9 +133,16 @@ async function handler(req, res){
         
         if (responseData.ok || r.ok || r.status === 0) {
           console.log(`✅ Лид успешно отправлен в GAS (попытка ${attempt})`);
+          console.log('📊 Детали отправки:', {
+            status: r.status,
+            statusText: r.statusText,
+            responseData: responseData,
+            payload: { name, phone, category, gift, messenger }
+          });
           lastError = null; // Сброс ошибки при успехе
           break; // Выходим из цикла retry
         } else {
+          console.error('❌ GAS вернул ошибку:', { status: r.status, responseData });
           throw new Error(`GAS returned error: ${JSON.stringify(responseData)}`);
         }
         

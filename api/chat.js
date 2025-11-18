@@ -97,13 +97,18 @@ async function saveChat(sessionId, userMessage, botReply) {
     
     session.lastUpdated = new Date().toISOString();
     
+    // Определяем источник сессии (если не задан, используем 'test')
+    const source = session.source || 'test';
+    const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
+    
     // Сохраняем в Redis
     console.log('🔧 ПЕРЕД redis.set: messages.length =', session.messages.length);
+    session.source = source; // Убеждаемся что источник сохранен
     await redis.set(chatKey, session);
     await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
-    // Убеждаемся, что сессия добавлена в список сессий
-    await redis.sadd('sessions:list', sessionId);
-    console.log('✅ redis.set выполнен, сессия добавлена в sessions:list');
+    // Убеждаемся, что сессия добавлена в соответствующий список сессий
+    await redis.sadd(sessionsListKey, sessionId);
+    console.log('✅ redis.set выполнен, сессия добавлена в', sessionsListKey);
     
     // ПРОВЕРКА: читаем сразу после записи
     const verification = await redis.get(chatKey);
@@ -251,32 +256,39 @@ async function handler(req, res){
       try {
         const chatKey = `chat:${session_id}`;
         
+        // Определяем источник из запроса (можно добавить в body или определить по другим признакам)
+        // По умолчанию 'test', но можно определить по другим данным
+        const source = 'test'; // TODO: можно определить по referer или другим данным
+        
         // Проверяем, существует ли сессия в Redis
         const existingSession = await redis.get(chatKey);
+        const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
         
         if (existingSession) {
           // Сессия уже существует - только обновляем prompt и lastUpdated
           existingSession.prompt = prompt;
           existingSession.locale = locale || 'ru';
+          existingSession.source = existingSession.source || source; // Сохраняем источник если его нет
           existingSession.lastUpdated = sessionData.lastUpdated;
           await redis.set(chatKey, existingSession);
           await redis.expire(chatKey, 30 * 24 * 60 * 60); // Обновляем TTL
-          await redis.sadd('sessions:list', session_id); // Убеждаемся что сессия в списке
-          console.log('Сессия обновлена в Redis:', session_id);
+          await redis.sadd(sessionsListKey, session_id); // Убеждаемся что сессия в списке
+          console.log('Сессия обновлена в Redis:', session_id, 'источник:', existingSession.source);
         } else {
           // Новая сессия - создаем с пустыми сообщениями
           const redisSession = {
             sessionId: session_id,
             prompt,
             locale: locale || 'ru',
+            source: source,
             createdAt: sessionData.createdAt,
             lastUpdated: sessionData.lastUpdated,
             messages: []
           };
           await redis.set(chatKey, redisSession);
           await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
-          const addedToSet = await redis.sadd('sessions:list', session_id); // Добавляем в список сессий
-          console.log('Новая сессия создана в Redis:', session_id, 'Добавлена в sessions:list:', addedToSet > 0);
+          const addedToSet = await redis.sadd(sessionsListKey, session_id); // Добавляем в список сессий
+          console.log('Новая сессия создана в Redis:', session_id, 'источник:', source, 'Добавлена в sessions:list:', addedToSet > 0);
         }
       } catch (error) {
         console.error('Ошибка сохранения сессии в Redis при инициализации:', error);

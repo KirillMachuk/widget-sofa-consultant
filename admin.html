@@ -56,6 +56,40 @@
             background: #dc2626;
         }
 
+        .source-switcher {
+            display: flex;
+            gap: 8px;
+            background: #f1f5f9;
+            padding: 4px;
+            border-radius: 8px;
+        }
+
+        .source-btn {
+            background: transparent;
+            color: #64748b;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .source-btn:hover {
+            background: #e2e8f0;
+            color: #475569;
+        }
+
+        .source-btn.active {
+            background: #3b82f6;
+            color: white;
+        }
+
+        .source-btn.active:hover {
+            background: #2563eb;
+        }
+
         .filters {
             background: white;
             border-radius: 12px;
@@ -556,7 +590,13 @@
             <div class="container">
                 <div class="header">
                     <h1>Диалоги с ботом</h1>
-                    <button class="logout-btn" onclick="logout()">Выйти</button>
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <div class="source-switcher">
+                            <button id="source-test" class="source-btn active" onclick="switchSource('test')">Test</button>
+                            <button id="source-nm-shop" class="source-btn" onclick="switchSource('nm-shop')">nm-shop</button>
+                        </div>
+                        <button class="logout-btn" onclick="logout()">Выйти</button>
+                    </div>
                 </div>
 
                 <!-- Раздел аналитики -->
@@ -638,6 +678,7 @@
     <script>
         let currentToken = null;
         let currentSession = null;
+        let currentSource = localStorage.getItem('admin_source') || 'test'; // По умолчанию 'test'
 
         // Проверяем авторизацию при загрузке
         document.addEventListener('DOMContentLoaded', function() {
@@ -645,12 +686,27 @@
                 if (token) {
                 currentToken = token;
                 showAdminInterface();
+                updateSourceButtons();
                 loadSessions();
                 loadAnalytics();
             } else {
                 showLoginForm();
             }
         });
+
+        // Переключение источника
+        function switchSource(source) {
+            currentSource = source;
+            localStorage.setItem('admin_source', source);
+            updateSourceButtons();
+            loadSessions();
+        }
+
+        // Обновление состояния кнопок
+        function updateSourceButtons() {
+            document.getElementById('source-test').classList.toggle('active', currentSource === 'test');
+            document.getElementById('source-nm-shop').classList.toggle('active', currentSource === 'nm-shop');
+        }
 
         // Обработка формы входа
         document.getElementById('login').addEventListener('submit', async function(e) {
@@ -696,6 +752,9 @@
             const search = document.getElementById('search').value;
             
             const params = new URLSearchParams();
+            params.append('source', currentSource); // Добавляем источник
+            params.append('limit', '100'); // Пагинация
+            params.append('offset', '0');
             if (dateFrom) params.append('dateFrom', dateFrom);
             if (dateTo) params.append('dateTo', dateTo);
             if (hasContacts) params.append('hasContacts', hasContacts);

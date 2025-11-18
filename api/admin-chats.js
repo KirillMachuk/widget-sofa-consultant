@@ -2,46 +2,68 @@
 const redisClient = require('../utils/redis-client');
 
 // Читаем все чаты из Redis используя список сессий из SET
-async function readChats() {
+async function readChats(source = 'test', limit = 100, offset = 0) {
   try {
-    console.log('🔍 Получаем список сессий из Redis SET...');
+    console.log('🔍 Получаем список сессий из Redis SET для источника:', source);
+    
+    // Используем разные ключи для разных источников
+    const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
     
     // Получаем список ID сессий из Redis SET
-    let sessionIds = await redisClient.smembers('sessions:list');
-    console.log(`Найдено ID сессий в SET: ${sessionIds ? sessionIds.length : 0}`);
+    let sessionIds = await redisClient.smembers(sessionsListKey);
+    console.log(`Найдено ID сессий в SET (${sessionsListKey}): ${sessionIds ? sessionIds.length : 0}`);
     
-    // Если SET пустой, пытаемся использовать KEYS как fallback (миграция)
+    // Если SET пустой, пытаемся использовать старый sessions:list или KEYS как fallback (миграция)
     if (!sessionIds || sessionIds.length === 0) {
-      console.log('SET пустой, пытаемся получить ключи через KEYS...');
+      console.log('SET пустой, пытаемся использовать старый sessions:list...');
       try {
-        const keys = await redisClient.keys('chat:*');
-        if (keys && keys.length > 0) {
-          console.log(`Найдено ключей через KEYS: ${keys.length}`);
-          // Извлекаем session IDs из ключей
-          sessionIds = keys.map(key => key.replace('chat:', ''));
-          // Попытка заполнить SET (не блокируем если не получится)
-          if (sessionIds.length > 0) {
-            redisClient.sadd('sessions:list', ...sessionIds).catch(err => {
-              console.warn('Не удалось заполнить SET:', err.message);
+        // Пробуем старый ключ sessions:list
+        sessionIds = await redisClient.smembers('sessions:list');
+        if (sessionIds && sessionIds.length > 0) {
+          console.log(`Найдено сессий в старом sessions:list: ${sessionIds.length}`);
+          // Мигрируем в новый ключ
+          if (source === 'test') {
+            redisClient.sadd(sessionsListKey, ...sessionIds).catch(err => {
+              console.warn('Не удалось мигрировать в новый SET:', err.message);
             });
           }
+        } else {
+          // Если и старый пустой, пробуем KEYS
+          console.log('Старый SET тоже пустой, пытаемся получить ключи через KEYS...');
+          const keys = await redisClient.keys('chat:*');
+          if (keys && keys.length > 0) {
+            console.log(`Найдено ключей через KEYS: ${keys.length}`);
+            // Извлекаем session IDs из ключей
+            sessionIds = keys.map(key => key.replace('chat:', ''));
+            // Попытка заполнить SET (не блокируем если не получится)
+            if (sessionIds.length > 0) {
+              redisClient.sadd(sessionsListKey, ...sessionIds).catch(err => {
+                console.warn('Не удалось заполнить SET:', err.message);
+              });
+            }
+          }
         }
-      } catch (keysError) {
-        console.error('KEYS тоже не работает:', keysError.message);
-        return [];
+      } catch (error) {
+        console.error('Ошибка при fallback:', error.message);
+        return { sessions: [], total: 0 };
       }
     }
     
     if (!sessionIds || sessionIds.length === 0) {
       console.log('Нет сессий, возвращаем пустой массив');
-      return [];
+      return { sessions: [], total: 0 };
     }
     
-    // Формируем ключи для получения данных сессий
-    const keys = sessionIds.map(id => `chat:${id}`);
-    console.log('Ключи для mget:', keys);
+    // Применяем пагинацию
+    const total = sessionIds.length;
+    const paginatedIds = sessionIds.slice(offset, offset + limit);
+    console.log(`Пагинация: показываем ${paginatedIds.length} из ${total} (offset: ${offset}, limit: ${limit})`);
     
-    // Читаем все сессии одним запросом
+    // Формируем ключи для получения данных сессий
+    const keys = paginatedIds.map(id => `chat:${id}`);
+    console.log('Ключи для mget:', keys.length);
+    
+    // Читаем сессии порциями
     const sessions = await redisClient.mget(...keys);
     console.log('Результат mget (кол-во элементов):', sessions ? sessions.length : 0);
     const validSessions = sessions.filter(session => session !== null);
@@ -88,11 +110,11 @@ async function readChats() {
       }
     }
     
-    return validSessions;
+    return { sessions: validSessions, total };
   } catch (error) {
     console.error('❌ Ошибка чтения чатов из Redis:', error);
     console.error('Stack:', error.stack);
-    return [];
+    return { sessions: [], total: 0 };
   }
 }
 
@@ -113,9 +135,17 @@ module.exports = async function handler(req, res) {
   try {
     console.log('Запрос к admin-chats:', req.method, req.url);
     
-    // Читаем реальные данные из Redis
-    const chats = await readChats();
-    console.log('Найдено чатов в Redis:', chats.length);
+    // Получаем параметры запроса
+    const url = new URL(req.url, `http://${req.headers.host}`);
+    const source = url.searchParams.get('source') || 'test'; // По умолчанию 'test'
+    const limit = parseInt(url.searchParams.get('limit') || '100', 10);
+    const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+    
+    console.log('Параметры запроса:', { source, limit, offset });
+    
+    // Читаем реальные данные из Redis с пагинацией
+    const { sessions: chats, total } = await readChats(source, limit, offset);
+    console.log('Найдено чатов в Redis:', chats.length, 'из', total);
     
     // Форматируем данные для фронтенда
     const formattedSessions = chats.map(session => ({
@@ -155,7 +185,10 @@ module.exports = async function handler(req, res) {
     return res.status(200).json({
       success: true,
       sessions: sessionsWithData,
-      total: sessionsWithData.length
+      total: total,
+      limit: limit,
+      offset: offset,
+      hasMore: offset + limit < total
     });
     
   } catch (error) {
