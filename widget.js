@@ -153,6 +153,8 @@
       width: 80px !important;
       height: 80px !important;
       border: 2px solid rgba(255,255,255,0.3) !important;
+      border-radius: 50% !important;
+      overflow: hidden !important;
     }
     
     .vfw-avatar-sm {
@@ -172,6 +174,10 @@
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
+      object-position: center !important;
+      border-radius: 50% !important;
+      min-width: 100% !important;
+      min-height: 100% !important;
     }
     
     .vfw-avatar-fallback {
@@ -256,6 +262,8 @@
       .vfw-avatar-lg {
         width: 92px !important;
         height: 92px !important;
+        border-radius: 50% !important;
+        overflow: hidden !important;
       }
       
       .vfw-online-indicator {
@@ -296,6 +304,8 @@
       .vfw-avatar-lg {
         width: 84px !important;
         height: 84px !important;
+        border-radius: 50% !important;
+        overflow: hidden !important;
       }
     }
     
