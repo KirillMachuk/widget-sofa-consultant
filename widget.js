@@ -155,6 +155,7 @@
       border: none !important;
       border-radius: 50% !important;
       overflow: hidden !important;
+      position: relative !important;
     }
     
     .vfw-avatar-sm {
@@ -176,12 +177,18 @@
       width: 100% !important;
       height: 100% !important;
       object-fit: cover !important;
-      object-position: center !important;
+      object-position: center center !important;
       border-radius: 50% !important;
       min-width: 100% !important;
       min-height: 100% !important;
-      max-width: 100% !important;
-      max-height: 100% !important;
+      max-width: none !important;
+      max-height: none !important;
+      display: block !important;
+      position: absolute !important;
+      top: 0 !important;
+      left: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
     }
     
     .vfw-avatar-fallback {
