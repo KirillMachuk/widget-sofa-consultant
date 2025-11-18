@@ -269,8 +269,15 @@
       .vfw-avatar-lg {
         width: 96px !important;
         height: 96px !important;
+        min-width: 96px !important;
+        min-height: 96px !important;
+        max-width: 96px !important;
+        max-height: 96px !important;
         border-radius: 50% !important;
         overflow: hidden !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
       }
       
       .vfw-online-indicator {
@@ -311,8 +318,15 @@
       .vfw-avatar-lg {
         width: 88px !important;
         height: 88px !important;
+        min-width: 88px !important;
+        min-height: 88px !important;
+        max-width: 88px !important;
+        max-height: 88px !important;
         border-radius: 50% !important;
         overflow: hidden !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        box-sizing: border-box !important;
       }
     }
     
@@ -644,10 +658,19 @@
     .vfw-avatar-lg {
       width: 84px !important;
       height: 84px !important;
+      min-width: 84px !important;
+      min-height: 84px !important;
+      max-width: 84px !important;
+      max-height: 84px !important;
       border: none !important;
       border-radius: 50% !important;
       overflow: hidden !important;
       position: relative !important;
+      display: block !important;
+      padding: 0 !important;
+      margin: 0 !important;
+      box-sizing: border-box !important;
+      flex-shrink: 0 !important;
     }
     
     .vfw-avatar-sm {
@@ -673,14 +696,17 @@
       border-radius: 50% !important;
       min-width: 100% !important;
       min-height: 100% !important;
-      max-width: none !important;
-      max-height: none !important;
+      max-width: 100% !important;
+      max-height: 100% !important;
       display: block !important;
       position: absolute !important;
       top: 0 !important;
       left: 0 !important;
       right: 0 !important;
       bottom: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      box-sizing: border-box !important;
     }
     
     .vfw-avatar-fallback {
