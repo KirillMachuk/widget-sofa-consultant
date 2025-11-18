@@ -194,7 +194,7 @@
       box-shadow: 0 6px 24px rgba(0,0,0,.16) !important;
       cursor: pointer !important;
       transition: transform .12s ease !important;
-      border: none !important;
+      border: 3px solid #000 !important;
       touch-action: manipulation !important;
       margin: 0 !important;
       padding: 0 !important;

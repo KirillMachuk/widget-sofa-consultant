@@ -135,7 +135,7 @@
       box-shadow: 0 6px 24px rgba(0,0,0,.16);
       cursor: pointer;
       transition: transform .12s ease;
-      border: none;
+      border: 3px solid #000;
       touch-action: manipulation;
     }
     
