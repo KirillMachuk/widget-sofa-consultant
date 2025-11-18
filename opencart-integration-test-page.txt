@@ -38,6 +38,11 @@
   s.dataset.api = 'https://widget-nine-murex.vercel.app/api/chat';
   s.dataset.prompt = 'https://widget-nine-murex.vercel.app/prompt.json';
   s.dataset.gas = 'https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec';
+  // Необязательно: кастомный аватар и отступы
+  // s.dataset.avatar = 'https://nm-shop.by/image/catalog/avatar.jpg';
+  // s.dataset.avatarInitials = 'NM';
+  // s.dataset.bottomOffset = '90';
+  // s.dataset.rightOffset = '20';
   s.onerror = () => console.warn('[Widget] Failed to load widget.js');
   document.head.appendChild(s);
 })();

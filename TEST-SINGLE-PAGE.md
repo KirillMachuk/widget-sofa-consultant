@@ -29,6 +29,11 @@
 3. Скопируйте весь код из `opencart-integration-test-page.txt`
 4. Вставьте в `header.twig` **перед** `</head>`
 5. Сохраните файл и загрузите обратно на сервер
+6. (Необязательно) Укажите свои настройки:
+   - `data-avatar="https://nm-shop.by/image/catalog/avatar.jpg"`
+   - `data-avatar-initials="NM"`
+   - `data-bottom-offset="90"` (если на сайте есть нижнее меню)
+   - `data-right-offset="20"`
 
 **Код уже содержит правильный URL:**
 ```javascript

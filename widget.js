@@ -13,8 +13,39 @@
     promptUrl: './prompt.json',
     triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
-    brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 }
+    brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 },
+    avatarUrl: null,
+    avatarInitials: 'NM',
+    bottomOffset: null,
+    rightOffset: null
   };
+  
+  function parsePixelValue(val){
+    if (val === undefined || val === null) return null;
+    if (typeof val === 'number') return `${val}px`;
+    const trimmed = `${val}`.trim();
+    if (!trimmed) return null;
+    if (/px|%|vh|vw|rem|em/.test(trimmed)) return trimmed;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? `${num}px` : null;
+  }
+  
+  function getScriptBaseUrl(){
+    try{
+      const currentScript = document.currentScript || Array.from(document.scripts).slice(-1)[0];
+      if (!currentScript || !currentScript.src) return '';
+      const url = new URL(currentScript.src);
+      return url.origin + url.pathname.substring(0, url.pathname.lastIndexOf('/') + 1);
+    }catch(e){
+      if (DEBUG) console.warn('Failed to resolve script base URL:', e);
+      return '';
+    }
+  }
+  
+  const SCRIPT_BASE_URL = getScriptBaseUrl();
+  const DEFAULT_AVATAR_URL = SCRIPT_BASE_URL
+    ? `${SCRIPT_BASE_URL}images/consultant.jpg`
+    : 'https://widget-nine-murex.vercel.app/images/consultant.jpg';
   const DEBUG = Boolean(window.VFW_DEBUG);
 
   // Read configuration from script dataset
@@ -25,12 +56,24 @@
       CONFIG.promptUrl = current.dataset.prompt || CONFIG.promptUrl;
       if (current.dataset.api) CONFIG.openaiEndpoint = current.dataset.api;
       if (current.dataset.lead) CONFIG.leadEndpoint = current.dataset.lead;
+      if (current.dataset.avatar) CONFIG.avatarUrl = current.dataset.avatar;
+      if (!CONFIG.avatarUrl) CONFIG.avatarUrl = DEFAULT_AVATAR_URL;
+      CONFIG.avatarInitials = (current.dataset.avatarInitials || CONFIG.avatarInitials || 'NM')
+        .toString()
+        .slice(0, 3)
+        .toUpperCase();
+      CONFIG.bottomOffset = parsePixelValue(current.dataset.bottomOffset) || CONFIG.bottomOffset;
+      CONFIG.rightOffset = parsePixelValue(current.dataset.rightOffset) || CONFIG.rightOffset;
       
       if (current.dataset.promptContent) CONFIG.promptContent = current.dataset.promptContent;
       
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
     }catch(e){}
   })();
+  
+  if (!CONFIG.avatarUrl) {
+    CONFIG.avatarUrl = DEFAULT_AVATAR_URL;
+  }
 
   function getOrSetSessionId(){
     const key='vf_session_id';
@@ -74,8 +117,8 @@
     /* Основные стили виджета */
     .vfw-root {
       position: fixed;
-      right: 60px;
-      bottom: 60px;
+      right: var(--vfw-right-offset, 60px);
+      bottom: var(--vfw-bottom-offset, 60px);
       z-index: 999999;
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial;
     }
@@ -94,6 +137,50 @@
       transition: transform .12s ease;
       border: none;
       touch-action: manipulation;
+    }
+    
+    .vfw-avatar {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      overflow: hidden;
+      background: #f4f4f4;
+    }
+    
+    .vfw-avatar-lg {
+      width: 64px;
+      height: 64px;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+    
+    .vfw-avatar-sm {
+      width: 28px;
+      height: 28px;
+      border: 1px solid rgba(17,17,17,.1);
+    }
+    
+    .vfw-avatar-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+    
+    .vfw-avatar-fallback {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: #fff;
+      background: ${CONFIG.brand.accent};
+    }
+    
+    .vfw-avatar.has-fallback .vfw-avatar-fallback {
+      display: flex;
     }
     
     .vfw-btn:hover {
@@ -150,8 +237,8 @@
     /* Мобильные стили */
     @media (max-width: 768px) {
       .vfw-root {
-        right: 20px;
-        bottom: 20px;
+        right: var(--vfw-right-offset-mobile, 20px);
+        bottom: var(--vfw-bottom-offset-mobile, 20px);
       }
       
       .vfw-btn {
@@ -186,8 +273,8 @@
     
     @media (max-width: 480px) {
       .vfw-root {
-        right: 16px;
-        bottom: 16px;
+        right: var(--vfw-right-offset-mobile, 16px);
+        bottom: var(--vfw-bottom-offset-mobile, 16px);
       }
       
       .vfw-btn {
@@ -493,8 +580,8 @@
     /* Всплывающие подсказки */
     .vfw-hints {
       position: fixed;
-      right: 60px;
-      bottom: 160px;
+      right: var(--vfw-hint-right, 60px);
+      bottom: var(--vfw-hint-bottom, 160px);
       display: none;
       flex-direction: column;
       gap: 20px;
@@ -568,18 +655,6 @@
         max-width: calc(100vw - 80px);
         min-width: 200px;
       }
-      
-      .vfw-hints {
-        right: 20px;
-        bottom: 140px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .vfw-hints {
-        right: 16px;
-        bottom: 120px;
-      }
     }
     
     /* Предотвращение zoom на iOS */
@@ -617,7 +692,10 @@
   root.className = 'vfw-root';
   root.innerHTML = `
     <button class="vfw-btn" id="vfwBtn" aria-label="Открыть чат" style="position:relative">
-      <img src="./images/consultant.jpg" alt="Консультант" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);">
+      <span class="vfw-avatar vfw-avatar-lg" id="vfwBtnAvatar">
+        <img class="vfw-avatar-img" alt="Консультант">
+        <span class="vfw-avatar-fallback" aria-hidden="true">NM</span>
+      </span>
       <span class="vfw-online-indicator"></span>
     </button>
     <div class="vfw-hints" id="vfwHints">
@@ -633,7 +711,10 @@
     <div class="vfw-panel" id="vfwPanel" role="dialog" aria-modal="true">
       <div class="vfw-header">
         <div style="display:flex;align-items:center;gap:10px">
-          <img src="./images/consultant.jpg" alt="Аватар" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid rgba(17,17,17,.1)">
+          <span class="vfw-avatar vfw-avatar-sm">
+            <img class="vfw-avatar-img" alt="Аватар">
+            <span class="vfw-avatar-fallback" aria-hidden="true">NM</span>
+          </span>
           <div class="vfw-title">Евгений, ваш консультант</div>
         </div>
         <div class="vfw-actions">
@@ -666,6 +747,15 @@
     </div>
   `;
   document.body.appendChild(root);
+  
+  if (CONFIG.bottomOffset) {
+    root.style.setProperty('--vfw-bottom-offset', CONFIG.bottomOffset);
+    root.style.setProperty('--vfw-bottom-offset-mobile', CONFIG.bottomOffset);
+  }
+  if (CONFIG.rightOffset) {
+    root.style.setProperty('--vfw-right-offset', CONFIG.rightOffset);
+    root.style.setProperty('--vfw-right-offset-mobile', CONFIG.rightOffset);
+  }
   
   function updateVH() {
     const vh = window.innerHeight * 0.01;
@@ -826,6 +916,57 @@
     hintSingle: root.querySelector('#vfwHintSingle'),
     hintClose: root.querySelector('#vfwHintClose')
   };
+
+  initAvatarImages();
+  updateHintPosition();
+  window.addEventListener('resize', handleWidgetResize, { passive: true });
+  
+  function initAvatarImages(){
+    const containers = root.querySelectorAll('.vfw-avatar');
+    containers.forEach(container => {
+      applyAvatarToContainer(container);
+    });
+  }
+  
+  function applyAvatarToContainer(container){
+    const img = container.querySelector('.vfw-avatar-img');
+    const fallback = container.querySelector('.vfw-avatar-fallback');
+    if (fallback) fallback.textContent = CONFIG.avatarInitials;
+    
+    const showFallback = () => {
+      container.classList.add('has-fallback');
+      if (fallback) fallback.textContent = CONFIG.avatarInitials;
+    };
+    
+    if (!img) {
+      showFallback();
+      return;
+    }
+    
+    img.addEventListener('error', showFallback, { once: true });
+    img.addEventListener('load', () => container.classList.remove('has-fallback'));
+    
+    if (CONFIG.avatarUrl) {
+      img.src = CONFIG.avatarUrl;
+    } else {
+      showFallback();
+    }
+  }
+  
+  let resizeRaf = null;
+  function handleWidgetResize(){
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(updateHintPosition);
+  }
+  
+  function updateHintPosition(){
+    if (!els.btn || !els.hints) return;
+    const rect = els.btn.getBoundingClientRect();
+    const rightOffset = Math.max(16, window.innerWidth - rect.right + 16);
+    const bottomOffset = Math.max(16, window.innerHeight - rect.top + 20);
+    els.hints.style.setProperty('--vfw-hint-right', `${rightOffset}px`);
+    els.hints.style.setProperty('--vfw-hint-bottom', `${bottomOffset}px`);
+  }
 
   // Функция для трекинга аналитических событий
   let pageViewTracked = false;
@@ -1386,6 +1527,7 @@
       }
     }
     
+    updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
     }, 100);
@@ -1408,6 +1550,7 @@
       }
     }
     
+    updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
     }, 100);
@@ -1430,6 +1573,7 @@
       }
     }
     
+    updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
     }, 100);

@@ -13,7 +13,11 @@
     promptUrl: null, // Will be set from dataset or default
     triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
-    brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 }
+    brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 },
+    avatarUrl: null,
+    avatarInitials: 'NM',
+    bottomOffset: null,
+    rightOffset: null
   };
   const DEBUG = Boolean(window.VFW_DEBUG);
 
@@ -33,6 +37,16 @@
   }
   
   const WIDGET_BASE_URL = getWidgetBaseUrl();
+  function parsePixelValue(val){
+    if (val === undefined || val === null) return null;
+    if (typeof val === 'number') return `${val}px`;
+    const trimmed = `${val}`.trim();
+    if (!trimmed) return null;
+    if (/px|%|vh|vw|rem|em/.test(trimmed)) return trimmed;
+    const num = Number(trimmed);
+    return Number.isFinite(num) ? `${num}px` : null;
+  }
+  const DEFAULT_AVATAR_URL = (WIDGET_BASE_URL || 'https://widget-nine-murex.vercel.app/') + 'images/consultant.jpg';
 
   // Read configuration from script dataset
   (function(){
@@ -72,6 +86,23 @@
       } else {
         CONFIG.leadEndpoint = WIDGET_BASE_URL + 'api/lead';
       }
+      if (current.dataset.avatar) {
+        let avatarUrl = current.dataset.avatar;
+        if (avatarUrl.startsWith('./')) {
+          avatarUrl = WIDGET_BASE_URL + avatarUrl.substring(2);
+        } else if (!avatarUrl.startsWith('http')) {
+          avatarUrl = WIDGET_BASE_URL + avatarUrl;
+        }
+        CONFIG.avatarUrl = avatarUrl;
+      } else {
+        CONFIG.avatarUrl = DEFAULT_AVATAR_URL;
+      }
+      CONFIG.avatarInitials = (current.dataset.avatarInitials || CONFIG.avatarInitials || 'NM')
+        .toString()
+        .slice(0, 3)
+        .toUpperCase();
+      CONFIG.bottomOffset = parsePixelValue(current.dataset.bottomOffset) || CONFIG.bottomOffset;
+      CONFIG.rightOffset = parsePixelValue(current.dataset.rightOffset) || CONFIG.rightOffset;
       
       if (current.dataset.promptContent) CONFIG.promptContent = current.dataset.promptContent;
       
@@ -83,6 +114,10 @@
       if (CONFIG.promptUrl && !CONFIG.promptUrl.includes('v=')) CONFIG.promptUrl += '?v=' + WIDGET_VERSION;
     }catch(e){}
   })();
+  
+  if (!CONFIG.avatarUrl) {
+    CONFIG.avatarUrl = DEFAULT_AVATAR_URL;
+  }
 
   // FIXED: Generate unique session_id including origin to prevent conflicts between different sites
   function getOrSetSessionId(){
@@ -138,12 +173,12 @@
     
     /* Основные стили виджета с изоляцией */
     .vfw-root {
+      all: initial;
       position: fixed !important;
-      right: 60px !important;
-      bottom: 60px !important;
+      right: var(--vfw-right-offset, 60px) !important;
+      bottom: var(--vfw-bottom-offset, 60px) !important;
       z-index: 999999 !important;
       font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif !important;
-      all: initial;
       display: block !important;
     }
     
@@ -221,8 +256,8 @@
     /* Мобильные стили */
     @media (max-width: 768px) {
       .vfw-root {
-        right: 20px;
-        bottom: 20px;
+        right: var(--vfw-right-offset-mobile, 20px) !important;
+        bottom: var(--vfw-bottom-offset-mobile, 20px) !important;
       }
       
       .vfw-btn {
@@ -257,8 +292,8 @@
     
     @media (max-width: 480px) {
       .vfw-root {
-        right: 16px;
-        bottom: 16px;
+        right: var(--vfw-right-offset-mobile, 16px) !important;
+        bottom: var(--vfw-bottom-offset-mobile, 16px) !important;
       }
       
       .vfw-btn {
@@ -563,13 +598,13 @@
     
     /* Всплывающие подсказки */
     .vfw-hints {
-      position: fixed;
-      right: 60px;
-      bottom: 160px;
+      position: fixed !important;
+      right: var(--vfw-hint-right, 60px) !important;
+      bottom: var(--vfw-hint-bottom, 160px) !important;
       display: none;
       flex-direction: column;
       gap: 20px;
-      z-index: 999998;
+      z-index: 999998 !important;
       align-items: flex-end;
       opacity: 0;
       transform: translateY(30px);
@@ -580,6 +615,50 @@
       display: flex;
       opacity: 1;
       transform: translateY(0);
+    }
+
+    .vfw-avatar {
+      position: relative !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      border-radius: 50% !important;
+      overflow: hidden !important;
+      background: #f4f4f4 !important;
+    }
+    
+    .vfw-avatar-lg {
+      width: 64px !important;
+      height: 64px !important;
+      border: 2px solid rgba(255,255,255,0.3) !important;
+    }
+    
+    .vfw-avatar-sm {
+      width: 28px !important;
+      height: 28px !important;
+      border: 1px solid rgba(17,17,17,.1) !important;
+    }
+    
+    .vfw-avatar-img {
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+      display: block !important;
+    }
+    
+    .vfw-avatar-fallback {
+      position: absolute !important;
+      inset: 0 !important;
+      display: none !important;
+      align-items: center !important;
+      justify-content: center !important;
+      font-weight: 600 !important;
+      color: #fff !important;
+      background: ${CONFIG.brand.accent} !important;
+    }
+    
+    .vfw-avatar.has-fallback .vfw-avatar-fallback {
+      display: flex !important;
     }
     
     .vfw-hint {
@@ -639,18 +718,6 @@
         max-width: calc(100vw - 80px);
         min-width: 200px;
       }
-      
-      .vfw-hints {
-        right: 20px;
-        bottom: 140px;
-      }
-    }
-    
-    @media (max-width: 480px) {
-      .vfw-hints {
-        right: 16px;
-        bottom: 120px;
-      }
     }
     
     /* Предотвращение zoom на iOS */
@@ -688,7 +755,10 @@
   root.className = 'vfw-root';
   root.innerHTML = `
     <button class="vfw-btn" id="vfwBtn" aria-label="Открыть чат" style="position:relative">
-      <img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="Консультант" style="width:64px;height:64px;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);">
+      <span class="vfw-avatar vfw-avatar-lg" id="vfwBtnAvatar">
+        <img class="vfw-avatar-img" alt="Консультант">
+        <span class="vfw-avatar-fallback" aria-hidden="true">NM</span>
+      </span>
       <span class="vfw-online-indicator"></span>
     </button>
     <div class="vfw-hints" id="vfwHints">
@@ -704,7 +774,10 @@
     <div class="vfw-panel" id="vfwPanel" role="dialog" aria-modal="true">
       <div class="vfw-header">
         <div style="display:flex;align-items:center;gap:10px">
-          <img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="Аватар" style="width:28px;height:28px;border-radius:50%;object-fit:cover;border:1px solid rgba(17,17,17,.1)">
+          <span class="vfw-avatar vfw-avatar-sm">
+            <img class="vfw-avatar-img" alt="Аватар">
+            <span class="vfw-avatar-fallback" aria-hidden="true">NM</span>
+          </span>
           <div class="vfw-title">Евгений, ваш консультант</div>
         </div>
         <div class="vfw-actions">
@@ -737,6 +810,15 @@
     </div>
   `;
   document.body.appendChild(root);
+  
+  if (CONFIG.bottomOffset) {
+    root.style.setProperty('--vfw-bottom-offset', CONFIG.bottomOffset);
+    root.style.setProperty('--vfw-bottom-offset-mobile', CONFIG.bottomOffset);
+  }
+  if (CONFIG.rightOffset) {
+    root.style.setProperty('--vfw-right-offset', CONFIG.rightOffset);
+    root.style.setProperty('--vfw-right-offset-mobile', CONFIG.rightOffset);
+  }
   
   function updateVH() {
     const vh = window.innerHeight * 0.01;
@@ -897,6 +979,63 @@
     hintSingle: root.querySelector('#vfwHintSingle'),
     hintClose: root.querySelector('#vfwHintClose')
   };
+
+  initAvatarImages();
+  updateHintPosition();
+  window.addEventListener('resize', handleWidgetResize, { passive: true });
+
+  function initAvatarImages(){
+    const containers = root.querySelectorAll('.vfw-avatar');
+    containers.forEach(container => {
+      applyAvatarToContainer(container);
+    });
+  }
+
+  function applyAvatarToContainer(container){
+    const img = container.querySelector('.vfw-avatar-img');
+    const fallbackEl = container.querySelector('.vfw-avatar-fallback');
+    const initials = (CONFIG.avatarInitials || 'NM').toString().slice(0, 3).toUpperCase();
+    if (fallbackEl) fallbackEl.textContent = initials;
+
+    const showFallback = () => {
+      container.classList.add('has-fallback');
+      if (fallbackEl) fallbackEl.textContent = initials;
+    };
+
+    if (!img) {
+      showFallback();
+      return;
+    }
+
+    img.addEventListener('error', showFallback, { once: true });
+    img.addEventListener('load', () => container.classList.remove('has-fallback'));
+
+    const avatarSrc = CONFIG.avatarUrl || DEFAULT_AVATAR_URL;
+    if (avatarSrc) {
+      img.src = avatarSrc;
+    } else {
+      showFallback();
+    }
+  }
+
+  let resizeRaf = null;
+  function handleWidgetResize(){
+    if (resizeRaf) cancelAnimationFrame(resizeRaf);
+    resizeRaf = requestAnimationFrame(updateHintPosition);
+  }
+
+  function updateHintPosition(){
+    if (!els.btn || !els.hints) return;
+    const rect = els.btn.getBoundingClientRect();
+    const rightOffset = Math.max(16, window.innerWidth - rect.right + 16);
+    const bottomOffset = Math.max(16, window.innerHeight - rect.top + 20);
+    els.hints.style.setProperty('--vfw-hint-right', `${rightOffset}px`);
+    els.hints.style.setProperty('--vfw-hint-bottom', `${bottomOffset}px`);
+  }
+
+  initAvatarImages();
+  updateHintPosition();
+  window.addEventListener('resize', handleWidgetResize, { passive: true });
 
   // Функция для трекинга аналитических событий
   let pageViewTracked = false;
@@ -1458,6 +1597,7 @@
       }
     }
     
+    updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
     }, 100);
@@ -1480,6 +1620,7 @@
       }
     }
     
+    updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
     }, 100);
@@ -1502,6 +1643,7 @@
       }
     }
     
+    updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
     }, 100);

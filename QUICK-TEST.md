@@ -20,6 +20,11 @@ catalog/view/theme/[ТЕМА]/template/common/header.twig
 - Админка → Extensions → Modifications → **Refresh**
 - Dashboard → **Clear cache**
 
+### 🔧 Опциональные настройки
+- `data-avatar="https://nm-shop.by/image/catalog/avatar.jpg"` — если нужен свой аватар
+- `data-avatar-initials="NM"` — текст fallback (до 3 символов)
+- `data-bottom-offset="90"` и `data-right-offset="20"` — если кнопку нужно поднять выше нижнего меню
+
 ## ✅ Проверка
 
 1. Откройте в инкогнито: **https://nm-shop.by/kuhonnaya-mebel/kuhnya-variant-fasada-kvadro/**

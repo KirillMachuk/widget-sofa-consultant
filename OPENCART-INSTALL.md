@@ -13,6 +13,12 @@
 - **Промпт**: `https://widget-nine-murex.vercel.app/prompt.json`
 - **Google Apps Script**: `https://script.google.com/macros/s/AKfycbxiJrvTNiGfXTbfFWMiTWEGAyh4RKFhoKU8zjIfmQqrZlphC_vdO4R_OS9zhd-gYoZJOw/exec`
 
+### Дополнительные настройки (опционально)
+- `data-avatar` — URL вашего аватара (например, `https://nm-shop.by/image/catalog/avatar.jpg`)
+- `data-avatar-initials` — текст для fallback (например, `NM`)
+- `data-bottom-offset` — отступ кнопки снизу (например, `90` или `90px`)
+- `data-right-offset` — отступ кнопки справа
+
 ---
 
 ## 🔧 Способ 1: Через FTP (Рекомендуется)
