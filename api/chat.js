@@ -101,7 +101,9 @@ async function saveChat(sessionId, userMessage, botReply) {
     console.log('🔧 ПЕРЕД redis.set: messages.length =', session.messages.length);
     await redis.set(chatKey, session);
     await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
-    console.log('✅ redis.set выполнен');
+    // Убеждаемся, что сессия добавлена в список сессий
+    await redis.sadd('sessions:list', sessionId);
+    console.log('✅ redis.set выполнен, сессия добавлена в sessions:list');
     
     // ПРОВЕРКА: читаем сразу после записи
     const verification = await redis.get(chatKey);
@@ -273,8 +275,8 @@ async function handler(req, res){
           };
           await redis.set(chatKey, redisSession);
           await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
-          await redis.sadd('sessions:list', session_id); // Добавляем в список сессий
-          console.log('Новая сессия создана в Redis:', session_id);
+          const addedToSet = await redis.sadd('sessions:list', session_id); // Добавляем в список сессий
+          console.log('Новая сессия создана в Redis:', session_id, 'Добавлена в sessions:list:', addedToSet > 0);
         }
       } catch (error) {
         console.error('Ошибка сохранения сессии в Redis при инициализации:', error);
@@ -291,10 +293,33 @@ async function handler(req, res){
       console.log('Обработка чата для сессии:', session_id);
       console.log('Сообщение пользователя:', user_message);
       
-      const session = sessionCache.get(session_id);
+      let session = sessionCache.get(session_id);
+      
+      // Если сессия не найдена в кеше, пытаемся восстановить из Redis
       if (!session) {
-        console.log('Сессия не найдена в кеше:', session_id);
-        return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
+        console.log('Сессия не найдена в кеше, пытаемся восстановить из Redis:', session_id);
+        try {
+          const chatKey = `chat:${session_id}`;
+          const redisSession = await redis.get(chatKey);
+          
+          if (redisSession && redisSession.prompt) {
+            // Восстанавливаем сессию в кеше из Redis
+            session = {
+              prompt: redisSession.prompt,
+              locale: redisSession.locale || 'ru',
+              createdAt: redisSession.createdAt || new Date().toISOString(),
+              lastUpdated: redisSession.lastUpdated || new Date().toISOString()
+            };
+            sessionCache.set(session_id, session);
+            console.log('Сессия восстановлена из Redis:', session_id);
+          } else {
+            console.log('Сессия не найдена в Redis:', session_id);
+            return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
+          }
+        } catch (error) {
+          console.error('Ошибка восстановления сессии из Redis:', error);
+          return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
+        }
       }
       
       // Обновляем время последнего использования сессии
