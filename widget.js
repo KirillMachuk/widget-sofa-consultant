@@ -1008,14 +1008,26 @@
       return;
     }
     
-    img.addEventListener('error', showFallback, { once: true });
-    img.addEventListener('load', () => container.classList.remove('has-fallback'));
+    img.addEventListener('error', (e) => {
+      if (DEBUG) console.log('[Widget] Avatar image failed to load:', img.src, e);
+      showFallback();
+    }, { once: true });
+    img.addEventListener('load', () => {
+      container.classList.remove('has-fallback');
+      if (DEBUG) console.log('[Widget] Avatar image loaded successfully:', img.src);
+    });
     
     // Используем CONFIG.avatarUrl или DEFAULT_AVATAR_URL
     const avatarUrl = CONFIG.avatarUrl || DEFAULT_AVATAR_URL;
     if (avatarUrl) {
-      img.src = avatarUrl;
+      // Убеждаемся, что URL абсолютный
+      const finalUrl = avatarUrl.startsWith('http') || avatarUrl.startsWith('//') 
+        ? avatarUrl 
+        : `https://widget-nine-murex.vercel.app/${avatarUrl.replace(/^\//, '')}`;
+      if (DEBUG) console.log('[Widget] Setting avatar URL:', finalUrl);
+      img.src = finalUrl;
     } else {
+      if (DEBUG) console.warn('[Widget] No avatar URL available, showing fallback');
       showFallback();
     }
   }
