@@ -93,6 +93,8 @@ async function handler(req, res){
       
       try {
         console.log(`📤 Отправляем лид в GAS (попытка ${attempt}/${maxRetries})`);
+        console.log('🔗 GAS URL:', GAS_URL ? GAS_URL.substring(0, 50) + '...' : 'НЕ ЗАДАН');
+        console.log('📦 Полный payload:', JSON.stringify(payload, null, 2));
         
         const r = await fetch(GAS_URL, {
           method: 'POST',
@@ -107,42 +109,64 @@ async function handler(req, res){
         
         clearTimeout(timeoutId);
         
+        console.log('📥 Ответ от GAS получен:', {
+          status: r.status,
+          statusText: r.statusText,
+          ok: r.ok,
+          headers: Object.fromEntries(r.headers.entries())
+        });
+        
         // GAS может возвращать разные форматы ответов
         let responseData;
+        let responseText = '';
         try {
-          const text = await r.text();
+          responseText = await r.text();
+          console.log('📄 Текст ответа от GAS:', responseText.substring(0, 500));
+          
           try {
-            responseData = JSON.parse(text);
-          } catch {
+            responseData = JSON.parse(responseText);
+            console.log('✅ JSON ответ от GAS распарсен:', responseData);
+          } catch (parseError) {
+            console.warn('⚠️ Ответ не JSON, пытаемся определить успех по тексту');
             // Если не JSON, проверяем текст
-            if (text.includes('ok') || text.includes('success') || r.ok) {
-              responseData = { ok: true };
+            if (responseText.includes('ok') || responseText.includes('success') || responseText.includes('true') || r.ok) {
+              responseData = { ok: true, text: responseText };
+              console.log('✅ Определен как успех по тексту');
             } else {
-              responseData = { ok: false, text };
+              responseData = { ok: false, text: responseText };
+              console.log('❌ Определен как ошибка по тексту');
             }
           }
         } catch (parseError) {
-          console.warn('Ошибка парсинга ответа GAS:', parseError);
+          console.error('❌ Ошибка чтения ответа GAS:', parseError);
           // Если статус 200, считаем успехом
           if (r.ok || r.status === 0) {
             responseData = { ok: true };
+            console.log('✅ Статус 200, считаем успехом');
           } else {
+            console.error('❌ Статус не 200:', r.status);
             throw new Error(`GAS upstream error: ${r.status}`);
           }
         }
         
         if (responseData.ok || r.ok || r.status === 0) {
-          console.log(`✅ Лид успешно отправлен в GAS (попытка ${attempt})`);
-          console.log('📊 Детали отправки:', {
+          console.log(`✅✅✅ Лид успешно отправлен в GAS (попытка ${attempt})`);
+          console.log('📊 Детали успешной отправки:', {
             status: r.status,
             statusText: r.statusText,
             responseData: responseData,
-            payload: { name, phone, category, gift, messenger }
+            responseText: responseText.substring(0, 200),
+            payload: { name, phone, category, gift, messenger, page_url }
           });
           lastError = null; // Сброс ошибки при успехе
           break; // Выходим из цикла retry
         } else {
-          console.error('❌ GAS вернул ошибку:', { status: r.status, responseData });
+          console.error('❌❌❌ GAS вернул ошибку:', { 
+            status: r.status, 
+            statusText: r.statusText,
+            responseData: responseData,
+            responseText: responseText.substring(0, 500)
+          });
           throw new Error(`GAS returned error: ${JSON.stringify(responseData)}`);
         }
         
@@ -167,8 +191,11 @@ async function handler(req, res){
     }
     
     if (lastError) {
+      console.error('❌❌❌ Все попытки отправки в GAS неудачны:', lastError);
       return res.status(502).json({ error: 'All retry attempts failed', details: lastError.message });
     }
+    
+    console.log('✅✅✅ УСПЕХ: Лид успешно отправлен в GAS после всех попыток');
     
     // Сохраняем контакты ПОСЛЕ успешного ответа от GAS
     if (session_id) {
