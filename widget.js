@@ -150,8 +150,8 @@
     }
     
     .vfw-avatar-lg {
-      width: 96px !important;
-      height: 96px !important;
+      width: 84px !important;
+      height: 84px !important;
       border: none !important;
       border-radius: 50% !important;
       overflow: hidden !important;
