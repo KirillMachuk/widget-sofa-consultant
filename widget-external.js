@@ -267,8 +267,8 @@
       }
       
       .vfw-avatar-lg {
-        width: 92px !important;
-        height: 92px !important;
+        width: 96px !important;
+        height: 96px !important;
         border-radius: 50% !important;
         overflow: hidden !important;
       }
@@ -309,8 +309,8 @@
       }
       
       .vfw-avatar-lg {
-        width: 84px !important;
-        height: 84px !important;
+        width: 88px !important;
+        height: 88px !important;
         border-radius: 50% !important;
         overflow: hidden !important;
       }
@@ -642,9 +642,9 @@
     }
     
     .vfw-avatar-lg {
-      width: 80px !important;
-      height: 80px !important;
-      border: 2px solid rgba(255,255,255,0.3) !important;
+      width: 96px !important;
+      height: 96px !important;
+      border: none !important;
       border-radius: 50% !important;
       overflow: hidden !important;
     }
