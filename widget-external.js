@@ -273,6 +273,7 @@
         min-height: 96px !important;
         max-width: 96px !important;
         max-height: 96px !important;
+        border: 3px solid #000 !important;
         border-radius: 50% !important;
         overflow: hidden !important;
         padding: 0 !important;
@@ -322,6 +323,7 @@
         min-height: 88px !important;
         max-width: 88px !important;
         max-height: 88px !important;
+        border: 3px solid #000 !important;
         border-radius: 50% !important;
         overflow: hidden !important;
         padding: 0 !important;
@@ -662,7 +664,7 @@
       min-height: 84px !important;
       max-width: 84px !important;
       max-height: 84px !important;
-      border: none !important;
+      border: 3px solid #000 !important;
       border-radius: 50% !important;
       overflow: hidden !important;
       position: relative !important;

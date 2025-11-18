@@ -156,7 +156,7 @@
       min-height: 84px !important;
       max-width: 84px !important;
       max-height: 84px !important;
-      border: none !important;
+      border: 3px solid #000 !important;
       border-radius: 50% !important;
       overflow: hidden !important;
       position: relative !important;
@@ -289,6 +289,7 @@
         min-height: 96px !important;
         max-width: 96px !important;
         max-height: 96px !important;
+        border: 3px solid #000 !important;
         border-radius: 50% !important;
         overflow: hidden !important;
         padding: 0 !important;
@@ -338,6 +339,7 @@
         min-height: 88px !important;
         max-width: 88px !important;
         max-height: 88px !important;
+        border: 3px solid #000 !important;
         border-radius: 50% !important;
         overflow: hidden !important;
         padding: 0 !important;
@@ -1009,8 +1011,10 @@
     img.addEventListener('error', showFallback, { once: true });
     img.addEventListener('load', () => container.classList.remove('has-fallback'));
     
-    if (CONFIG.avatarUrl) {
-      img.src = CONFIG.avatarUrl;
+    // Используем CONFIG.avatarUrl или DEFAULT_AVATAR_URL
+    const avatarUrl = CONFIG.avatarUrl || DEFAULT_AVATAR_URL;
+    if (avatarUrl) {
+      img.src = avatarUrl;
     } else {
       showFallback();
     }
