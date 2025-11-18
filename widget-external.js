@@ -1082,17 +1082,32 @@
     });
 
     // Используем CONFIG.avatarUrl или DEFAULT_AVATAR_URL
-    const avatarSrc = CONFIG.avatarUrl || DEFAULT_AVATAR_URL;
+    let avatarSrc = CONFIG.avatarUrl || DEFAULT_AVATAR_URL;
+    
+    // Всегда используем абсолютный URL для надежности
     if (avatarSrc) {
-      // Убеждаемся, что URL абсолютный
-      const finalUrl = avatarSrc.startsWith('http') || avatarSrc.startsWith('//') 
-        ? avatarSrc 
-        : `https://widget-nine-murex.vercel.app/${avatarSrc.replace(/^\//, '')}`;
-      if (DEBUG) console.log('[Widget] Setting avatar URL:', finalUrl);
-      img.src = finalUrl;
+      // Если URL не абсолютный, преобразуем его
+      if (!avatarSrc.startsWith('http') && !avatarSrc.startsWith('//')) {
+        // Если это относительный путь, используем базовый URL виджета
+        if (avatarSrc.startsWith('/')) {
+          avatarSrc = `https://widget-nine-murex.vercel.app${avatarSrc}`;
+        } else {
+          avatarSrc = `https://widget-nine-murex.vercel.app/${avatarSrc}`;
+        }
+      }
+      
+      // Если URL начинается с //, добавляем https:
+      if (avatarSrc.startsWith('//')) {
+        avatarSrc = `https:${avatarSrc}`;
+      }
+      
+      if (DEBUG) console.log('[Widget] Setting avatar URL:', avatarSrc, 'Original:', CONFIG.avatarUrl || DEFAULT_AVATAR_URL);
+      img.src = avatarSrc;
     } else {
-      if (DEBUG) console.warn('[Widget] No avatar URL available, showing fallback');
-      showFallback();
+      // Если ничего не установлено, используем дефолтный абсолютный URL
+      const defaultUrl = 'https://widget-nine-murex.vercel.app/images/consultant.jpg';
+      if (DEBUG) console.log('[Widget] Using default avatar URL:', defaultUrl);
+      img.src = defaultUrl;
     }
   }
 
