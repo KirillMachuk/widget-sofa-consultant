@@ -150,8 +150,8 @@
     }
     
     .vfw-avatar-lg {
-      width: 64px;
-      height: 64px;
+      width: 76px;
+      height: 76px;
       border: 2px solid rgba(255,255,255,0.3);
     }
     
@@ -247,6 +247,11 @@
         box-shadow: 0 8px 32px rgba(0,0,0,.25);
       }
       
+      .vfw-avatar-lg {
+        width: 88px;
+        height: 88px;
+      }
+      
       .vfw-online-indicator {
         width: 20px;
         height: 20px;
@@ -280,6 +285,11 @@
       .vfw-btn {
         width: 88px;
         height: 88px;
+      }
+      
+      .vfw-avatar-lg {
+        width: 82px;
+        height: 82px;
       }
     }
     
@@ -1023,12 +1033,20 @@
     if (role==='bot'){
       row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="./images/consultant.jpg" alt="bot"></div><div class="bubble"></div></div>`;
     } else {
-      row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div></div>`;
+      row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div><div class="vfw-avatar"><img class="vfw-avatar-img" alt="Пользователь"><span class="vfw-avatar-fallback" aria-hidden="true">${CONFIG.avatarInitials}</span></div></div>`;
     }
     
     const safeText = escapeHtml(text);
     row.querySelector('.bubble').innerHTML = safeText;
     els.body.appendChild(row);
+    
+    // Применяем правильную загрузку аватара для сообщений пользователя
+    if (role === 'user') {
+      const avatarContainer = row.querySelector('.vfw-avatar');
+      if (avatarContainer) {
+        applyAvatarToContainer(avatarContainer);
+      }
+    }
     
     setTimeout(() => {
       const isAtBottom = els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 10;

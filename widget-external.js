@@ -266,6 +266,11 @@
         box-shadow: 0 8px 32px rgba(0,0,0,.25);
       }
       
+      .vfw-avatar-lg {
+        width: 88px !important;
+        height: 88px !important;
+      }
+      
       .vfw-online-indicator {
         width: 20px;
         height: 20px;
@@ -299,6 +304,11 @@
       .vfw-btn {
         width: 88px;
         height: 88px;
+      }
+      
+      .vfw-avatar-lg {
+        width: 82px !important;
+        height: 82px !important;
       }
     }
     
@@ -628,8 +638,8 @@
     }
     
     .vfw-avatar-lg {
-      width: 64px !important;
-      height: 64px !important;
+      width: 76px !important;
+      height: 76px !important;
       border: 2px solid rgba(255,255,255,0.3) !important;
     }
     
@@ -1093,12 +1103,21 @@
     if (role==='bot'){
       row.innerHTML = `<div class="vfw-msg bot"><div class="vfw-avatar"><img src="${WIDGET_BASE_URL}images/consultant.jpg" alt="bot"></div><div class="bubble"></div></div>`;
     } else {
-      row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div></div>`;
+      const initials = (CONFIG.avatarInitials || 'NM').toString().slice(0, 3).toUpperCase();
+      row.innerHTML = `<div class="vfw-msg user"><div class="bubble"></div><div class="vfw-avatar"><img class="vfw-avatar-img" alt="Пользователь"><span class="vfw-avatar-fallback" aria-hidden="true">${initials}</span></div></div>`;
     }
     
     const safeText = escapeHtml(text);
     row.querySelector('.bubble').innerHTML = safeText;
     els.body.appendChild(row);
+    
+    // Применяем правильную загрузку аватара для сообщений пользователя
+    if (role === 'user') {
+      const avatarContainer = row.querySelector('.vfw-avatar');
+      if (avatarContainer) {
+        applyAvatarToContainer(avatarContainer);
+      }
+    }
     
     setTimeout(() => {
       const isAtBottom = els.body.scrollTop + els.body.clientHeight >= els.body.scrollHeight - 10;
