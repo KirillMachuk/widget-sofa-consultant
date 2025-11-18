@@ -47,6 +47,24 @@
     return Number.isFinite(num) ? `${num}px` : null;
   }
   const DEFAULT_AVATAR_URL = (WIDGET_BASE_URL || 'https://widget-nine-murex.vercel.app/') + 'images/consultant.jpg';
+  
+  // Функция для получения абсолютного URL аватара
+  function getAvatarUrl() {
+    // Если установлен кастомный URL, используем его (но делаем абсолютным)
+    if (CONFIG.avatarUrl) {
+      const url = CONFIG.avatarUrl;
+      if (url.startsWith('http') || url.startsWith('//')) {
+        return url.startsWith('//') ? `https:${url}` : url;
+      }
+      // Относительный путь - преобразуем в абсолютный
+      if (url.startsWith('/')) {
+        return `https://widget-nine-murex.vercel.app${url}`;
+      }
+      return `https://widget-nine-murex.vercel.app/${url}`;
+    }
+    // Используем дефолтный абсолютный URL
+    return 'https://widget-nine-murex.vercel.app/images/consultant.jpg';
+  }
 
   // Read configuration from script dataset
   (function(){
@@ -1081,34 +1099,10 @@
       if (DEBUG) console.log('[Widget] Avatar image loaded successfully:', img.src);
     });
 
-    // Используем CONFIG.avatarUrl или DEFAULT_AVATAR_URL
-    let avatarSrc = CONFIG.avatarUrl || DEFAULT_AVATAR_URL;
-    
-    // Всегда используем абсолютный URL для надежности
-    if (avatarSrc) {
-      // Если URL не абсолютный, преобразуем его
-      if (!avatarSrc.startsWith('http') && !avatarSrc.startsWith('//')) {
-        // Если это относительный путь, используем базовый URL виджета
-        if (avatarSrc.startsWith('/')) {
-          avatarSrc = `https://widget-nine-murex.vercel.app${avatarSrc}`;
-        } else {
-          avatarSrc = `https://widget-nine-murex.vercel.app/${avatarSrc}`;
-        }
-      }
-      
-      // Если URL начинается с //, добавляем https:
-      if (avatarSrc.startsWith('//')) {
-        avatarSrc = `https:${avatarSrc}`;
-      }
-      
-      if (DEBUG) console.log('[Widget] Setting avatar URL:', avatarSrc, 'Original:', CONFIG.avatarUrl || DEFAULT_AVATAR_URL);
-      img.src = avatarSrc;
-    } else {
-      // Если ничего не установлено, используем дефолтный абсолютный URL
-      const defaultUrl = 'https://widget-nine-murex.vercel.app/images/consultant.jpg';
-      if (DEBUG) console.log('[Widget] Using default avatar URL:', defaultUrl);
-      img.src = defaultUrl;
-    }
+    // Всегда используем абсолютный URL через функцию getAvatarUrl()
+    const avatarUrl = getAvatarUrl();
+    if (DEBUG) console.log('[Widget] Setting avatar URL:', avatarUrl);
+    img.src = avatarUrl;
   }
 
   let resizeRaf = null;
