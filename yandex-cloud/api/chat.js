@@ -387,7 +387,7 @@ async function handler(req, res){
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
-        max_tokens: 600,        // Ограничение длины ответа
+        max_completion_tokens: 600,     // Ограничение длины ответа
         reasoning_effort: 'low',        // Уровень рассуждений для ускорения
         verbosity: 'low'                // Краткие ответы для ускорения
       };
@@ -624,7 +624,7 @@ ${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: systemPrompt }],
-        max_tokens: 150,
+        max_completion_tokens: 150,     // Ограничение длины ответа
         reasoning_effort: 'low',        // Быстрая генерация стандартного сообщения
         verbosity: 'low'                // Краткое сообщение о подарках
       })
