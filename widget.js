@@ -771,6 +771,12 @@
       transform: translateY(0);
       transition: all 0.4s cubic-bezier(0.2,0.8,0.2,1);
       position: relative;
+      cursor: pointer;
+    }
+    
+    .vfw-hint:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 20px 52px rgba(0,0,0,.3);
     }
     
     .vfw-hint-close {
@@ -2112,6 +2118,23 @@
       hideHints();
       startHintsCooldown();
     }); 
+  }
+
+  // Добавляем обработчик клика на всплывающее сообщение
+  if (els.hintSingle) {
+    els.hintSingle.addEventListener('click', (e)=>{
+      // Не открываем виджет если клик был на крестике
+      if (e.target.closest('.vfw-hint-close')) {
+        return;
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      // Открываем виджет
+      if (els.panel.getAttribute('data-open') !== '1') {
+        hideHints();
+        els.btn.click();
+      }
+    });
   }
 
   els.send.addEventListener('click', submitUser);
