@@ -229,10 +229,15 @@ async function analyzeUserMessage(userMessage) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'gpt-5-mini',
         messages: [{ role: 'system', content: analysisPrompt }],
-        max_tokens: 100,
-        temperature: 0.1
+        max_output_tokens: 100,         // Для краткого JSON ответа
+        reasoning: {
+          effort: 'low'                 // Минимальные рассуждения для быстрого анализа
+        },
+        text: {
+          verbosity: 'low'              // Краткий JSON ответ
+        }
       })
     });
 
@@ -474,7 +479,14 @@ async function handler(req, res){
       const model = 'gpt-5-mini';
       const body = {
         model,
-        messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24)
+        messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
+        max_output_tokens: 600,        // Ограничение длины ответа
+        reasoning: {
+          effort: 'medium'              // Уменьшаем с high (по умолчанию) на medium для ускорения
+        },
+        text: {
+          verbosity: 'low'              // Краткие ответы для ускорения
+        }
       };
       // Функция для retry запросов с таймаутом
       async function fetchWithRetry(url, options, maxRetries = 3) {
@@ -724,8 +736,13 @@ ${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: systemPrompt }],
-        max_tokens: 150,
-        temperature: 0.3
+        max_output_tokens: 150,        // Правильный параметр вместо max_tokens
+        reasoning: {
+          effort: 'low'                 // Быстрая генерация стандартного сообщения
+        },
+        text: {
+          verbosity: 'low'              // Краткое сообщение о подарках
+        }
       })
     });
 
@@ -759,9 +776,9 @@ function buildSystemPrompt(prompt, locale, aggressiveMode = false){
     `Инструкции: ${prompt.main_instructions.join(' ')}`,
     `О компании: ${prompt.about_company?.description||''}`,
     `Достижения компании: ${prompt.about_company?.achievements ? Object.values(prompt.about_company.achievements).join(', ') : ''}`,
-    `Салоны: ${prompt.about_company?.showrooms ? JSON.stringify(prompt.about_company.showrooms, null, 2) : 'Информация о салонах недоступна'}`,
-    `Подарки по категориям: ${prompt.offers?.gifts_by_category ? JSON.stringify(prompt.offers.gifts_by_category, null, 2) : 'Информация о подарках недоступна'}`,
-    `Доставка и оплата: ${prompt.delivery_and_payment ? JSON.stringify(prompt.delivery_and_payment, null, 2) : 'Информация о доставке недоступна'}`,
+    `Салоны: ${prompt.about_company?.showrooms ? JSON.stringify(prompt.about_company.showrooms) : 'Информация о салонах недоступна'}`,
+    `Подарки по категориям: ${prompt.offers?.gifts_by_category ? JSON.stringify(prompt.offers.gifts_by_category) : 'Информация о подарках недоступна'}`,
+    `Доставка и оплата: ${prompt.delivery_and_payment ? JSON.stringify(prompt.delivery_and_payment) : 'Информация о доставке недоступна'}`,
     `Стиль: ${prompt.templates_and_style||''}`
   ].join('\n') : 'Ты консультант. Отвечай кратко.';
   
