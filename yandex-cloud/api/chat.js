@@ -493,13 +493,8 @@ async function handler(req, res){
         .replace(/\n\n+/g, '\n\n')  // Убираем лишние переносы
         .trim();
       
-      // Проверяем, нужно ли генерировать персонализированное сообщение с формой
+      // Проверяем, нужно ли показать форму (без дополнительного сообщения)
       const shouldGenerateFormMessage = checkIfNeedsFormMessage(reply, messages, user_messages_after_last_form);
-      let formMessage = null;
-      
-      if (shouldGenerateFormMessage) {
-        formMessage = await generatePersonalizedFormMessage(messages, session);
-      }
       
       // Сохраняем диалог в Redis (с ожиданием завершения)
       console.log('📝 Вызываем saveChat для сессии:', session_id);
@@ -513,7 +508,6 @@ async function handler(req, res){
       
       return res.status(200).json({ 
         reply, 
-        formMessage,
         needsForm: shouldGenerateFormMessage,
         isProductQuestion: messageAnalysis.isProductQuestion,
         detectedCategory: messageAnalysis.detectedCategory
