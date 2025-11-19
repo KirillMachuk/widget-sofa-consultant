@@ -1782,7 +1782,16 @@
   let hintsCooldownTimer = null;
   let exitIntentTriggered = false;
   let scrollToBottomTriggered = false;
-  let lastHintShownAt = 0;
+  
+  // Функции для работы с глобальным cooldown через sessionStorage
+  function getLastHintShownAt() {
+    const stored = sessionStorage.getItem('vfw_last_hint_shown_at');
+    return stored ? parseInt(stored, 10) : 0;
+  }
+  
+  function setLastHintShownAt() {
+    sessionStorage.setItem('vfw_last_hint_shown_at', Date.now().toString());
+  }
   
   function showHintsWithAutoHide(text) {
     
@@ -1799,7 +1808,7 @@
     updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
-      lastHintShownAt = Date.now();
+      setLastHintShownAt();
     }, 100);
     
     hintsAutoHideTimer = setTimeout(() => {
@@ -1823,7 +1832,7 @@
     updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
-      lastHintShownAt = Date.now();
+      setLastHintShownAt();
     }, 100);
     
     hintsAutoHideTimer = setTimeout(() => {
@@ -1847,7 +1856,7 @@
     updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
-      lastHintShownAt = Date.now();
+      setLastHintShownAt();
     }, 100);
     
     hintsAutoHideTimer = setTimeout(() => {
@@ -1868,6 +1877,7 @@
   }
   
   function canShowHints() {
+    const lastHintShownAt = getLastHintShownAt();
     const cooldownPassed = Date.now() - lastHintShownAt > 30000;
     return cooldownPassed && !hintsCooldownTimer && !els.hints.getAttribute('data-show');
   }
