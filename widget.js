@@ -1873,7 +1873,7 @@
   }
   
   function handleExitIntent() {
-    if (els.panel.getAttribute('data-open') !== '1' && !exitIntentTriggered) {
+    if (els.panel.getAttribute('data-open') !== '1' && !exitIntentTriggered && canShowHints()) {
       hideHints();
       showExitIntentHints();
       exitIntentTriggered = true;
