@@ -229,15 +229,10 @@ async function analyzeUserMessage(userMessage) {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-5-mini',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'system', content: analysisPrompt }],
         max_tokens: 100,         // Для краткого JSON ответа
-        reasoning: {
-          effort: 'low'                 // Минимальные рассуждения для быстрого анализа
-        },
-        text: {
-          verbosity: 'low'              // Краткий JSON ответ
-        }
+        temperature: 0.1        // Низкая температура для детерминированных ответов
       })
     });
 
@@ -476,17 +471,11 @@ async function handler(req, res){
       }
       
       console.log('Отправляем запрос к OpenAI...');
-      const model = 'gpt-5-mini';
+      const model = 'gpt-4o-mini';
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
-        max_tokens: 600,        // Ограничение длины ответа
-        reasoning: {
-          effort: 'medium'              // Уменьшаем с high (по умолчанию) на medium для ускорения
-        },
-        text: {
-          verbosity: 'low'              // Краткие ответы для ускорения
-        }
+        max_tokens: 600        // Ограничение длины ответа
       };
       // Функция для retry запросов с таймаутом
       async function fetchWithRetry(url, options, maxRetries = 3) {
@@ -734,15 +723,10 @@ ${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-5-mini',
+        model: 'gpt-4o-mini',
         messages: [{ role: 'system', content: systemPrompt }],
         max_tokens: 150,        // Ограничение длины ответа
-        reasoning: {
-          effort: 'low'                 // Быстрая генерация стандартного сообщения
-        },
-        text: {
-          verbosity: 'low'              // Краткое сообщение о подарках
-        }
+        temperature: 0.3       // Низкая температура для стандартных сообщений
       })
     });
 
