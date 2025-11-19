@@ -54,6 +54,17 @@ module.exports = async function handler(req, res) {
       // Если ключ не существует, INCR инициализирует его со значением 1
       const currentValue = await redisClient.incr(analyticsKey);
       
+      // Для page_view добавляем session_id в SET уникальных посетителей
+      if (event_type === 'page_view' && session_id) {
+        const uniqueVisitorsKey = `unique_visitors:${source}`;
+        // SADD добавляет элемент в SET только если его там еще нет (автоматическая дедупликация)
+        await redisClient.sadd(uniqueVisitorsKey, session_id).catch(err => {
+          console.warn('Не удалось добавить уникального посетителя:', err.message);
+        });
+        // Устанавливаем TTL 30 дней для SET (чтобы не накапливались старые данные)
+        await redisClient.expire(uniqueVisitorsKey, 30 * 24 * 60 * 60).catch(() => {});
+      }
+      
       // Если это ошибка, сохраняем детали
       if (ERROR_EVENTS.includes(event_type) && error_data) {
         const timestamp = new Date().toISOString();

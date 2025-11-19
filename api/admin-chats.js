@@ -93,7 +93,11 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       validSessions.forEach(session => {
         // Нормализуем messages: если не массив - делаем пустым массивом
         if (!Array.isArray(session.messages)) {
-          console.warn('⚠️ Нормализация messages: не массив, исправляем для', session.sessionId);
+          console.warn('⚠️ Нормализация messages: не массив, исправляем для', session.sessionId, 'тип:', typeof session.messages);
+          // Сохраняем оригинальное значение для диагностики
+          if (session.messages && typeof session.messages === 'object') {
+            console.warn('  Оригинальное значение messages:', JSON.stringify(session.messages).substring(0, 200));
+          }
           session.messages = [];
         }
         // Нормализуем contacts: если не объект - делаем null
@@ -102,16 +106,47 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
           session.contacts = null;
         }
       });
+      
+      // Логируем статистику после нормализации
+      const sessionsWithMessages = validSessions.filter(s => s.messages && Array.isArray(s.messages) && s.messages.length > 0);
+      const sessionsWithContacts = validSessions.filter(s => s.contacts && (s.contacts.name || s.contacts.phone));
+      console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
     }
     
     // ИСПРАВЛЕНИЕ: Фильтруем сессии с действиями (сообщения или контакты) ДО пагинации
     const sessionsWithData = validSessions.filter(session => {
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
       const hasContacts = session.contacts && (session.contacts.name || session.contacts.phone);
-      return hasMessages || hasContacts;
+      const hasData = hasMessages || hasContacts;
+      
+      // Детальное логирование для отладки (только первые 3 сессии)
+      if (validSessions.indexOf(session) < 3) {
+        console.log(`🔍 Сессия ${session.sessionId?.substring(0, 10)}...:`, {
+          hasMessages,
+          messagesLength: session.messages ? session.messages.length : 0,
+          messagesType: typeof session.messages,
+          hasContacts,
+          contacts: session.contacts ? Object.keys(session.contacts) : null,
+          hasData
+        });
+      }
+      
+      return hasData;
     });
     
     console.log(`📋 После фильтрации по действиям: ${sessionsWithData.length} из ${validSessions.length}`);
+    
+    // Если после фильтрации нет сессий, логируем детали для диагностики
+    if (sessionsWithData.length === 0 && validSessions.length > 0) {
+      console.warn('⚠️ ВНИМАНИЕ: Все сессии отфильтрованы! Примеры сессий:');
+      validSessions.slice(0, 3).forEach((session, idx) => {
+        console.warn(`  Сессия ${idx + 1} (${session.sessionId?.substring(0, 10)}...):`, {
+          messages: session.messages ? `массив, длина ${session.messages.length}` : `тип: ${typeof session.messages}`,
+          contacts: session.contacts ? JSON.stringify(session.contacts) : 'нет',
+          rawMessages: session.messages ? JSON.stringify(session.messages.slice(0, 2)) : 'нет'
+        });
+      });
+    }
     
     // ИСПРАВЛЕНИЕ: Стабильная сортировка (по lastUpdated, затем по sessionId для одинаковых дат)
     sessionsWithData.sort((a, b) => {

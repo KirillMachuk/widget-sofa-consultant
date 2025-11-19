@@ -884,6 +884,10 @@
                     </div>
                     <div class="analytics-cards">
                         <div class="analytics-card">
+                            <div class="analytics-label">Уникальных посетителей</div>
+                            <div class="analytics-value" id="analytics-uniqueVisitors">—</div>
+                        </div>
+                        <div class="analytics-card">
                             <div class="analytics-label">Посещений страницы</div>
                             <div class="analytics-value" id="analytics-pageViews">—</div>
                         </div>
@@ -1298,9 +1302,10 @@
                 const data = await response.json();
                 
                 if (data.success && data.analytics) {
-                    const { pageViews, widgetOpens, formSubmits, conversionWidgetOpen, conversionFormSubmit } = data.analytics;
+                    const { uniqueVisitors, pageViews, widgetOpens, formSubmits, conversionWidgetOpen, conversionFormSubmit } = data.analytics;
                     
                     // Обновляем значения
+                    document.getElementById('analytics-uniqueVisitors').textContent = uniqueVisitors.toLocaleString('ru-RU');
                     document.getElementById('analytics-pageViews').textContent = pageViews.toLocaleString('ru-RU');
                     document.getElementById('analytics-widgetOpens').textContent = widgetOpens.toLocaleString('ru-RU');
                     document.getElementById('analytics-formSubmits').textContent = formSubmits.toLocaleString('ru-RU');

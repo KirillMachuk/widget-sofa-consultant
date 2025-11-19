@@ -21,16 +21,18 @@ module.exports = async function handler(req, res) {
     const source = url.searchParams.get('source') || 'test';
     
     // Получаем значения счетчиков из Redis для указанного источника
-    const [pageViews, widgetOpens, formSubmits] = await Promise.all([
+    const [pageViews, widgetOpens, formSubmits, uniqueVisitorsCount] = await Promise.all([
       redisClient.get(`analytics:page_view:${source}`).catch(() => 0),
       redisClient.get(`analytics:widget_open:${source}`).catch(() => 0),
-      redisClient.get(`analytics:form_submit:${source}`).catch(() => 0)
+      redisClient.get(`analytics:form_submit:${source}`).catch(() => 0),
+      redisClient.scard(`unique_visitors:${source}`).catch(() => 0) // Количество уникальных посетителей
     ]);
     
     // Преобразуем в числа
     const pageViewsCount = parseInt(pageViews || 0, 10);
     const widgetOpensCount = parseInt(widgetOpens || 0, 10);
     const formSubmitsCount = parseInt(formSubmits || 0, 10);
+    const uniqueVisitors = parseInt(uniqueVisitorsCount || 0, 10);
     
     // Вычисляем конверсии
     const conversionWidgetOpen = pageViewsCount > 0 
@@ -45,6 +47,7 @@ module.exports = async function handler(req, res) {
       success: true,
       source: source,
       analytics: {
+        uniqueVisitors: uniqueVisitors,
         pageViews: pageViewsCount,
         widgetOpens: widgetOpensCount,
         formSubmits: formSubmitsCount,
