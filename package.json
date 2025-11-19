@@ -11,13 +11,15 @@
     "start": "echo 'Starting server'",
     "deploy": "gh-pages -d .",
     "predeploy": "npm run build",
-    "clear-sessions": "node utils/clear-old-sessions.js"
+    "clear-sessions": "node utils/clear-old-sessions.js",
+    "clear-all-data": "node utils/clear-all-data.js"
   },
   "homepage": "https://ваш-username.github.io/ваш-репозиторий",
   "dependencies": {
     "@upstash/redis": "^1.35.6",
     "@vercel/kv": "^1.0.1",
-    "crypto-js": "^4.2.0"
+    "crypto-js": "^4.2.0",
+    "dotenv": "^16.3.1"
   },
   "devDependencies": {
     "gh-pages": "^6.0.0"
