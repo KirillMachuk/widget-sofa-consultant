@@ -1,0 +1,75 @@
+# Конфигурация для Yandex Cloud Functions
+# Используется для деплоя через Yandex Cloud CLI
+
+functions:
+  chat:
+    name: widget-chat
+    runtime: nodejs22
+    entrypoint: api/chat.cloudHandler
+    memory: 256MB
+    timeout: 30s
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    triggers:
+      - http:
+          path: /api/chat
+          method: POST
+  
+  lead:
+    name: widget-lead
+    runtime: nodejs22
+    entrypoint: api/lead.cloudHandler
+    memory: 256MB
+    timeout: 15s
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    triggers:
+      - http:
+          path: /api/lead
+          method: POST
+  
+  analytics:
+    name: widget-analytics
+    runtime: nodejs22
+    entrypoint: api/analytics.cloudHandler
+    memory: 128MB
+    timeout: 10s
+    environment:
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    triggers:
+      - http:
+          path: /api/analytics
+          method: POST
+  
+  health:
+    name: widget-health
+    runtime: nodejs22
+    entrypoint: api/health.cloudHandler
+    memory: 128MB
+    timeout: 10s
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      REDIS_HOST: ${REDIS_HOST}
+      REDIS_PORT: ${REDIS_PORT}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    triggers:
+      - http:
+          path: /api/health
+          method: GET
+
+# Object Storage bucket для статических файлов
+object_storage:
+  bucket: widget-static-files
+  public_access: true
+  files:
+    - widget-external.js
+    - images/consultant.jpg
+    - Промпт.json
+

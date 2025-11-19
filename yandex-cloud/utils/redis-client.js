@@ -1,11 +1,34 @@
-// Единый Redis клиент с connection pooling и retry логикой
-const { Redis } = require('@upstash/redis');
+// Единый Redis клиент для Yandex Managed Service for Redis
+const Redis = require('ioredis');
 
 // Создаем единственный экземпляр Redis клиента
-const redis = new Redis({
-  url: process.env.KV_REST_API_URL,
-  token: process.env.KV_REST_API_TOKEN,
-});
+let redis = null;
+
+function getRedisClient() {
+  if (!redis) {
+    redis = new Redis({
+      host: process.env.REDIS_HOST,
+      port: parseInt(process.env.REDIS_PORT || '6379'),
+      password: process.env.REDIS_PASSWORD,
+      retryStrategy: (times) => {
+        const delay = Math.min(times * 50, 2000);
+        return delay;
+      },
+      maxRetriesPerRequest: 3,
+      enableReadyCheck: true,
+      lazyConnect: true
+    });
+
+    redis.on('error', (err) => {
+      console.error('Redis connection error:', err);
+    });
+
+    redis.on('connect', () => {
+      console.log('Redis connected');
+    });
+  }
+  return redis;
+}
 
 // Retry логика для Redis операций
 async function withRetry(operation, maxRetries = 3, delay = 1000) {
@@ -27,42 +50,75 @@ async function withRetry(operation, maxRetries = 3, delay = 1000) {
 
 // Безопасные обертки для Redis операций
 const redisClient = {
-  // GET с retry (Upstash автоматически сериализует/десериализует JSON)
+  // GET с retry
+  // ioredis автоматически сериализует/десериализует JSON
   async get(key) {
+    const client = getRedisClient();
     return Promise.race([
-      withRetry(() => redis.get(key)),
+      withRetry(async () => {
+        const value = await client.get(key);
+        // ioredis возвращает строку, нужно парсить JSON вручную
+        if (!value) return null;
+        try {
+          return JSON.parse(value);
+        } catch (e) {
+          // Если не JSON, возвращаем как есть (для числовых значений)
+          return value;
+        }
+      }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis GET timeout after 10s')), 10000)
       )
     ]);
   },
 
-  // SET с retry (Upstash автоматически сериализует/десериализует JSON)
+  // SET с retry
   async set(key, value, options = {}) {
+    const client = getRedisClient();
     return Promise.race([
-      withRetry(() => redis.set(key, value, options)),
+      withRetry(async () => {
+        const serialized = JSON.stringify(value);
+        if (options.EX) {
+          return await client.setex(key, options.EX, serialized);
+        }
+        return await client.set(key, serialized);
+      }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis SET timeout after 10s')), 10000)
       )
     ]);
   },
 
-  // SETEX с retry (Upstash автоматически сериализует/десериализует JSON)
+  // SETEX с retry
   async setex(key, seconds, value) {
-    return withRetry(() => redis.setex(key, seconds, value));
+    const client = getRedisClient();
+    return withRetry(async () => {
+      const serialized = JSON.stringify(value);
+      return await client.setex(key, seconds, serialized);
+    });
   },
 
   // MGET с retry и логированием
   async mget(...keys) {
+    const client = getRedisClient();
     console.log('🔍 redisClient.mget: Запрос для', keys.length, 'ключей');
     const results = await Promise.race([
-      withRetry(() => redis.mget(...keys)),
+      withRetry(async () => {
+        const values = await client.mget(...keys);
+        return values.map(v => {
+          if (!v) return null;
+          try {
+            return JSON.parse(v);
+          } catch (e) {
+            return v;
+          }
+        });
+      }),
       new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Redis MGET timeout after 15s')), 15000)
       )
     ]);
     console.log('✅ redisClient.mget: Получено', results ? results.length : 0, 'результатов');
-    // Логируем первый результат для диагностики
     if (results && results.length > 0 && results[0]) {
       const first = results[0];
       if (first && first.messages) {
@@ -74,53 +130,57 @@ const redisClient = {
 
   // INCR с retry
   async incr(key) {
-    return withRetry(() => redis.incr(key));
+    const client = getRedisClient();
+    return withRetry(() => client.incr(key));
   },
 
   // Redis SET операции
   async sadd(key, ...members) {
-    return withRetry(() => redis.sadd(key, ...members));
+    const client = getRedisClient();
+    return withRetry(() => client.sadd(key, ...members));
   },
 
   async smembers(key) {
-    return withRetry(() => redis.smembers(key));
+    const client = getRedisClient();
+    return withRetry(() => client.smembers(key));
   },
 
   async srem(key, ...members) {
-    return withRetry(() => redis.srem(key, ...members));
-  },
-
-  // SCARD для подсчета элементов в SET
-  async scard(key) {
-    return withRetry(() => redis.scard(key));
+    const client = getRedisClient();
+    return withRetry(() => client.srem(key, ...members));
   },
 
   // EXPIRE для установки TTL
   async expire(key, seconds) {
-    return withRetry(() => redis.expire(key, seconds));
+    const client = getRedisClient();
+    return withRetry(() => client.expire(key, seconds));
   },
 
   // DEL для удаления ключа
   async del(...keys) {
-    return withRetry(() => redis.del(...keys));
+    const client = getRedisClient();
+    return withRetry(() => client.del(...keys));
   },
 
-  // SCAN для безопасного получения ключей (замена keys())
+  // SCAN для безопасного получения ключей
   async scan(cursor = 0, match = '*', count = 100) {
-    return withRetry(() => redis.scan(cursor, { match, count }), 3, 1000);
+    const client = getRedisClient();
+    return withRetry(() => client.scan(cursor, 'MATCH', match, 'COUNT', count), 3, 1000);
   },
 
-  // KEYS - старая блокирующая команда (не рекомендуется для production, но нужна если SCAN не работает)
+  // KEYS - старая блокирующая команда (не рекомендуется для production)
   async keys(pattern = '*') {
-    return withRetry(() => redis.keys(pattern), 1, 5000);
+    const client = getRedisClient();
+    return withRetry(() => client.keys(pattern), 1, 5000);
   },
 
   // Получить все ключи с помощью SCAN (неблокирующая операция)
   async getAllKeys(pattern = '*', batchSize = 100) {
+    const client = getRedisClient();
     const keys = [];
     let cursor = 0;
     let iterations = 0;
-    const maxIterations = 100; // Защита от бесконечного цикла
+    const maxIterations = 100;
     
     try {
       do {
@@ -131,12 +191,10 @@ const redisClient = {
           )
         ]);
         
-        // Проверяем формат результата
         if (Array.isArray(result)) {
-          cursor = result[0];
+          cursor = parseInt(result[0]);
           keys.push(...result[1]);
         } else if (result && typeof result === 'object') {
-          // Возможно, Upstash возвращает объект
           cursor = result.cursor || result[0] || 0;
           const resultKeys = result.keys || result[1] || [];
           keys.push(...resultKeys);
@@ -153,7 +211,6 @@ const redisClient = {
       } while (cursor !== 0 && cursor !== '0');
     } catch (error) {
       console.error('SCAN error:', error.message);
-      // Fallback на KEYS если SCAN не работает
       console.log('Falling back to KEYS command...');
       try {
         const fallbackKeys = await this.keys(pattern);
@@ -171,7 +228,8 @@ const redisClient = {
   // Проверка доступности Redis
   async ping() {
     try {
-      await withRetry(() => redis.ping(), 1, 500);
+      const client = getRedisClient();
+      await withRetry(() => client.ping(), 1, 500);
       return true;
     } catch (error) {
       console.error('Redis ping failed:', error.message);
@@ -196,24 +254,8 @@ const redisClient = {
       console.error(`Redis SET failed for key ${key}:`, error.message);
       return false;
     }
-  },
-
-  // Redis LIST операции для хранения ошибок
-  async lpush(key, ...values) {
-    return withRetry(() => redis.lpush(key, ...values));
-  },
-
-  async ltrim(key, start, stop) {
-    return withRetry(() => redis.ltrim(key, start, stop));
-  },
-
-  async lrange(key, start, stop) {
-    return withRetry(() => redis.lrange(key, start, stop));
-  },
-
-  async llen(key) {
-    return withRetry(() => redis.llen(key));
   }
 };
 
 module.exports = redisClient;
+

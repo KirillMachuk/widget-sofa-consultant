@@ -56,13 +56,31 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     
     console.log(`📊 Всего ID сессий в SET: ${sessionIds.length}`);
     
-    // ИСПРАВЛЕНИЕ: Загружаем ВСЕ сессии, а не только пагинированные
+    // ИСПРАВЛЕНИЕ: Загружаем ВСЕ сессии порциями, чтобы не превысить лимит размера запроса (10MB)
     // Формируем ключи для получения данных ВСЕХ сессий
     const keys = sessionIds.map(id => `chat:${id}`);
     console.log('Ключи для mget (все сессии):', keys.length);
     
-    // Читаем ВСЕ сессии из Redis
-    const sessions = await redisClient.mget(...keys);
+    // Загружаем сессии порциями по 500 за раз (чтобы не превысить лимит 10MB)
+    const BATCH_SIZE = 500;
+    const sessions = [];
+    
+    for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+      const batch = keys.slice(i, i + BATCH_SIZE);
+      console.log(`📦 Загружаем батч ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} сессий (${i + 1}-${Math.min(i + BATCH_SIZE, keys.length)})`);
+      
+      try {
+        const batchResults = await redisClient.mget(...batch);
+        if (batchResults && Array.isArray(batchResults)) {
+          sessions.push(...batchResults);
+        }
+      } catch (error) {
+        console.error(`❌ Ошибка загрузки батча ${Math.floor(i / BATCH_SIZE) + 1}:`, error.message);
+        // Продолжаем загрузку остальных батчей
+        sessions.push(...new Array(batch.length).fill(null));
+      }
+    }
+    
     console.log('Результат mget (кол-во элементов):', sessions ? sessions.length : 0);
     
     // Фильтруем null (несуществующие ключи) и нормализуем данные
