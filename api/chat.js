@@ -269,6 +269,15 @@ async function handler(req, res){
   // Сохраняем req в глобальной переменной для доступа в других функциях
   global.currentRequest = req;
   
+  // Логирование всех входящих запросов
+  const requestTimestamp = new Date().toISOString();
+  console.log(`[${requestTimestamp}] Incoming request:`, {
+    method: req.method,
+    url: req.url,
+    referer: req.headers.referer || req.headers.origin || 'not set',
+    userAgent: req.headers['user-agent'] ? req.headers['user-agent'].substring(0, 100) : 'not set'
+  });
+  
   // Add CORS headers for external domains
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -278,14 +287,27 @@ async function handler(req, res){
     return res.status(200).end();
   }
   
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'POST') {
+    console.log(`[${requestTimestamp}] Method not allowed:`, req.method);
+    return res.status(405).end();
+  }
   
   try{
     const { action, session_id, user_message, history_tail, prompt, locale, aggressive_mode, user_messages_after_last_form } = req.body || {};
     
+    // Логирование параметров запроса
+    console.log(`[${requestTimestamp}] Request params:`, {
+      action,
+      session_id: session_id ? `${session_id.substring(0, 10)}...` : 'not set',
+      has_user_message: !!user_message,
+      has_prompt: !!prompt,
+      locale
+    });
+    
     // Rate limiting для chat endpoint (после получения session_id)
     const rateLimitResult = await checkRateLimit(req);
     if (!rateLimitResult.allowed) {
+      console.log(`[${requestTimestamp}] Rate limit exceeded for session:`, session_id ? `${session_id.substring(0, 10)}...` : 'unknown');
       return res.status(429).json({
         error: 'Too Many Requests',
         message: 'Превышен лимит запросов. Попробуйте позже.',
@@ -295,7 +317,13 @@ async function handler(req, res){
     
     // Handle session initialization (first request with prompt)
     if (action === 'init' && prompt) {
-      console.log(`[${new Date().toISOString()}] Инициализация сессии:`, session_id);
+      const initTimestamp = new Date().toISOString();
+      console.log(`[${initTimestamp}] Session init request:`, {
+        session_id: session_id ? `${session_id.substring(0, 10)}...` : 'not set',
+        referer: req.headers.referer || req.headers.origin || 'not set',
+        prompt_length: prompt ? prompt.length : 0,
+        locale: locale || 'ru'
+      });
       
       // Кэшируем промпт локально для быстрого доступа
       getCachedPrompt(prompt);
@@ -346,7 +374,13 @@ async function handler(req, res){
           console.log('Новая сессия создана в Redis:', session_id, 'источник:', source, 'Добавлена в sessions:list:', addedToSet > 0);
         }
       } catch (error) {
-        console.error('Ошибка сохранения сессии в Redis при инициализации:', error);
+        const errorTimestamp = new Date().toISOString();
+        console.error(`[${errorTimestamp}] Redis error in session init:`, {
+          session_id: session_id ? `${session_id.substring(0, 10)}...` : 'not set',
+          error_message: error.message,
+          error_stack: error.stack ? error.stack.substring(0, 200) : 'no stack',
+          referer: req.headers.referer || req.headers.origin || 'not set'
+        });
         trackError('redis_error', `Redis error in session init: ${error.message}`, req).catch(() => {});
         // Продолжаем работу даже если не удалось сохранить в Redis
       }
@@ -384,7 +418,13 @@ async function handler(req, res){
         
         console.log('Сессия загружена из Redis:', session_id);
       } catch (error) {
-        console.error('Ошибка загрузки сессии из Redis:', error);
+        const errorTimestamp = new Date().toISOString();
+        console.error(`[${errorTimestamp}] Redis error loading session:`, {
+          session_id: session_id ? `${session_id.substring(0, 10)}...` : 'not set',
+          error_message: error.message,
+          error_stack: error.stack ? error.stack.substring(0, 200) : 'no stack',
+          referer: req.headers.referer || req.headers.origin || 'not set'
+        });
         trackError('redis_error', `Redis error loading session: ${error.message}`, req).catch(() => {});
         return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
       }
@@ -581,8 +621,17 @@ async function handler(req, res){
     // No valid action found
     return res.status(400).json({ error: 'Invalid request format' });
   }catch(e){
-    console.error('КРИТИЧЕСКАЯ ОШИБКА в API чата:', e);
-    console.error('Стек ошибки:', e.stack);
+    const errorTimestamp = new Date().toISOString();
+    console.error(`[${errorTimestamp}] CRITICAL ERROR in chat API:`, {
+      error_message: e.message,
+      error_name: e.name,
+      error_stack: e.stack ? e.stack.substring(0, 500) : 'no stack',
+      method: req.method,
+      url: req.url,
+      referer: req.headers.referer || req.headers.origin || 'not set',
+      userAgent: req.headers['user-agent'] ? req.headers['user-agent'].substring(0, 100) : 'not set',
+      body_preview: req.body ? JSON.stringify(req.body).substring(0, 200) : 'no body'
+    });
     trackError('api_error', `Critical error in chat API: ${e.message}`, req, { status: 'internal_error' }).catch(() => {});
     const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
     return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift' });
