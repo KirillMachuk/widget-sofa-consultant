@@ -6,6 +6,15 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
   try {
     console.log('🔍 Получаем список сессий из Redis SET для источника:', source);
     
+    // ДИАГНОСТИКА: Проверяем оба источника для понимания распределения сессий
+    try {
+      const testSessionsCount = await redisClient.scard('sessions:list:test');
+      const nmShopSessionsCount = await redisClient.scard('sessions:list:nm-shop');
+      console.log(`📊 Диагностика источников: test=${testSessionsCount || 0}, nm-shop=${nmShopSessionsCount || 0}`);
+    } catch (diagError) {
+      console.warn('⚠️ Не удалось получить диагностику источников:', diagError.message);
+    }
+    
     // Используем разные ключи для разных источников
     const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
     
@@ -139,31 +148,116 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       
       // Логируем статистику после нормализации
       const sessionsWithMessages = validSessions.filter(s => s.messages && Array.isArray(s.messages) && s.messages.length > 0);
-      const sessionsWithContacts = validSessions.filter(s => s.contacts && (s.contacts.name || s.contacts.phone));
+      const sessionsWithContacts = validSessions.filter(s => s.contacts && (
+        (s.contacts.name && s.contacts.name.trim() !== '') || 
+        (s.contacts.phone && s.contacts.phone.trim() !== '')
+      ));
       console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
     }
     
-    // ИСПРАВЛЕНИЕ: Показываем ВСЕ сессии в админке, независимо от наличия сообщений или контактов
-    // Это позволяет видеть все переписки клиентов, даже если данные еще не полностью сохранены
-    console.log(`📋 Всего валидных сессий для отображения: ${validSessions.length}`);
-    
-    // Диагностическое логирование для первых 5 сессий
-    validSessions.slice(0, 5).forEach((session, idx) => {
+    // ФИЛЬТРАЦИЯ: Показываем только сессии с данными (сообщения ИЛИ заполненная форма)
+    // Это исключает пустые сессии, которые были только инициализированы
+    const sessionsWithData = validSessions.filter(session => {
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
-      const hasContacts = session.contacts && (session.contacts.name || session.contacts.phone);
-      console.log(`🔍 Сессия ${idx + 1} (${session.sessionId?.substring(0, 10)}...):`, {
-        hasMessages,
-        messagesLength: session.messages ? session.messages.length : 0,
-        messagesType: typeof session.messages,
-        hasContacts,
-        contacts: session.contacts ? Object.keys(session.contacts) : null,
-        createdAt: session.createdAt,
-        lastUpdated: session.lastUpdated
-      });
+      // Проверяем контакты: форма считается заполненной, если есть name ИЛИ phone (не пустые строки)
+      const hasContacts = session.contacts && (
+        (session.contacts.name && session.contacts.name.trim() !== '') || 
+        (session.contacts.phone && session.contacts.phone.trim() !== '')
+      );
+      const hasData = hasMessages || hasContacts;
+      
+      return hasData;
     });
     
+    console.log(`📋 После фильтрации: ${sessionsWithData.length} сессий с данными из ${validSessions.length} всего`);
+    
+    // Диагностическое логирование для понимания, какие сессии отфильтрованы
+    const filteredOut = validSessions.length - sessionsWithData.length;
+    if (filteredOut > 0) {
+      console.log(`⚠️ Отфильтровано ${filteredOut} пустых сессий (без сообщений и контактов)`);
+      
+      // Показываем примеры отфильтрованных сессий для диагностики
+      const emptySessions = validSessions.filter(s => {
+        const hasMessages = s.messages && Array.isArray(s.messages) && s.messages.length > 0;
+        const hasContacts = s.contacts && (
+          (s.contacts.name && s.contacts.name.trim() !== '') || 
+          (s.contacts.phone && s.contacts.phone.trim() !== '')
+        );
+        return !hasMessages && !hasContacts;
+      });
+      
+      if (emptySessions.length > 0) {
+        console.log(`🔍 Примеры пустых сессий (первые 3):`);
+        emptySessions.slice(0, 3).forEach((session, idx) => {
+          console.log(`  Пустая сессия ${idx + 1}:`, {
+            sessionId: session.sessionId?.substring(0, 15),
+            source: session.source || 'не указан',
+            createdAt: session.createdAt,
+            lastUpdated: session.lastUpdated,
+            hasMessages: !!(session.messages && Array.isArray(session.messages) && session.messages.length > 0),
+            hasContacts: !!(session.contacts && (
+        (session.contacts.name && session.contacts.name.trim() !== '') || 
+        (session.contacts.phone && session.contacts.phone.trim() !== '')
+      )),
+            messagesType: typeof session.messages,
+            messagesLength: session.messages ? (Array.isArray(session.messages) ? session.messages.length : 'не массив') : 'нет'
+          });
+        });
+      }
+    }
+    
+    // Диагностическое логирование для сессий с данными (первые 5)
+    if (sessionsWithData.length > 0) {
+      console.log(`🔍 Примеры сессий с данными (первые ${Math.min(5, sessionsWithData.length)}):`);
+      sessionsWithData.slice(0, 5).forEach((session, idx) => {
+        const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
+        const hasContacts = session.contacts && (
+          (session.contacts.name && session.contacts.name.trim() !== '') || 
+          (session.contacts.phone && session.contacts.phone.trim() !== '')
+        );
+        const contactsInfo = session.contacts ? {
+          name: session.contacts.name || 'нет',
+          phone: session.contacts.phone || 'нет',
+          category: session.contacts.category || 'нет',
+          gift: session.contacts.gift || 'нет',
+          messenger: session.contacts.messenger || 'нет',
+          wishes: session.contacts.wishes || 'нет'
+        } : null;
+        console.log(`  Сессия с данными ${idx + 1}:`, {
+          sessionId: session.sessionId?.substring(0, 15),
+          source: session.source || 'не указан',
+          hasMessages,
+          messagesLength: session.messages ? session.messages.length : 0,
+          hasContacts,
+          contacts: contactsInfo,
+          createdAt: session.createdAt,
+          lastUpdated: session.lastUpdated
+        });
+      });
+    }
+    
+    // Дополнительная диагностика: проверяем сессии с контактами, но без name/phone
+    const sessionsWithOtherContacts = validSessions.filter(s => {
+      const hasNameOrPhone = s.contacts && (
+        (s.contacts.name && s.contacts.name.trim() !== '') || 
+        (s.contacts.phone && s.contacts.phone.trim() !== '')
+      );
+      const hasOtherFields = s.contacts && (s.contacts.category || s.contacts.gift || s.contacts.messenger || s.contacts.wishes);
+      return !hasNameOrPhone && hasOtherFields;
+    });
+    if (sessionsWithOtherContacts.length > 0) {
+      console.log(`⚠️ ВНИМАНИЕ: Найдено ${sessionsWithOtherContacts.length} сессий с контактами, но БЕЗ name/phone (только другие поля формы)`);
+      sessionsWithOtherContacts.slice(0, 3).forEach((session, idx) => {
+        console.log(`  Сессия с частичными контактами ${idx + 1}:`, {
+          sessionId: session.sessionId?.substring(0, 15),
+          source: session.source || 'не указан',
+          contacts: session.contacts ? Object.keys(session.contacts).filter(k => session.contacts[k]) : null
+        });
+      });
+    }
+    
     // ИСПРАВЛЕНИЕ: Стабильная сортировка (по lastUpdated, затем по sessionId для одинаковых дат)
-    validSessions.sort((a, b) => {
+    sessionsWithData.sort((a, b) => {
       const dateA = new Date(a.lastUpdated || a.createdAt || 0);
       const dateB = new Date(b.lastUpdated || b.createdAt || 0);
       
@@ -176,11 +270,11 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       return (a.sessionId || '').localeCompare(b.sessionId || '');
     });
     
-    console.log(`✅ После сортировки: ${validSessions.length} сессий`);
+    console.log(`✅ После сортировки: ${sessionsWithData.length} сессий с данными`);
     
-    // ИСПРАВЛЕНИЕ: Применяем пагинацию ПОСЛЕ сортировки
-    const total = validSessions.length;
-    const paginatedSessions = validSessions.slice(offset, offset + limit);
+    // ИСПРАВЛЕНИЕ: Применяем пагинацию ПОСЛЕ фильтрации и сортировки
+    const total = sessionsWithData.length;
+    const paginatedSessions = sessionsWithData.slice(offset, offset + limit);
     console.log(`📄 Пагинация: показываем ${paginatedSessions.length} из ${total} (offset: ${offset}, limit: ${limit})`);
     
     return { sessions: paginatedSessions, total };
@@ -232,7 +326,10 @@ module.exports = async function handler(req, res) {
       lastMessage: session.messages && session.messages.length > 0 
         ? session.messages[session.messages.length - 1] 
         : null,
-      hasContacts: !!(session.contacts && (session.contacts.name || session.contacts.phone))
+      hasContacts: !!(session.contacts && (
+        (session.contacts.name && session.contacts.name.trim() !== '') || 
+        (session.contacts.phone && session.contacts.phone.trim() !== '')
+      ))
     }));
     
     // Логируем финальную статистику
