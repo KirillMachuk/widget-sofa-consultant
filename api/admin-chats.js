@@ -143,43 +143,27 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
     }
     
-    // ИСПРАВЛЕНИЕ: Фильтруем сессии с действиями (сообщения или контакты) ДО пагинации
-    const sessionsWithData = validSessions.filter(session => {
+    // ИСПРАВЛЕНИЕ: Показываем ВСЕ сессии в админке, независимо от наличия сообщений или контактов
+    // Это позволяет видеть все переписки клиентов, даже если данные еще не полностью сохранены
+    console.log(`📋 Всего валидных сессий для отображения: ${validSessions.length}`);
+    
+    // Диагностическое логирование для первых 5 сессий
+    validSessions.slice(0, 5).forEach((session, idx) => {
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
       const hasContacts = session.contacts && (session.contacts.name || session.contacts.phone);
-      const hasData = hasMessages || hasContacts;
-      
-      // Детальное логирование для отладки (только первые 3 сессии)
-      if (validSessions.indexOf(session) < 3) {
-        console.log(`🔍 Сессия ${session.sessionId?.substring(0, 10)}...:`, {
-          hasMessages,
-          messagesLength: session.messages ? session.messages.length : 0,
-          messagesType: typeof session.messages,
-          hasContacts,
-          contacts: session.contacts ? Object.keys(session.contacts) : null,
-          hasData
-        });
-      }
-      
-      return hasData;
+      console.log(`🔍 Сессия ${idx + 1} (${session.sessionId?.substring(0, 10)}...):`, {
+        hasMessages,
+        messagesLength: session.messages ? session.messages.length : 0,
+        messagesType: typeof session.messages,
+        hasContacts,
+        contacts: session.contacts ? Object.keys(session.contacts) : null,
+        createdAt: session.createdAt,
+        lastUpdated: session.lastUpdated
+      });
     });
     
-    console.log(`📋 После фильтрации по действиям: ${sessionsWithData.length} из ${validSessions.length}`);
-    
-    // Если после фильтрации нет сессий, логируем детали для диагностики
-    if (sessionsWithData.length === 0 && validSessions.length > 0) {
-      console.warn('⚠️ ВНИМАНИЕ: Все сессии отфильтрованы! Примеры сессий:');
-      validSessions.slice(0, 3).forEach((session, idx) => {
-        console.warn(`  Сессия ${idx + 1} (${session.sessionId?.substring(0, 10)}...):`, {
-          messages: session.messages ? `массив, длина ${session.messages.length}` : `тип: ${typeof session.messages}`,
-          contacts: session.contacts ? JSON.stringify(session.contacts) : 'нет',
-          rawMessages: session.messages ? JSON.stringify(session.messages.slice(0, 2)) : 'нет'
-        });
-      });
-    }
-    
     // ИСПРАВЛЕНИЕ: Стабильная сортировка (по lastUpdated, затем по sessionId для одинаковых дат)
-    sessionsWithData.sort((a, b) => {
+    validSessions.sort((a, b) => {
       const dateA = new Date(a.lastUpdated || a.createdAt || 0);
       const dateB = new Date(b.lastUpdated || b.createdAt || 0);
       
@@ -192,11 +176,11 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       return (a.sessionId || '').localeCompare(b.sessionId || '');
     });
     
-    console.log(`✅ После сортировки: ${sessionsWithData.length} сессий`);
+    console.log(`✅ После сортировки: ${validSessions.length} сессий`);
     
-    // ИСПРАВЛЕНИЕ: Применяем пагинацию ПОСЛЕ фильтрации и сортировки
-    const total = sessionsWithData.length;
-    const paginatedSessions = sessionsWithData.slice(offset, offset + limit);
+    // ИСПРАВЛЕНИЕ: Применяем пагинацию ПОСЛЕ сортировки
+    const total = validSessions.length;
+    const paginatedSessions = validSessions.slice(offset, offset + limit);
     console.log(`📄 Пагинация: показываем ${paginatedSessions.length} из ${total} (offset: ${offset}, limit: ${limit})`);
     
     return { sessions: paginatedSessions, total };
@@ -232,9 +216,9 @@ module.exports = async function handler(req, res) {
     
     console.log('Параметры запроса:', { source, limit, offset });
     
-    // Читаем реальные данные из Redis (фильтрация и сортировка уже применены в readChats)
+    // Читаем реальные данные из Redis (сортировка и пагинация уже применены в readChats)
     const { sessions: chats, total } = await readChats(source, limit, offset);
-    console.log('📊 Итоговый результат: найдено чатов:', chats.length, 'из', total, 'с действиями');
+    console.log('📊 Итоговый результат: найдено чатов:', chats.length, 'из', total, 'всего сессий');
     
     // Форматируем данные для фронтенда
     const formattedSessions = chats.map(session => ({
