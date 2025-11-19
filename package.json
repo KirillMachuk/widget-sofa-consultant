@@ -10,7 +10,8 @@
     "build": "echo 'No build step required'",
     "start": "echo 'Starting server'",
     "deploy": "gh-pages -d .",
-    "predeploy": "npm run build"
+    "predeploy": "npm run build",
+    "clear-sessions": "node utils/clear-old-sessions.js"
   },
   "homepage": "https://ваш-username.github.io/ваш-репозиторий",
   "dependencies": {

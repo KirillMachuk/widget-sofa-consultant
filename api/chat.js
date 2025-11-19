@@ -1,6 +1,17 @@
-// Simple in-memory cache for sessions with size limit
-const sessionCache = new Map();
-const MAX_SESSION_CACHE_SIZE = 100; // Ограничиваем размер кэша
+// Локальный кэш промпта (живет в рамках serverless инстанса)
+let cachedPrompt = null;
+let promptCacheTime = 0;
+const PROMPT_CACHE_TTL = 10 * 60 * 1000; // 10 минут
+
+function getCachedPrompt(sessionPrompt) {
+  const now = Date.now();
+  if (cachedPrompt && (now - promptCacheTime < PROMPT_CACHE_TTL)) {
+    return cachedPrompt;
+  }
+  cachedPrompt = sessionPrompt;
+  promptCacheTime = now;
+  return cachedPrompt;
+}
 
 // Circuit Breaker для OpenAI API
 const circuitBreaker = {
@@ -22,24 +33,6 @@ function isCircuitOpen() {
     return circuitBreaker.state === 'open';
   }
   return false;
-}
-
-// Очистка старых сессий из кэша
-function cleanupSessionCache() {
-  if (sessionCache.size > MAX_SESSION_CACHE_SIZE) {
-    const entries = Array.from(sessionCache.entries());
-    // Сортируем по времени последнего обновления
-    entries.sort((a, b) => {
-      const timeA = new Date(a[1].lastUpdated || a[1].createdAt || 0).getTime();
-      const timeB = new Date(b[1].lastUpdated || b[1].createdAt || 0).getTime();
-      return timeA - timeB;
-    });
-    
-    // Удаляем самые старые сессии
-    const toDelete = entries.slice(0, sessionCache.size - MAX_SESSION_CACHE_SIZE);
-    toDelete.forEach(([key]) => sessionCache.delete(key));
-    console.log(`Очищено ${toDelete.length} старых сессий из кэша`);
-  }
 }
 
 // Catalog module removed - no longer needed
@@ -251,8 +244,8 @@ async function handler(req, res){
     if (action === 'init' && prompt) {
       console.log(`[${new Date().toISOString()}] Инициализация сессии:`, session_id);
       
-      // Очищаем кэш только если он переполнен
-      cleanupSessionCache();
+      // Кэшируем промпт локально для быстрого доступа
+      getCachedPrompt(prompt);
       
       const sessionData = { 
         prompt, 
@@ -260,8 +253,6 @@ async function handler(req, res){
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString()
       };
-      
-      sessionCache.set(session_id, sessionData);
       
       // Сохраняем сессию в Redis сразу при инициализации
       try {
@@ -306,7 +297,7 @@ async function handler(req, res){
         // Продолжаем работу даже если не удалось сохранить в Redis
       }
       
-      console.log(`[${new Date().toISOString()}] Сессия инициализирована, размер кэша: ${sessionCache.size}`);
+      console.log(`[${new Date().toISOString()}] Сессия инициализирована в Redis:`, session_id);
       
       return res.status(200).json({ status: 'initialized' });
     }
@@ -316,38 +307,32 @@ async function handler(req, res){
       console.log('Обработка чата для сессии:', session_id);
       console.log('Сообщение пользователя:', user_message);
       
-      let session = sessionCache.get(session_id);
-      
-      // Если сессия не найдена в кеше, пытаемся восстановить из Redis
-      if (!session) {
-        console.log('Сессия не найдена в кеше, пытаемся восстановить из Redis:', session_id);
-        try {
-          const chatKey = `chat:${session_id}`;
-          const redisSession = await redis.get(chatKey);
-          
-          if (redisSession && redisSession.prompt) {
-            // Восстанавливаем сессию в кеше из Redis
-            session = {
-              prompt: redisSession.prompt,
-              locale: redisSession.locale || 'ru',
-              createdAt: redisSession.createdAt || new Date().toISOString(),
-              lastUpdated: redisSession.lastUpdated || new Date().toISOString()
-            };
-            sessionCache.set(session_id, session);
-            console.log('Сессия восстановлена из Redis:', session_id);
-          } else {
-            console.log('Сессия не найдена в Redis:', session_id);
-            return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
-          }
-        } catch (error) {
-          console.error('Ошибка восстановления сессии из Redis:', error);
+      // Всегда читаем сессию из Redis (не используем in-memory кэш)
+      let session;
+      try {
+        const chatKey = `chat:${session_id}`;
+        const redisSession = await redis.get(chatKey);
+        
+        if (!redisSession || !redisSession.prompt) {
+          console.log('Сессия не найдена в Redis:', session_id);
           return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
         }
+        
+        // Используем промпт из Redis, с локальным кэшированием для производительности
+        const cachedPrompt = getCachedPrompt(redisSession.prompt);
+        
+        session = {
+          prompt: cachedPrompt,
+          locale: redisSession.locale || 'ru',
+          createdAt: redisSession.createdAt || new Date().toISOString(),
+          lastUpdated: redisSession.lastUpdated || new Date().toISOString()
+        };
+        
+        console.log('Сессия загружена из Redis:', session_id);
+      } catch (error) {
+        console.error('Ошибка загрузки сессии из Redis:', error);
+        return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
       }
-      
-      // Обновляем время последнего использования сессии
-      session.lastUpdated = new Date().toISOString();
-      sessionCache.set(session_id, session);
       
       console.log('Сессия найдена:', !!session);
       
