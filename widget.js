@@ -1598,75 +1598,97 @@
     const [p] = await Promise.allSettled([promptPromise]);
     PROMPT = p.status==='fulfilled' ? p.value : null;
     
+    const SESSION_INIT_TIMEOUT = 20000; // более мягкий таймаут
+    const SESSION_INIT_MAX_RETRIES = 2;
+    
     // Initialize session on server with prompt only
     if (PROMPT && CONFIG.openaiEndpoint) {
-      const initController = new AbortController();
-      const initTimeoutId = setTimeout(() => initController.abort(), 10000); // 10 секунд таймаут
-      
-      const initStartTime = Date.now();
       const initUrl = CONFIG.openaiEndpoint;
+      const initPayload = {
+        action: 'init',
+        session_id: SESSION_ID,
+        prompt: PROMPT,
+        locale: 'ru'
+      };
       
-      fetch(initUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'init',
-          session_id: SESSION_ID,
-          prompt: PROMPT,
-          locale: 'ru'
-        }),
-        signal: initController.signal
-      }).then(res => {
-        clearTimeout(initTimeoutId);
-        const initLatency = Date.now() - initStartTime;
+      const runInitAttempt = async (attempt) => {
+        const initController = new AbortController();
+        const initTimeoutId = setTimeout(() => initController.abort(), SESSION_INIT_TIMEOUT);
+        const initStartTime = Date.now();
         
-        if (!res.ok) {
-          const errorDetails = {
-            status: res.status,
-            statusText: res.statusText,
+        try {
+          const res = await fetch(initUrl, {
+            method: 'POST',
+            keepalive: true,
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(initPayload),
+            signal: initController.signal
+          });
+          
+          clearTimeout(initTimeoutId);
+          const initLatency = Date.now() - initStartTime;
+          
+          if (!res.ok) {
+            console.warn('[Widget] Session init failed (attempt %d): %o', attempt, { status: res.status, latency: initLatency });
+            return { success: false, latency: initLatency, status: res.status };
+          }
+          
+          if (DEBUG) {
+            console.log('[Widget] Session initialized successfully:', { latency: initLatency, session_id: SESSION_ID });
+          }
+          return { success: true };
+        } catch (e) {
+          clearTimeout(initTimeoutId);
+          const initLatency = Date.now() - initStartTime;
+          
+          if (DEBUG) {
+            console.warn('[Widget] Session init attempt failed:', {
+              attempt,
+              error: e.message,
+              type: e.name,
+              latency: initLatency
+            });
+          }
+          
+          // Не трекаем промежуточные ошибки, чтобы не захламлять аналитику
+          return { success: false, error: e, latency: initLatency };
+        }
+      };
+      
+      (async () => {
+        let lastErrorDetails = null;
+        
+        for (let attempt = 1; attempt <= SESSION_INIT_MAX_RETRIES; attempt++) {
+          const result = await runInitAttempt(attempt);
+          
+          if (result.success) {
+            lastErrorDetails = null;
+            break;
+          }
+          
+          lastErrorDetails = {
+            attempt,
+            ...('status' in result ? { status: result.status } : {}),
+            latency: result.latency,
+            error_name: result.error?.name,
+            error_message: result.error?.message,
             url: initUrl,
             session_id: SESSION_ID,
-            latency: initLatency,
             timestamp: new Date().toISOString()
           };
           
-          // Fallback логирование в консоль
-          console.error('[Widget] Session init failed:', errorDetails);
-          
-          trackError('session_init_error', `Session initialization failed with status ${res.status}`, errorDetails).catch(err => {
-            // Если trackError тоже не работает, логируем в консоль
+          if (attempt < SESSION_INIT_MAX_RETRIES) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          }
+        }
+        
+        if (lastErrorDetails) {
+          console.error('[Widget] Session init failed after retries:', lastErrorDetails);
+          trackError('session_init_error', 'Session initialization failed after retries', lastErrorDetails).catch(err => {
             console.error('[Widget] Failed to track error:', err);
           });
-        } else if (DEBUG) {
-          console.log('[Widget] Session initialized successfully:', { latency: initLatency, session_id: SESSION_ID });
         }
-      }).catch(e => {
-        clearTimeout(initTimeoutId);
-        const initLatency = Date.now() - initStartTime;
-        
-        const errorDetails = {
-          error_name: e.name,
-          error_message: e.message,
-          error_type: e.name === 'AbortError' ? 'timeout' : 'network_error',
-          url: initUrl,
-          session_id: SESSION_ID,
-          latency: initLatency,
-          timestamp: new Date().toISOString()
-        };
-        
-        // Fallback логирование в консоль (всегда работает)
-        console.error('[Widget] Session init error:', errorDetails);
-        
-        // Пытаемся отправить ошибку в аналитику
-        trackError('session_init_error', `Session initialization failed: ${e.message}`, errorDetails).catch(err => {
-          // Если trackError тоже не работает, логируем в консоль
-          console.error('[Widget] Failed to track error:', err);
-        });
-        
-        if (DEBUG) {
-          console.warn('[Widget] Failed to initialize session:', e);
-        }
-      });
+      })();
     }
   }
   

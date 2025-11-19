@@ -1,3 +1,11 @@
+function convertToMinskTime(isoString) {
+  var date = new Date(isoString);
+  // Convert to Minsk time (UTC+3)
+  var minskTime = new Date(date.getTime() + (3 * 60 * 60 * 1000));
+  // Format as readable date/time string
+  return Utilities.formatDate(minskTime, 'Europe/Minsk', 'dd.MM.yyyy HH:mm:ss');
+}
+
 function doPost(e) {
   try {
     var raw = e.postData && e.postData.contents ? e.postData.contents : '{}';
@@ -15,7 +23,7 @@ function doPost(e) {
       sh.appendRow(headers);
     }
 
-    var timestamp = data.timestamp || new Date().toISOString();
+    var timestamp = convertToMinskTime(data.timestamp || new Date().toISOString());
     var phone     = data.phone || '';
     var offer     = data.pretext || '';
     var pageUrl   = data.page_url || '';
