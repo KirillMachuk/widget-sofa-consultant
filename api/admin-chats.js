@@ -54,20 +54,39 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       return { sessions: [], total: 0 };
     }
     
-    // Применяем пагинацию
-    const total = sessionIds.length;
-    const paginatedIds = sessionIds.slice(offset, offset + limit);
-    console.log(`Пагинация: показываем ${paginatedIds.length} из ${total} (offset: ${offset}, limit: ${limit})`);
+    console.log(`📊 Всего ID сессий в SET: ${sessionIds.length}`);
     
-    // Формируем ключи для получения данных сессий
-    const keys = paginatedIds.map(id => `chat:${id}`);
-    console.log('Ключи для mget:', keys.length);
+    // ИСПРАВЛЕНИЕ: Загружаем ВСЕ сессии, а не только пагинированные
+    // Формируем ключи для получения данных ВСЕХ сессий
+    const keys = sessionIds.map(id => `chat:${id}`);
+    console.log('Ключи для mget (все сессии):', keys.length);
     
-    // Читаем сессии порциями
+    // Читаем ВСЕ сессии из Redis
     const sessions = await redisClient.mget(...keys);
     console.log('Результат mget (кол-во элементов):', sessions ? sessions.length : 0);
-    const validSessions = sessions.filter(session => session !== null);
-    console.log(`Прочитано валидных сессий: ${validSessions.length}`);
+    
+    // Фильтруем null (несуществующие ключи) и нормализуем данные
+    const validSessions = [];
+    const missingSessionIds = [];
+    
+    sessions.forEach((session, index) => {
+      if (session === null) {
+        // Запоминаем несуществующие сессии для очистки SET
+        missingSessionIds.push(sessionIds[index]);
+      } else {
+        validSessions.push(session);
+      }
+    });
+    
+    console.log(`Прочитано валидных сессий: ${validSessions.length}, несуществующих: ${missingSessionIds.length}`);
+    
+    // Очищаем SET от несуществующих ключей (в фоне, не блокируя ответ)
+    if (missingSessionIds.length > 0) {
+      redisClient.srem(sessionsListKey, ...missingSessionIds).catch(err => {
+        console.warn('Не удалось очистить SET от несуществующих сессий:', err.message);
+      });
+      console.log(`🧹 Запланирована очистка SET от ${missingSessionIds.length} несуществующих сессий`);
+    }
     
     // Нормализуем данные сессий (защита от старых/некорректных данных)
     if (validSessions.length > 0) {
@@ -83,34 +102,39 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
           session.contacts = null;
         }
       });
-      
-      // Логируем первую сессию для отладки
-      const firstSession = validSessions[0];
-      console.log('Пример первой сессии (краткая):', {
-        sessionId: firstSession.sessionId,
-        hasMessages: !!firstSession.messages,
-        messagesLength: firstSession.messages ? firstSession.messages.length : 'undefined',
-        messagesType: typeof firstSession.messages,
-        hasContacts: !!firstSession.contacts,
-        contactsKeys: firstSession.contacts ? Object.keys(firstSession.contacts) : 'undefined'
-      });
-      // Логируем ПЕРВЫЕ 3 сообщения для диагностики
-      if (firstSession.messages && Array.isArray(firstSession.messages)) {
-        console.log('🔍 Первые сообщения в сессии [0]:', JSON.stringify(firstSession.messages.slice(0, 3), null, 2));
-      }
-      
-      // СПЕЦИАЛЬНО логируем сессию s_ak0ient4olimg0vjdh8
-      const targetSession = validSessions.find(s => s.sessionId === 's_ak0ient4olimg0vjdh8');
-      if (targetSession) {
-        console.log('🎯 Найдена целевая сессия s_ak0ient4olimg0vjdh8:');
-        console.log('  - messages.length:', targetSession.messages ? targetSession.messages.length : 0);
-        console.log('  - lastUpdated:', targetSession.lastUpdated);
-      } else {
-        console.log('❌ Сессия s_ak0ient4olimg0vjdh8 НЕ найдена в результатах mget');
-      }
     }
     
-    return { sessions: validSessions, total };
+    // ИСПРАВЛЕНИЕ: Фильтруем сессии с действиями (сообщения или контакты) ДО пагинации
+    const sessionsWithData = validSessions.filter(session => {
+      const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
+      const hasContacts = session.contacts && (session.contacts.name || session.contacts.phone);
+      return hasMessages || hasContacts;
+    });
+    
+    console.log(`📋 После фильтрации по действиям: ${sessionsWithData.length} из ${validSessions.length}`);
+    
+    // ИСПРАВЛЕНИЕ: Стабильная сортировка (по lastUpdated, затем по sessionId для одинаковых дат)
+    sessionsWithData.sort((a, b) => {
+      const dateA = new Date(a.lastUpdated || a.createdAt || 0);
+      const dateB = new Date(b.lastUpdated || b.createdAt || 0);
+      
+      // Сначала по дате (убывание - новые сверху)
+      if (dateB.getTime() !== dateA.getTime()) {
+        return dateB - dateA;
+      }
+      
+      // Если даты одинаковые - сортируем по sessionId для стабильности
+      return (a.sessionId || '').localeCompare(b.sessionId || '');
+    });
+    
+    console.log(`✅ После сортировки: ${sessionsWithData.length} сессий`);
+    
+    // ИСПРАВЛЕНИЕ: Применяем пагинацию ПОСЛЕ фильтрации и сортировки
+    const total = sessionsWithData.length;
+    const paginatedSessions = sessionsWithData.slice(offset, offset + limit);
+    console.log(`📄 Пагинация: показываем ${paginatedSessions.length} из ${total} (offset: ${offset}, limit: ${limit})`);
+    
+    return { sessions: paginatedSessions, total };
   } catch (error) {
     console.error('❌ Ошибка чтения чатов из Redis:', error);
     console.error('Stack:', error.stack);
@@ -143,9 +167,9 @@ module.exports = async function handler(req, res) {
     
     console.log('Параметры запроса:', { source, limit, offset });
     
-    // Читаем реальные данные из Redis с пагинацией
+    // Читаем реальные данные из Redis (фильтрация и сортировка уже применены в readChats)
     const { sessions: chats, total } = await readChats(source, limit, offset);
-    console.log('Найдено чатов в Redis:', chats.length, 'из', total);
+    console.log('📊 Итоговый результат: найдено чатов:', chats.length, 'из', total, 'с действиями');
     
     // Форматируем данные для фронтенда
     const formattedSessions = chats.map(session => ({
@@ -162,29 +186,17 @@ module.exports = async function handler(req, res) {
       hasContacts: !!(session.contacts && (session.contacts.name || session.contacts.phone))
     }));
     
-    // Логируем статистику перед фильтрацией
-    console.log('До фильтрации:', {
+    // Логируем финальную статистику
+    console.log('✅ Финальная статистика:', {
       total: formattedSessions.length,
       withMessages: formattedSessions.filter(s => s.messageCount > 0).length,
       withContacts: formattedSessions.filter(s => s.hasContacts).length,
-      empty: formattedSessions.filter(s => s.messageCount === 0 && !s.hasContacts).length
-    });
-    
-    // Фильтруем пустые сессии (без сообщений и без контактов)
-    const sessionsWithData = formattedSessions.filter(session => 
-      session.messageCount > 0 || session.hasContacts
-    );
-    
-    // Сортировка по дате последнего обновления (самые новые сверху)
-    sessionsWithData.sort((a, b) => {
-      const dateA = new Date(a.lastUpdated || a.createdAt || 0);
-      const dateB = new Date(b.lastUpdated || b.createdAt || 0);
-      return dateB - dateA; // Сортировка по убыванию (новые сверху)
+      totalInRedis: total
     });
     
     return res.status(200).json({
       success: true,
-      sessions: sessionsWithData,
+      sessions: formattedSessions,
       total: total,
       limit: limit,
       offset: offset,
