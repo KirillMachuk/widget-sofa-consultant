@@ -386,7 +386,10 @@ async function handler(req, res){
       const model = 'gpt-5-mini';
       const body = {
         model,
-        messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24)
+        messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
+        max_tokens: 600,        // Ограничение длины ответа
+        reasoning_effort: 'low',        // Уровень рассуждений для ускорения
+        verbosity: 'low'                // Краткие ответы для ускорения
       };
       // Функция для retry запросов с таймаутом
       async function fetchWithRetry(url, options, maxRetries = 3) {
@@ -622,7 +625,8 @@ ${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: systemPrompt }],
         max_tokens: 150,
-        temperature: 0.3
+        reasoning_effort: 'low',        // Быстрая генерация стандартного сообщения
+        verbosity: 'low'                // Краткое сообщение о подарках
       })
     });
 
