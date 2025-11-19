@@ -231,7 +231,7 @@ async function analyzeUserMessage(userMessage) {
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: analysisPrompt }],
-        max_output_tokens: 100,         // Для краткого JSON ответа
+        max_tokens: 100,         // Для краткого JSON ответа
         reasoning: {
           effort: 'low'                 // Минимальные рассуждения для быстрого анализа
         },
@@ -480,7 +480,7 @@ async function handler(req, res){
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
-        max_output_tokens: 600,        // Ограничение длины ответа
+        max_tokens: 600,        // Ограничение длины ответа
         reasoning: {
           effort: 'medium'              // Уменьшаем с high (по умолчанию) на medium для ускорения
         },
@@ -736,7 +736,7 @@ ${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
       body: JSON.stringify({
         model: 'gpt-5-mini',
         messages: [{ role: 'system', content: systemPrompt }],
-        max_output_tokens: 150,        // Правильный параметр вместо max_tokens
+        max_tokens: 150,        // Ограничение длины ответа
         reasoning: {
           effort: 'low'                 // Быстрая генерация стандартного сообщения
         },
