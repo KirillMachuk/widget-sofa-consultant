@@ -32,7 +32,6 @@
     openaiEndpoint: '/api/chat',
     leadEndpoint: '/api/lead',
     promptUrl: './prompt.json',
-    triggerMinIntervalMs: 60_000,
     pageThreshold: 2,
     brand: { accent: '#6C5CE7', bg: '#ffffff', text: '#111', radius: 16 },
     avatarUrl: null,
@@ -1779,14 +1778,11 @@
     setTimeout(checkScrollToBottom, 1000);
   }
 
-  let lastTriggerAt = 0;
-  function canTrigger(){ return Date.now() - lastTriggerAt > CONFIG.triggerMinIntervalMs; }
-  function markTriggered(){ lastTriggerAt = Date.now(); }
-
   let hintsAutoHideTimer = null;
   let hintsCooldownTimer = null;
   let exitIntentTriggered = false;
   let scrollToBottomTriggered = false;
+  let lastHintShownAt = 0;
   
   function showHintsWithAutoHide(text) {
     
@@ -1803,6 +1799,7 @@
     updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
+      lastHintShownAt = Date.now();
     }, 100);
     
     hintsAutoHideTimer = setTimeout(() => {
@@ -1826,6 +1823,7 @@
     updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
+      lastHintShownAt = Date.now();
     }, 100);
     
     hintsAutoHideTimer = setTimeout(() => {
@@ -1849,6 +1847,7 @@
     updateHintPosition();
     setTimeout(() => {
       els.hints.setAttribute('data-show','1');
+      lastHintShownAt = Date.now();
     }, 100);
     
     hintsAutoHideTimer = setTimeout(() => {
@@ -1869,7 +1868,8 @@
   }
   
   function canShowHints() {
-    return !hintsCooldownTimer && !els.hints.getAttribute('data-show');
+    const cooldownPassed = Date.now() - lastHintShownAt > 30000;
+    return cooldownPassed && !hintsCooldownTimer && !els.hints.getAttribute('data-show');
   }
   
   function handleExitIntent() {
@@ -1881,24 +1881,22 @@
   }
   
   function handleScrollToBottom() {
-    if (els.panel.getAttribute('data-open') !== '1' && !scrollToBottomTriggered && canTrigger() && canShowHints()) {
+    if (els.panel.getAttribute('data-open') !== '1' && !scrollToBottomTriggered && canShowHints()) {
       hideHints();
       showScrollToBottomHints();
       scrollToBottomTriggered = true;
-      markTriggered();
     }
   }
 
 
   function schedulePageCountTrigger(){
     const n = incPageViews();
-    if (n >= CONFIG.pageThreshold && canTrigger()){
+    if (n >= CONFIG.pageThreshold){
       // Use IntersectionObserver for page count trigger too
       const observer = new IntersectionObserver((entries) => {
         entries.forEach(entry => {
           if (entry.isIntersecting && els.panel.getAttribute('data-open') !== '1' && canShowHints()) {
             showHintsWithAutoHide('Вижу, вам интересна мебель! 💡\nПодберу варианты специально для вас со скидкой или подарком!');
-            markTriggered();
             observer.disconnect();
           }
         });
