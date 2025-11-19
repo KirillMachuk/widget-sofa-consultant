@@ -181,89 +181,82 @@ async function saveChat(sessionId, userMessage, botReply) {
   }
 }
 
-// Определение типа вопроса и категории товара
-async function analyzeUserMessage(userMessage) {
-  const analysisPrompt = `Ты анализируешь запросы клиентов мебельного магазина nm-shop.by.
+const CATEGORY_PATTERNS = [
+  { category: 'Диван', patterns: [/диван/, /соф/, /тахт/, /канап/, /углов/, /п-образ/, /раскладн/, /модульн/] },
+  { category: 'Кровать', patterns: [/кроват/, /спалн/, /матрас/, /изголов/, /подъемн/, /основан/, /ортопед/] },
+  { category: 'Кухня', patterns: [/кухн/, /гарнитур/, /кухон/, /столешн/, /фасад/, /пенал кух/, /остров/ ] },
+  { category: 'Другое', patterns: [/стол(?!еш)/, /стул/, /шкаф/, /прихож/, /комод/, /тумб/, /кресл/, /банкет/, /стенка/, /обеденн/, /журнальн/, /полк/] }
+];
 
-ЗАДАЧА: Определить тип вопроса и категорию товара (если есть).
+const PRODUCT_HINTS = [
+  /мебел/, /подбер/, /ищу/, /нужен/, /нужна/, /нужны/, /интересует/, /вариант/, /цвет/,
+  /размер/, /материал/, /ткан/, /фабрик/, /в наличии/, /ассортимент/, /модель/, /комплект/,
+  /цена/, /стоимост/, /бюджет/, /сколько стоит/, /покажите/, /подскажите по/, /расскажите про/
+];
 
-ЗАПРОС КЛИЕНТА: ${JSON.stringify(userMessage)}
+const SERVICE_HINTS = [
+  /достав/, /оплат/, /рассроч/, /кредит/, /гарант/, /возврат/, /обмен/, /салон/, /шоурум/,
+  /адрес/, /где наход/, /режим/, /график/, /контакт/, /телефон/, /номер/, /самовывоз/,
+  /как доехать/, /когда открыт/, /время работы/
+];
 
-ПРАВИЛА:
-1. Если клиент спрашивает о конкретных товарах (диван, стул, кровать, кухня) → isProductQuestion: true
-2. Если клиент спрашивает о салонах, доставке, оплате, гарантии, контактах → isProductQuestion: false
-3. Определи категорию из вопроса:
-   - "диван", "софа", "угловой диван" → detectedCategory: "Диван"
-   - "кровать", "спальное место", "матрас" → detectedCategory: "Кровать"
-   - "кухня", "кухонный гарнитур", "кухонная мебель" → detectedCategory: "Кухня"
-   - "стол", "стул", "шкаф", "прихожая" → detectedCategory: "Другое"
-   - Нет упоминания категории → detectedCategory: null
+const GREETING_PATTERNS = [
+  /^привет[!. ]?$/,
+  /^здравствуй(те)?[!. ]?$/,
+  /^добрый (день|вечер|утро)[!. ]?$/,
+  /^hello[!. ]?$/,
+  /^hi[!. ]?$/
+];
 
-ПРИМЕРЫ:
-
-Запрос: "нужен стул до 300 руб"
-Ответ: {"isProductQuestion": true, "detectedCategory": "Другое"}
-
-Запрос: "какие у вас диваны?"
-Ответ: {"isProductQuestion": true, "detectedCategory": "Диван"}
-
-Запрос: "где можно диваны посмотреть в минске"
-Ответ: {"isProductQuestion": false, "detectedCategory": null}
-
-Запрос: "какие условия доставки"
-Ответ: {"isProductQuestion": false, "detectedCategory": null}
-
-Запрос: "подберите кровать с подъемным механизмом"
-Ответ: {"isProductQuestion": true, "detectedCategory": "Кровать"}
-
-ВАЖНО: Отвечай СТРОГО валидным JSON объектом, ничего больше:
-{"isProductQuestion": true/false, "detectedCategory": "Диван"/"Кровать"/"Кухня"/"Другое"/null}`;
-
-  console.log('🔍 Message Analysis: промпт длина:', analysisPrompt.length, 'символов');
-  
-  try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-5-mini',
-        messages: [{ role: 'system', content: analysisPrompt }],
-        max_completion_tokens: 100,      // Для краткого JSON ответа
-        reasoning_effort: 'low',         // Минимальные рассуждения для быстрого анализа
-        verbosity: 'low'                 // Краткий JSON ответ
-      })
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('Message Analysis: OpenAI error', response.status);
-      console.error('Message Analysis: Error details:', errorText);
-      // Fallback: считаем что это FAQ вопрос без категории
-      return { isProductQuestion: false, detectedCategory: null };
-    }
-
-    const data = await response.json();
-    const resultText = data.choices?.[0]?.message?.content || '{}';
-    
-    console.log('🔍 Message Analysis extracted content:', resultText);
-    
-    // Парсим JSON с обработкой ошибок
-    try {
-      const result = JSON.parse(resultText);
-      console.log('🔍 Message Analysis parsed:', result);
-      return result;
-    } catch (parseError) {
-      console.error('❌ Message Analysis: JSON parse error', resultText);
-      return { isProductQuestion: false, detectedCategory: null };
-    }
-  } catch (error) {
-    console.error('Message Analysis: request error', error);
-    // Fallback: при ошибке сети считаем что это FAQ вопрос
+// Определение типа вопроса и категории товара (локально, без второго запроса в OpenAI)
+async function analyzeUserMessage(userMessage = '') {
+  if (typeof userMessage !== 'string') {
     return { isProductQuestion: false, detectedCategory: null };
   }
+  
+  const normalized = userMessage
+    .toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/\s+/g, ' ')
+    .trim();
+  
+  if (!normalized) {
+    return { isProductQuestion: false, detectedCategory: null };
+  }
+  
+  const greetingOnly = GREETING_PATTERNS.some(pattern => pattern.test(normalized));
+  if (greetingOnly) {
+    return { isProductQuestion: false, detectedCategory: null };
+  }
+  
+  let detectedCategory = null;
+  for (const { category, patterns } of CATEGORY_PATTERNS) {
+    if (patterns.some(pattern => pattern.test(normalized))) {
+      detectedCategory = category;
+      break;
+    }
+  }
+  
+  let isProductQuestion = Boolean(detectedCategory);
+  
+  if (!isProductQuestion && PRODUCT_HINTS.some(pattern => pattern.test(normalized))) {
+    isProductQuestion = true;
+  }
+  
+  // Бюджет почти всегда означает подбор конкретного товара
+  if (!isProductQuestion && /\d+[\s-]*(byn|руб|р\.?\b)/.test(normalized)) {
+    isProductQuestion = true;
+  }
+  
+  const isServiceQuestion = SERVICE_HINTS.some(pattern => pattern.test(normalized));
+  if (isServiceQuestion && !isProductQuestion) {
+    return { isProductQuestion: false, detectedCategory: null };
+  }
+  
+  return {
+    isProductQuestion,
+    detectedCategory: isProductQuestion ? detectedCategory : null
+  };
 }
 
 async function handler(req, res){
