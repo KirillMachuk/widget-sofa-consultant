@@ -61,13 +61,13 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     const keys = sessionIds.map(id => `chat:${id}`);
     console.log('Ключи для mget (все сессии):', keys.length);
     
-    // Загружаем сессии порциями по 500 за раз (чтобы не превысить лимит 10MB)
-    const BATCH_SIZE = 500;
+    // Загружаем сессии порциями с адаптивным размером батча (защита от превышения лимита 10MB)
+    let BATCH_SIZE = 100; // Безопасное начальное значение
     const sessions = [];
     
     for (let i = 0; i < keys.length; i += BATCH_SIZE) {
       const batch = keys.slice(i, i + BATCH_SIZE);
-      console.log(`📦 Загружаем батч ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} сессий (${i + 1}-${Math.min(i + BATCH_SIZE, keys.length)})`);
+      console.log(`📦 Загружаем батч ${Math.floor(i / BATCH_SIZE) + 1}: ${batch.length} сессий (${i + 1}-${Math.min(i + BATCH_SIZE, keys.length)}), размер батча: ${BATCH_SIZE}`);
       
       try {
         const batchResults = await redisClient.mget(...batch);
@@ -76,7 +76,19 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         }
       } catch (error) {
         console.error(`❌ Ошибка загрузки батча ${Math.floor(i / BATCH_SIZE) + 1}:`, error.message);
-        // Продолжаем загрузку остальных батчей
+        
+        // Если ошибка связана с размером запроса, уменьшаем размер батча и повторяем
+        if (error.message && error.message.includes('max request size exceeded')) {
+          const newBatchSize = Math.floor(BATCH_SIZE / 2);
+          if (newBatchSize >= 10) {
+            console.log(`🔄 Уменьшаем размер батча с ${BATCH_SIZE} до ${newBatchSize} и повторяем...`);
+            BATCH_SIZE = newBatchSize;
+            i -= BATCH_SIZE; // Возвращаемся назад, чтобы повторить этот батч
+            continue;
+          }
+        }
+        
+        // Если не удалось загрузить даже с минимальным батчом, добавляем null
         sessions.push(...new Array(batch.length).fill(null));
       }
     }

@@ -38,8 +38,24 @@ async function getErrorTimeSeries(source, period = '24h') {
   
   const errors = [];
   if (errorKeys && errorKeys.length > 0) {
-    // Получаем детали ошибок
-    const errorDetails = await redisClient.mget(...errorKeys);
+    // Получаем детали ошибок порциями (защита от превышения лимита 10MB)
+    const BATCH_SIZE = 100;
+    const errorDetails = [];
+    
+    for (let i = 0; i < errorKeys.length; i += BATCH_SIZE) {
+      const batch = errorKeys.slice(i, i + BATCH_SIZE);
+      try {
+        const batchResults = await redisClient.mget(...batch);
+        if (batchResults && Array.isArray(batchResults)) {
+          errorDetails.push(...batchResults);
+        } else {
+          errorDetails.push(...new Array(batch.length).fill(null));
+        }
+      } catch (error) {
+        console.error(`❌ Ошибка загрузки батча ошибок ${Math.floor(i / BATCH_SIZE) + 1}:`, error.message);
+        errorDetails.push(...new Array(batch.length).fill(null));
+      }
+    }
     
     for (let i = 0; i < errorKeys.length; i++) {
       const error = errorDetails[i];
@@ -142,7 +158,24 @@ module.exports = async function handler(req, res) {
     
     const recentErrors = [];
     if (errorKeys && errorKeys.length > 0) {
-      const errorDetails = await redisClient.mget(...errorKeys);
+      // Получаем детали ошибок порциями (защита от превышения лимита 10MB)
+      const BATCH_SIZE = 100;
+      const errorDetails = [];
+      
+      for (let i = 0; i < errorKeys.length; i += BATCH_SIZE) {
+        const batch = errorKeys.slice(i, i + BATCH_SIZE);
+        try {
+          const batchResults = await redisClient.mget(...batch);
+          if (batchResults && Array.isArray(batchResults)) {
+            errorDetails.push(...batchResults);
+          } else {
+            errorDetails.push(...new Array(batch.length).fill(null));
+          }
+        } catch (error) {
+          console.error(`❌ Ошибка загрузки батча последних ошибок ${Math.floor(i / BATCH_SIZE) + 1}:`, error.message);
+          errorDetails.push(...new Array(batch.length).fill(null));
+        }
+      }
       
       for (let i = 0; i < errorKeys.length; i++) {
         const error = errorDetails[i];
