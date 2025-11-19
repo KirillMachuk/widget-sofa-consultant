@@ -7,6 +7,27 @@
   }
   window.VFW_LOADED = true;
   
+  // Глобальный обработчик ошибок для отслеживания ошибок загрузки виджета
+  const originalOnError = window.onerror;
+  window.onerror = function(message, source, lineno, colno, error) {
+    // Отслеживаем только ошибки связанные с виджетом
+    if (source && (source.includes('widget.js') || source.includes('widget-external.js'))) {
+      // Функция trackError будет доступна после загрузки виджета
+      if (typeof window.trackWidgetError === 'function') {
+        window.trackWidgetError('widget_load_error', `JavaScript error: ${message}`, {
+          source: source,
+          line: lineno,
+          column: colno
+        });
+      }
+    }
+    // Вызываем оригинальный обработчик если он был
+    if (originalOnError) {
+      return originalOnError(message, source, lineno, colno, error);
+    }
+    return false;
+  };
+  
   const CONFIG = {
     openaiEndpoint: '/api/chat',
     leadEndpoint: '/api/lead',
@@ -1127,6 +1148,33 @@
     });
   }
 
+  // Функция для трекинга ошибок
+  function trackError(errorType, message, additionalData = {}) {
+    const analyticsUrl = resolveApiUrl('./api/analytics');
+    const errorData = {
+      message: message || 'Unknown error',
+      url: window.location.href,
+      userAgent: navigator.userAgent,
+      ...additionalData
+    };
+    
+    fetch(analyticsUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_type: errorType,
+        session_id: SESSION_ID,
+        error_data: errorData
+      })
+    }).catch(err => {
+      // Игнорируем ошибки трекинга ошибок, чтобы не блокировать виджет
+      if (DEBUG) console.warn('Error tracking failed:', err);
+    });
+  }
+  
+  // Экспортируем функцию для глобального обработчика ошибок
+  window.trackWidgetError = trackError;
+
   function openPanel(){
     els.panel.setAttribute('data-open','1');
     disableScroll();
@@ -1555,7 +1603,12 @@
           prompt: PROMPT,
           locale: 'ru'
         })
+      }).then(res => {
+        if (!res.ok) {
+          trackError('session_init_error', `Session initialization failed with status ${res.status}`, { status: res.status });
+        }
       }).catch(e => {
+        trackError('session_init_error', `Session initialization failed: ${e.message}`);
         if (DEBUG) console.warn('Failed to initialize session:', e);
       });
     }
@@ -1848,6 +1901,7 @@
       return { reply, formMessage: null };
     }
     
+    const requestStartTime = Date.now();
     try {
       const res = await fetchWithRetry(CONFIG.openaiEndpoint, {
         method:'POST',
@@ -1858,6 +1912,13 @@
         body: JSON.stringify(payload)
       });
       
+      const requestLatency = Date.now() - requestStartTime;
+      
+      // Отслеживаем медленные запросы (>5 секунд)
+      if (requestLatency > 5000) {
+        trackError('slow_request', `Request took ${requestLatency}ms`, { latency: requestLatency });
+      }
+      
       let data;
       try{
         data = await res.json();
@@ -1866,10 +1927,14 @@
       }
       
       if (!res.ok){
+        // Отслеживаем ошибки API
+        trackError('api_error', `API request failed with status ${res.status}`, { status: res.status });
+        
         // Если ошибка 400 и сессия не инициализирована - пробуем инициализировать
         if (res.status === 400) {
           const errorData = await res.json().catch(() => ({}));
           if (errorData.error && errorData.error.includes('Session not initialized')) {
+            trackError('session_init_error', 'Session not initialized during chat request');
             if (DEBUG) console.log('Session not initialized, trying to reinitialize...');
             // Пробуем инициализировать сессию еще раз
             await fetchPrompt();
@@ -1933,6 +1998,9 @@
       };
       
     } catch (error) {
+      // Отслеживаем ошибки сети/таймаута
+      trackError('api_error', `Request failed: ${error.message}`, { status: 'network_error' });
+      
       // Показываем fallback форму только если она еще не была показана в этой сессии
       if (!fallbackFormShown) {
         fallbackFormShown = true; // Устанавливаем флаг сразу

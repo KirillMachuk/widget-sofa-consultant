@@ -191,6 +191,23 @@ const redisClient = {
       console.error(`Redis SET failed for key ${key}:`, error.message);
       return false;
     }
+  },
+
+  // Redis LIST операции для хранения ошибок
+  async lpush(key, ...values) {
+    return withRetry(() => redis.lpush(key, ...values));
+  },
+
+  async ltrim(key, start, stop) {
+    return withRetry(() => redis.ltrim(key, start, stop));
+  },
+
+  async lrange(key, start, stop) {
+    return withRetry(() => redis.lrange(key, start, stop));
+  },
+
+  async llen(key) {
+    return withRetry(() => redis.llen(key));
   }
 };
 
