@@ -518,8 +518,8 @@ async function handler(req, res){
       
       const requestLatency = Date.now() - requestStartTime;
       
-      // Отслеживаем медленные запросы (>5 секунд)
-      if (requestLatency > 5000) {
+      // Отслеживаем медленные запросы (>10 секунд)
+      if (requestLatency > 10000) {
         trackError('slow_request', `OpenAI API request took ${requestLatency}ms`, req, { latency: requestLatency }).catch(() => {});
       }
       

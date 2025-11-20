@@ -2021,8 +2021,8 @@
       
       const requestLatency = Date.now() - requestStartTime;
       
-      // Отслеживаем медленные запросы (>5 секунд)
-      if (requestLatency > 5000) {
+      // Отслеживаем медленные запросы (>10 секунд)
+      if (requestLatency > 10000) {
         trackError('slow_request', `Request took ${requestLatency}ms`, { latency: requestLatency });
       }
       
