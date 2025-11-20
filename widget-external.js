@@ -137,6 +137,21 @@
     CONFIG.avatarUrl = DEFAULT_AVATAR_URL;
   }
 
+  // Функция для расчета оставшегося времени до конца дня (Минск UTC+3)
+  function getMinskTimeRemaining() {
+    const now = new Date();
+    const minskTime = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Minsk' }));
+    
+    const midnight = new Date(minskTime);
+    midnight.setHours(24, 0, 0, 0);
+    
+    const diff = midnight - minskTime;
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    return `${hours}ч ${minutes}м`;
+  }
+
   // FIXED: Generate unique session_id including origin to prevent conflicts between different sites
   function getOrSetSessionId(){
     const key='vf_session_id_external';
@@ -2000,11 +2015,19 @@
       fallbackFormShown = false;
       
       // Показываем приветствие мгновенно
-      addMsg('bot', 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁\nКакую мебель рассматриваете?');
+      const welcomeMsg = `⚡ Скидка 5% + подарок 🎁
+
+⏰ ТОЛЬКО СЕГОДНЯ (осталось ${getMinskTimeRemaining()})
+
+✅ 156 человек уже выбрали
+
+Какую мебель рассматриваете?`;
+
+      addMsg('bot', welcomeMsg);
       
       // Сохраняем приветственное сообщение в историю
       const history = loadHistory();
-      history.push({ role: 'assistant', content: 'Здравствуйте! Подберу для вас идеальную мебель и закреплю подарок 🎁\nКакую мебель рассматриваете?', ts: nowIso() });
+      history.push({ role: 'assistant', content: welcomeMsg, ts: nowIso() });
       saveHistory(history);
       
       // Показываем кнопки категорий мгновенно
