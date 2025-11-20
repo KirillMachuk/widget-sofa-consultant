@@ -1137,6 +1137,8 @@
 
   // Функция для трекинга аналитических событий
   let pageViewTracked = false;
+  const FORM_INVOCATION_STORAGE_KEY = 'vfw_form_invoked';
+  let formInvocationTracked = false;
   function trackEvent(eventType) {
     // Отправляем событие асинхронно, не блокируя UI
     const analyticsUrl = resolveApiUrl('./api/analytics');
@@ -1179,6 +1181,23 @@
   
   // Экспортируем функцию для глобального обработчика ошибок
   window.trackWidgetError = trackError;
+
+  function trackFormInvocationOnce() {
+    if (formInvocationTracked) return;
+    try {
+      const stored = localStorage.getItem(FORM_INVOCATION_STORAGE_KEY);
+      if (stored === '1') {
+        formInvocationTracked = true;
+        return;
+      }
+    } catch (e) {}
+    
+    trackEvent('form_invocation');
+    formInvocationTracked = true;
+    try {
+      localStorage.setItem(FORM_INVOCATION_STORAGE_KEY, '1');
+    } catch (e) {}
+  }
 
   function openPanel(){
     els.panel.setAttribute('data-open','1');
@@ -1423,7 +1442,6 @@
       
       // Click handler
       button.addEventListener('click', () => {
-        trackEvent('category_click');
         container.remove(); // Remove all category buttons
         showGiftForm(buttonData.category);
       });
@@ -1459,6 +1477,8 @@
     
     const wrap = document.createElement('div'); 
     wrap.className='vfw-msg bot';
+    trackFormInvocationOnce();
+    trackFormInvocationOnce();
     
     const giftsHtml = gifts.map(gift => `
       <button class="gift-btn" data-gift="${gift.value}" style="padding:12px 16px;border:2px solid #e0e0e0;border-radius:12px;background:#fff;cursor:pointer;text-align:left;transition:all 0.2s;min-height:44px;font-size:16px;width:100%;margin-bottom:8px">
