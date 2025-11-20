@@ -1423,6 +1423,7 @@
       
       // Click handler
       button.addEventListener('click', () => {
+        trackEvent('category_click');
         container.remove(); // Remove all category buttons
         showGiftForm(buttonData.category);
       });

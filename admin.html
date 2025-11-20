@@ -901,6 +901,10 @@
                             <div class="analytics-value" id="analytics-formSubmits">—</div>
                             <div class="analytics-conversion" id="analytics-conversionForm">—</div>
                         </div>
+                    <div class="analytics-card">
+                        <div class="analytics-label">Выбрано категорий</div>
+                        <div class="analytics-value" id="analytics-categoryClicks">—</div>
+                    </div>
                     </div>
                 </div>
                 </div>
@@ -1302,13 +1306,14 @@
                 const data = await response.json();
                 
                 if (data.success && data.analytics) {
-                    const { uniqueVisitors, pageViews, widgetOpens, formSubmits, conversionWidgetOpen, conversionFormSubmit } = data.analytics;
+                    const { uniqueVisitors, pageViews, widgetOpens, formSubmits, categoryClicks, conversionWidgetOpen, conversionFormSubmit } = data.analytics;
                     
                     // Обновляем значения
                     document.getElementById('analytics-uniqueVisitors').textContent = uniqueVisitors.toLocaleString('ru-RU');
                     document.getElementById('analytics-pageViews').textContent = pageViews.toLocaleString('ru-RU');
                     document.getElementById('analytics-widgetOpens').textContent = widgetOpens.toLocaleString('ru-RU');
                     document.getElementById('analytics-formSubmits').textContent = formSubmits.toLocaleString('ru-RU');
+                    document.getElementById('analytics-categoryClicks').textContent = (categoryClicks ?? 0).toLocaleString('ru-RU');
                     
                     // Обновляем конверсии
                     const widgetConversion = conversionWidgetOpen > 0 

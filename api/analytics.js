@@ -2,7 +2,7 @@
 const redisClient = require('../utils/redis-client');
 
 // Список допустимых типов событий
-const ALLOWED_EVENTS = ['page_view', 'widget_open', 'form_submit', 'widget_load_error', 'session_init_error', 'api_error', 'slow_request', 'redis_error'];
+const ALLOWED_EVENTS = ['page_view', 'widget_open', 'form_submit', 'category_click', 'widget_load_error', 'session_init_error', 'api_error', 'slow_request', 'redis_error'];
 
 // Типы ошибок для отслеживания
 const ERROR_EVENTS = ['widget_load_error', 'session_init_error', 'api_error', 'slow_request', 'redis_error'];
