@@ -753,6 +753,7 @@ function buildSystemPrompt(prompt, locale, aggressiveMode = false){
     `Достижения компании: ${prompt.about_company?.achievements ? Object.values(prompt.about_company.achievements).join(', ') : ''}`,
     `Салоны: ${prompt.about_company?.showrooms ? JSON.stringify(prompt.about_company.showrooms) : 'Информация о салонах недоступна'}`,
     `Подарки по категориям: ${prompt.offers?.gifts_by_category ? JSON.stringify(prompt.offers.gifts_by_category) : 'Информация о подарках недоступна'}`,
+    `Персонализированные ответы: ${prompt.personalized_responses ? `Принцип: ${prompt.personalized_responses.principle}. Ключевые фразы: ${prompt.personalized_responses.key_phrases?.join(', ') || ''}. Примеры: ${JSON.stringify(prompt.personalized_responses.examples || {})}. ${prompt.personalized_responses.usage || ''}` : ''}`,
     `Доставка и оплата: ${prompt.delivery_and_payment ? JSON.stringify(prompt.delivery_and_payment) : 'Информация о доставке недоступна'}`,
     `Стиль: ${prompt.templates_and_style||''}`
   ].join('\n') : 'Ты консультант. Отвечай кратко.';
