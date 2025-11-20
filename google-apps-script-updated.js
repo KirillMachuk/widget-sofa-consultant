@@ -1,9 +1,10 @@
 function convertToMinskTime(isoString) {
+  // Получаем дату в UTC
   var date = new Date(isoString);
-  // Convert to Minsk time (UTC+3)
+  // Добавляем 3 часа для перехода в минское время (UTC+3)
   var minskTime = new Date(date.getTime() + (3 * 60 * 60 * 1000));
-  // Format as readable date/time string
-  return Utilities.formatDate(minskTime, 'Europe/Minsk', 'dd.MM.yyyy HH:mm:ss');
+  // Форматируем в читаемый вид для Google Sheets
+  return Utilities.formatDate(minskTime, 'GMT', 'yyyy-MM-dd HH:mm:ss');
 }
 
 function doPost(e) {
