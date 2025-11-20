@@ -256,13 +256,13 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       });
     }
     
-    // ИСПРАВЛЕНИЕ: Стабильная сортировка (по lastUpdated, затем по sessionId для одинаковых дат)
+    // ИСПРАВЛЕНИЕ: Простая сортировка по createdAt (время открытия виджета, новые сверху)
     sessionsWithData.sort((a, b) => {
-      const dateA = new Date(a.lastUpdated || a.createdAt || 0);
-      const dateB = new Date(b.lastUpdated || b.createdAt || 0);
+      const dateA = new Date(a.createdAt || 0).getTime();
+      const dateB = new Date(b.createdAt || 0).getTime();
       
-      // Сначала по дате (убывание - новые сверху)
-      if (dateB.getTime() !== dateA.getTime()) {
+      // Сначала по дате создания (убывание - новые сверху)
+      if (dateB !== dateA) {
         return dateB - dateA;
       }
       
@@ -271,6 +271,14 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     });
     
     console.log(`✅ После сортировки: ${sessionsWithData.length} сессий с данными`);
+    
+    // Логируем первые 3 сессии для проверки сортировки
+    if (sessionsWithData.length > 0) {
+      console.log(`🔍 Проверка сортировки (первые 3 сессии по createdAt):`);
+      sessionsWithData.slice(0, 3).forEach((session, idx) => {
+        console.log(`  ${idx + 1}. ${session.sessionId?.substring(0, 15)}: createdAt=${session.createdAt}`);
+      });
+    }
     
     // ИСПРАВЛЕНИЕ: Применяем пагинацию ПОСЛЕ фильтрации и сортировки
     const total = sessionsWithData.length;

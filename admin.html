@@ -1191,7 +1191,7 @@
                 <div class="session-item" onclick="selectSession('${session.id}')">
                     <div class="session-header">
                         <span class="session-id">${session.id}</span>
-                        <span class="session-date">${formatDate(session.lastUpdated)}</span>
+                        <span class="session-date">${formatDate(session.createdAt)}</span>
                     </div>
                     <div class="session-info">
                         <span class="session-badge ${session.hasContacts ? 'badge-contacts' : 'badge-no-contacts'}">
