@@ -75,8 +75,11 @@ async function saveChat(sessionId, userMessage, botReply) {
     
     if (!session) {
       console.log('⚠️ saveChat: Сессия не найдена, создаем новую');
+      // Определяем источник из текущего запроса
+      const source = global.currentRequest ? detectSource(global.currentRequest) : 'test';
       session = {
         sessionId,
+        source: source, // Устанавливаем источник сразу
         createdAt: new Date().toISOString(),
         lastUpdated: new Date().toISOString(),
         messages: []
@@ -106,29 +109,29 @@ async function saveChat(sessionId, userMessage, botReply) {
     
     session.lastUpdated = new Date().toISOString();
     
-    // Определяем источник сессии (если не задан, используем 'test')
-    const source = session.source || 'test';
+    // Определяем источник сессии - если не задан, определяем из текущего запроса
+    if (!session.source && global.currentRequest) {
+      session.source = detectSource(global.currentRequest);
+      console.log('🔍 saveChat: Источник не был установлен, определен из запроса:', session.source);
+    }
+    if (!session.source) {
+      session.source = 'test'; // Fallback
+    }
+    
+    const source = session.source;
     const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
     
     // Сохраняем в Redis
-    console.log('🔧 ПЕРЕД redis.set: messages.length =', session.messages.length);
-    session.source = source; // Убеждаемся что источник сохранен
+    console.log('🔧 ПЕРЕД redis.set: messages.length =', session.messages.length, 'source =', source);
     await redis.set(chatKey, session);
     await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
     // Убеждаемся, что сессия добавлена в соответствующий список сессий
     await redis.sadd(sessionsListKey, sessionId);
     console.log('✅ redis.set выполнен, сессия добавлена в', sessionsListKey);
     
-    // ПРОВЕРКА: читаем сразу после записи
-    const verification = await redis.get(chatKey);
-    console.log('🔍 ПРОВЕРКА сразу после SET:');
-    console.log('  - messages type:', typeof verification.messages);
-    console.log('  - messages isArray:', Array.isArray(verification.messages));
-    console.log('  - messages.length:', verification.messages ? verification.messages.length : 'undefined');
+    // Убрана verification проверка для экономии Redis команд (GET после SET не нужен)
     
-    console.log('Диалог сохранен в Redis для сессии:', sessionId);
-    console.log('Ключ в Redis:', chatKey);
-    console.log('Данные сессии:', JSON.stringify(session, null, 2));
+    console.log('Диалог сохранен в Redis для сессии:', sessionId, 'источник:', source);
     return true;
   } catch (error) {
     console.error('Ошибка сохранения диалога в Redis:', error);
