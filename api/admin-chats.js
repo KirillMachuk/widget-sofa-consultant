@@ -41,11 +41,17 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     const sessionIds = allKeys.map(key => key.replace('chat:', ''));
     console.log(`📊 Всего найдено сессий (включая старые): ${sessionIds.length}`);
     
+    // ДИАГНОСТИКА: Проверяем наличие конкретной сессии
+    const targetSessionId = 's_7amn7gqaklmi4g1yhq';
+    const hasTargetSession = sessionIds.includes(targetSessionId);
+    console.log(`🔍 ДИАГНОСТИКА: Сессия ${targetSessionId} в списке ключей: ${hasTargetSession ? 'ДА ✅' : 'НЕТ ❌'}`);
+    
     // ШАГ 1: Загружаем индекс (ID + createdAt + source) для сортировки и фильтрации
     const indexBatchSize = 50;
     const keys = sessionIds.map(id => `chat:${id}`);
     const sessionIndex = [];
     let total = 0; // Подсчитываем total параллельно с индексом
+    let sourceStats = { 'nm-shop': 0, 'test': 0, 'undefined': 0 }; // Статистика по source
     
     // Загружаем индекс и фильтруем по source одновременно
     for (let i = 0; i < keys.length; i += indexBatchSize) {
@@ -55,8 +61,21 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         if (batchResults && Array.isArray(batchResults)) {
           batchResults.forEach((session, idx) => {
             if (session && session.sessionId) {
-              // ФИЛЬТРАЦИЯ ПО SOURCE: показываем только сессии нужного источника
+              // Собираем статистику по source
               const sessionSource = session.source || 'test'; // по умолчанию 'test' для старых сессий
+              sourceStats[sessionSource] = (sourceStats[sessionSource] || 0) + 1;
+              
+              // ДИАГНОСТИКА: Логируем конкретную сессию
+              if (session.sessionId === targetSessionId) {
+                console.log(`🔍 НАЙДЕНА целевая сессия ${targetSessionId}:`, {
+                  source: session.source,
+                  hasMessages: session.messages?.length || 0,
+                  hasContacts: !!session.contacts,
+                  createdAt: session.createdAt
+                });
+              }
+              
+              // ФИЛЬТРАЦИЯ ПО SOURCE: показываем только сессии нужного источника
               if (sessionSource !== source) {
                 return; // Пропускаем сессии другого источника
               }
@@ -86,6 +105,10 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     
     // Сортируем индекс по дате создания (новые сверху)
     sessionIndex.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    
+    // ДИАГНОСТИКА: Выводим статистику по source
+    console.log(`📊 СТАТИСТИКА по source:`, sourceStats);
+    console.log(`📊 После фильтрации для '${source}': ${sessionIndex.length} сессий`);
     
     // Применяем пагинацию на уровне индекса
     const paginatedIndex = sessionIndex.slice(offset, offset + limit);
