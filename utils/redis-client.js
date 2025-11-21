@@ -120,7 +120,7 @@ const redisClient = {
     const keys = [];
     let cursor = 0;
     let iterations = 0;
-    const maxIterations = 100; // Защита от бесконечного цикла
+    const maxIterations = 200; // Защита от бесконечного цикла (увеличено для поддержки большого количества ключей)
     
     try {
       do {
@@ -147,7 +147,7 @@ const redisClient = {
         
         iterations++;
         if (iterations >= maxIterations) {
-          console.warn('SCAN max iterations reached');
+          console.warn(`SCAN max iterations reached: ${maxIterations} iterations, loaded ${keys.length} keys`);
           break;
         }
       } while (cursor !== 0 && cursor !== '0');
