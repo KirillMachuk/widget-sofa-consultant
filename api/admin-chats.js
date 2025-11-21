@@ -15,16 +15,17 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       console.warn('⚠️ Не удалось получить диагностику источников:', diagError.message);
     }
     
-    // ИСПРАВЛЕНИЕ: Всегда используем KEYS для загрузки ВСЕХ сессий (включая старые)
+    // ИСПРАВЛЕНИЕ: Всегда используем SCAN для загрузки ВСЕХ сессий (включая старые)
+    // KEYS не работает для большого количества ключей (>1000), используем SCAN через getAllKeys
     // Это гарантирует, что старые сессии nm-shop тоже загрузятся, даже если их нет в SET
-    console.log('🔍 Ищем ВСЕ сессии через KEYS (включая старые)...');
+    console.log('🔍 Ищем ВСЕ сессии через SCAN (включая старые)...');
     let allKeys = [];
     try {
-      allKeys = await redisClient.keys('chat:*');
-      console.log(`📊 Найдено ВСЕХ ключей через KEYS: ${allKeys.length}`);
+      allKeys = await redisClient.getAllKeys('chat:*', 100); // Используем SCAN вместо KEYS
+      console.log(`📊 Найдено ВСЕХ ключей через SCAN: ${allKeys.length}`);
     } catch (error) {
-      console.error('❌ Ошибка получения ключей через KEYS:', error.message);
-      // Fallback на SET если KEYS не работает
+      console.error('❌ Ошибка получения ключей через SCAN:', error.message);
+      // Fallback на SET если SCAN не работает
       const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
       const sessionIdsFromSet = await redisClient.smembers(sessionsListKey).catch(() => []);
       allKeys = sessionIdsFromSet.map(id => `chat:${id}`);
