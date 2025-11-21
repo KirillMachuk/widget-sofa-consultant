@@ -116,6 +116,7 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
                 sessionIndex.push({
                   sessionId: session.sessionId,
                   createdAt: session.createdAt || session.lastUpdated || new Date(0).toISOString(),
+                  lastUpdated: session.lastUpdated || session.createdAt || new Date(0).toISOString(), // Для сортировки по последнему действию
                   index: i + idx
                 });
                 total++;
@@ -128,8 +129,9 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       }
     }
     
-    // Сортируем индекс по дате создания (новые сверху)
-    sessionIndex.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    // Сортируем индекс по дате последнего действия (lastUpdated) - новые сверху
+    // Это гарантирует, что сессии с последними сообщениями/лидами показываются первыми
+    sessionIndex.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
     
     // ДИАГНОСТИКА: Выводим статистику по source
     console.log(`📊 СТАТИСТИКА по source:`, sourceStats);
