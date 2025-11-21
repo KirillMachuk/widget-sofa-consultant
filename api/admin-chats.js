@@ -15,21 +15,44 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       console.warn('⚠️ Не удалось получить диагностику источников:', diagError.message);
     }
     
-    // ИСПРАВЛЕНИЕ: Всегда используем SCAN для загрузки ВСЕХ сессий (включая старые)
-    // KEYS не работает для большого количества ключей (>1000), используем SCAN через getAllKeys
-    // Это гарантирует, что старые сессии nm-shop тоже загрузятся, даже если их нет в SET
-    console.log('🔍 Ищем ВСЕ сессии через SCAN (включая старые)...');
+    // ОПТИМИЗАЦИЯ: Для nm-shop используем SET напрямую (9021 сессий) - быстрее чем SCAN всех 11k ключей
+    // Для test используем SCAN для поиска всех сессий
     let allKeys = [];
-    try {
-      allKeys = await redisClient.getAllKeys('chat:*', 100); // Используем SCAN вместо KEYS
-      console.log(`📊 Найдено ВСЕХ ключей через SCAN: ${allKeys.length}`);
-    } catch (error) {
-      console.error('❌ Ошибка получения ключей через SCAN:', error.message);
-      // Fallback на SET если SCAN не работает
-      const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
-      const sessionIdsFromSet = await redisClient.smembers(sessionsListKey).catch(() => []);
-      allKeys = sessionIdsFromSet.map(id => `chat:${id}`);
-      console.log(`📊 Fallback на SET: найдено ${allKeys.length} сессий`);
+    const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
+    
+    if (source === 'nm-shop') {
+      // Для nm-shop используем SET напрямую (быстрее и надежнее)
+      console.log('🔍 Для nm-shop используем SET напрямую (быстрее чем SCAN)...');
+      try {
+        const sessionIdsFromSet = await redisClient.smembers(sessionsListKey);
+        if (sessionIdsFromSet && sessionIdsFromSet.length > 0) {
+          allKeys = sessionIdsFromSet.map(id => `chat:${id}`);
+          console.log(`📊 Найдено сессий nm-shop через SET: ${allKeys.length}`);
+        } else {
+          console.warn('⚠️ SET nm-shop пустой, используем SCAN как fallback...');
+          allKeys = await redisClient.getAllKeys('chat:*', 100);
+          console.log(`📊 Fallback SCAN: найдено ${allKeys.length} ключей`);
+        }
+      } catch (error) {
+        console.error('❌ Ошибка получения сессий из SET:', error.message);
+        // Fallback на SCAN
+        console.log('🔄 Fallback на SCAN...');
+        allKeys = await redisClient.getAllKeys('chat:*', 100).catch(() => []);
+        console.log(`📊 Fallback SCAN: найдено ${allKeys.length} ключей`);
+      }
+    } else {
+      // Для test используем SCAN для поиска всех сессий (включая старые без SET)
+      console.log('🔍 Для test используем SCAN для поиска всех сессий...');
+      try {
+        allKeys = await redisClient.getAllKeys('chat:*', 100);
+        console.log(`📊 Найдено ВСЕХ ключей через SCAN: ${allKeys.length}`);
+      } catch (error) {
+        console.error('❌ Ошибка получения ключей через SCAN:', error.message);
+        // Fallback на SET
+        const sessionIdsFromSet = await redisClient.smembers(sessionsListKey).catch(() => []);
+        allKeys = sessionIdsFromSet.map(id => `chat:${id}`);
+        console.log(`📊 Fallback на SET: найдено ${allKeys.length} сессий`);
+      }
     }
     
     if (!allKeys || allKeys.length === 0) {
@@ -41,10 +64,10 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     const sessionIds = allKeys.map(key => key.replace('chat:', ''));
     console.log(`📊 Всего найдено сессий (включая старые): ${sessionIds.length}`);
     
-    // ДИАГНОСТИКА: Проверяем наличие конкретной сессии
-    const targetSessionId = 's_7amn7gqaklmi4g1yhq';
-    const hasTargetSession = sessionIds.includes(targetSessionId);
-    console.log(`🔍 ДИАГНОСТИКА: Сессия ${targetSessionId} в списке ключей: ${hasTargetSession ? 'ДА ✅' : 'НЕТ ❌'}`);
+    // ДИАГНОСТИКА: Проверяем наличие конкретной сессии (только для отладки)
+    // const targetSessionId = 's_7amn7gqaklmi4g1yhq';
+    // const hasTargetSession = sessionIds.includes(targetSessionId);
+    // console.log(`🔍 ДИАГНОСТИКА: Сессия ${targetSessionId} в списке ключей: ${hasTargetSession ? 'ДА ✅' : 'НЕТ ❌'}`);
     
     // ШАГ 1: Загружаем индекс (ID + createdAt + source) для сортировки и фильтрации
     const indexBatchSize = 50;
@@ -65,34 +88,36 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
               const sessionSource = session.source || 'test'; // по умолчанию 'test' для старых сессий
               sourceStats[sessionSource] = (sourceStats[sessionSource] || 0) + 1;
               
-              // ДИАГНОСТИКА: Логируем конкретную сессию
-              if (session.sessionId === targetSessionId) {
-                console.log(`🔍 НАЙДЕНА целевая сессия ${targetSessionId}:`, {
-                  source: session.source,
-                  hasMessages: session.messages?.length || 0,
-                  hasContacts: !!session.contacts,
-                  createdAt: session.createdAt
-                });
-              }
+              // ДИАГНОСТИКА: Логируем конкретную сессию (только для отладки)
+              // if (session.sessionId === targetSessionId) {
+              //   console.log(`🔍 НАЙДЕНА целевая сессия ${targetSessionId}:`, {
+              //     source: session.source,
+              //     hasMessages: session.messages?.length || 0,
+              //     hasContacts: !!session.contacts,
+              //     createdAt: session.createdAt
+              //   });
+              // }
               
               // ФИЛЬТРАЦИЯ ПО SOURCE: показываем только сессии нужного источника
               if (sessionSource !== source) {
                 return; // Пропускаем сессии другого источника
               }
               
-              sessionIndex.push({
-                sessionId: session.sessionId,
-                createdAt: session.createdAt || session.lastUpdated || new Date(0).toISOString(),
-                index: i + idx
-              });
-              
-              // Подсчитываем total параллельно (проверяем наличие данных)
+              // ИСПРАВЛЕНИЕ: Проверяем наличие данных ПЕРЕД добавлением в индекс
+              // Это критично для правильной пагинации - в индекс попадают только сессии с данными
               const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
               const hasContacts = session.contacts && (
                 (session.contacts.name && session.contacts.name.trim() !== '') || 
                 (session.contacts.phone && session.contacts.phone.trim() !== '')
               );
+              
+              // Добавляем в индекс ТОЛЬКО сессии с данными
               if (hasMessages || hasContacts) {
+                sessionIndex.push({
+                  sessionId: session.sessionId,
+                  createdAt: session.createdAt || session.lastUpdated || new Date(0).toISOString(),
+                  index: i + idx
+                });
                 total++;
               }
             }
@@ -123,13 +148,13 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       const BATCH_SIZE = 50;
       for (let i = 0; i < paginatedKeys.length; i += BATCH_SIZE) {
         const batch = paginatedKeys.slice(i, i + BATCH_SIZE);
-        try {
-          const batchResults = await redisClient.mget(...batch);
-          if (batchResults && Array.isArray(batchResults)) {
-            sessions.push(...batchResults);
-          }
-        } catch (error) {
-          console.error(`❌ Ошибка загрузки батча ${Math.floor(i / BATCH_SIZE) + 1}:`, error.message);
+      try {
+        const batchResults = await redisClient.mget(...batch);
+        if (batchResults && Array.isArray(batchResults)) {
+          sessions.push(...batchResults);
+        }
+      } catch (error) {
+        console.error(`❌ Ошибка загрузки батча ${Math.floor(i / BATCH_SIZE) + 1}:`, error.message);
           sessions.push(...new Array(batch.length).fill(null));
         }
       }
@@ -181,25 +206,31 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
     }
     
-    // ФИЛЬТРАЦИЯ: Показываем только сессии с данными (сообщения ИЛИ заполненная форма)
-    // Дополнительно фильтруем по source на всякий случай (защита от багов)
+    // ФИЛЬТРАЦИЯ: Все сессии в validSessions уже прошли проверку на наличие данных при добавлении в индекс
+    // Дополнительно проверяем source на всякий случай (защита от багов)
     const sessionsWithData = validSessions.filter(session => {
       // Фильтр по source
       const sessionSource = session.source || 'test';
       if (sessionSource !== source) {
+        console.warn(`⚠️ Сессия ${session.sessionId} имеет неправильный source: ${sessionSource}, ожидается: ${source}`);
         return false;
       }
       
-      // Фильтр по наличию данных
+      // Дополнительная проверка наличия данных (на всякий случай)
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
       const hasContacts = session.contacts && (
         (session.contacts.name && session.contacts.name.trim() !== '') || 
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       );
+      
+      if (!hasMessages && !hasContacts) {
+        console.warn(`⚠️ Сессия ${session.sessionId} не имеет данных (messages: ${hasMessages}, contacts: ${hasContacts})`);
+      }
+      
       return hasMessages || hasContacts;
     });
     
-    console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${total} всего (offset: ${offset}, limit: ${limit})`);
+    console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${total} всего в индексе (offset: ${offset}, limit: ${limit})`);
     
     const paginatedSessions = sessionsWithData;
     
