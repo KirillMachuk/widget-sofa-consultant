@@ -1,10 +1,10 @@
 // Используем новый Redis клиент с retry логикой
 const redisClient = require('../utils/redis-client');
 
-// Читаем все чаты из Redis используя список сессий из SET
+// Читаем все чаты из Redis - ВСЕГДА используем KEYS для загрузки всех сессий (включая старые)
 async function readChats(source = 'test', limit = 100, offset = 0) {
   try {
-    console.log('🔍 Получаем список сессий из Redis SET для источника:', source);
+    console.log('🔍 Загружаем ВСЕ сессии из Redis для источника:', source);
     
     // ДИАГНОСТИКА: Проверяем оба источника для понимания распределения сессий
     try {
@@ -15,66 +15,38 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       console.warn('⚠️ Не удалось получить диагностику источников:', diagError.message);
     }
     
-    // Используем разные ключи для разных источников
-    const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
-    
-    // Получаем список ID сессий из Redis SET
-    let sessionIds = await redisClient.smembers(sessionsListKey);
-    console.log(`Найдено ID сессий в SET (${sessionsListKey}): ${sessionIds ? sessionIds.length : 0}`);
-    
-    // Если SET пустой, пытаемся использовать старый sessions:list или KEYS как fallback (миграция)
-    if (!sessionIds || sessionIds.length === 0) {
-      console.log('SET пустой, пытаемся использовать старый sessions:list...');
-      try {
-        // Пробуем старый ключ sessions:list
-        sessionIds = await redisClient.smembers('sessions:list');
-        if (sessionIds && sessionIds.length > 0) {
-          console.log(`Найдено сессий в старом sessions:list: ${sessionIds.length}`);
-          // Мигрируем в новый ключ
-          if (source === 'test') {
-            redisClient.sadd(sessionsListKey, ...sessionIds).catch(err => {
-              console.warn('Не удалось мигрировать в новый SET:', err.message);
-            });
-          }
-        } else {
-          // Если и старый пустой, пробуем KEYS
-          console.log('Старый SET тоже пустой, пытаемся получить ключи через KEYS...');
-          const keys = await redisClient.keys('chat:*');
-          if (keys && keys.length > 0) {
-            console.log(`Найдено ключей через KEYS: ${keys.length}`);
-            // Извлекаем session IDs из ключей
-            sessionIds = keys.map(key => key.replace('chat:', ''));
-            // Попытка заполнить SET (не блокируем если не получится)
-            if (sessionIds.length > 0) {
-              redisClient.sadd(sessionsListKey, ...sessionIds).catch(err => {
-                console.warn('Не удалось заполнить SET:', err.message);
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Ошибка при fallback:', error.message);
-        return { sessions: [], total: 0 };
-      }
+    // ИСПРАВЛЕНИЕ: Всегда используем KEYS для загрузки ВСЕХ сессий (включая старые)
+    // Это гарантирует, что старые сессии nm-shop тоже загрузятся, даже если их нет в SET
+    console.log('🔍 Ищем ВСЕ сессии через KEYS (включая старые)...');
+    let allKeys = [];
+    try {
+      allKeys = await redisClient.keys('chat:*');
+      console.log(`📊 Найдено ВСЕХ ключей через KEYS: ${allKeys.length}`);
+    } catch (error) {
+      console.error('❌ Ошибка получения ключей через KEYS:', error.message);
+      // Fallback на SET если KEYS не работает
+      const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
+      const sessionIdsFromSet = await redisClient.smembers(sessionsListKey).catch(() => []);
+      allKeys = sessionIdsFromSet.map(id => `chat:${id}`);
+      console.log(`📊 Fallback на SET: найдено ${allKeys.length} сессий`);
     }
     
-    if (!sessionIds || sessionIds.length === 0) {
-      console.log('Нет сессий, возвращаем пустой массив');
+    if (!allKeys || allKeys.length === 0) {
+      console.log('Нет сессий в Redis');
       return { sessions: [], total: 0 };
     }
     
-    console.log(`📊 Всего ID сессий в SET: ${sessionIds.length}`);
+    // Извлекаем session IDs из ключей
+    const sessionIds = allKeys.map(key => key.replace('chat:', ''));
+    console.log(`📊 Всего найдено сессий (включая старые): ${sessionIds.length}`);
     
-    // ОПТИМИЗАЦИЯ: Загружаем индекс для сортировки и подсчета total, затем полные данные только для нужной страницы
-    const keys = sessionIds.map(id => `chat:${id}`);
-    console.log('Ключи для загрузки:', keys.length);
-    
-    // ШАГ 1: Загружаем индекс (ID + createdAt) для сортировки и фильтрации
+    // ШАГ 1: Загружаем индекс (ID + createdAt + source) для сортировки и фильтрации
     const indexBatchSize = 50;
+    const keys = sessionIds.map(id => `chat:${id}`);
     const sessionIndex = [];
     let total = 0; // Подсчитываем total параллельно с индексом
     
-    // Загружаем индекс и считаем total одновременно
+    // Загружаем индекс и фильтруем по source одновременно
     for (let i = 0; i < keys.length; i += indexBatchSize) {
       const batch = keys.slice(i, i + indexBatchSize);
       try {
@@ -82,6 +54,12 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         if (batchResults && Array.isArray(batchResults)) {
           batchResults.forEach((session, idx) => {
             if (session && session.sessionId) {
+              // ФИЛЬТРАЦИЯ ПО SOURCE: показываем только сессии нужного источника
+              const sessionSource = session.source || 'test'; // по умолчанию 'test' для старых сессий
+              if (sessionSource !== source) {
+                return; // Пропускаем сессии другого источника
+              }
+              
               sessionIndex.push({
                 sessionId: session.sessionId,
                 createdAt: session.createdAt || session.lastUpdated || new Date(0).toISOString(),
@@ -110,8 +88,8 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     
     // Применяем пагинацию на уровне индекса
     const paginatedIndex = sessionIndex.slice(offset, offset + limit);
-    console.log(`📄 Пагинация на уровне индекса: загружаем ${paginatedIndex.length} из ${sessionIndex.length} (offset: ${offset}, limit: ${limit})`);
-    console.log(`📊 Всего сессий с данными: ${total}`);
+    console.log(`📄 Пагинация на уровне индекса: загружаем ${paginatedIndex.length} из ${sessionIndex.length} сессий для источника '${source}' (offset: ${offset}, limit: ${limit})`);
+    console.log(`📊 Всего сессий с данными для '${source}': ${total}`);
     
     // ШАГ 2: Загружаем полные данные только для нужной страницы
     const paginatedKeys = paginatedIndex.map(item => `chat:${item.sessionId}`);
@@ -153,6 +131,7 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     
     // Очищаем SET от несуществующих ключей (в фоне, не блокируя ответ)
     if (missingSessionIds.length > 0) {
+      const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
       redisClient.srem(sessionsListKey, ...missingSessionIds).catch(err => {
         console.warn('Не удалось очистить SET от несуществующих сессий:', err.message);
       });
@@ -179,7 +158,15 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     }
     
     // ФИЛЬТРАЦИЯ: Показываем только сессии с данными (сообщения ИЛИ заполненная форма)
+    // Дополнительно фильтруем по source на всякий случай (защита от багов)
     const sessionsWithData = validSessions.filter(session => {
+      // Фильтр по source
+      const sessionSource = session.source || 'test';
+      if (sessionSource !== source) {
+        return false;
+      }
+      
+      // Фильтр по наличию данных
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
       const hasContacts = session.contacts && (
         (session.contacts.name && session.contacts.name.trim() !== '') || 
@@ -188,7 +175,7 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       return hasMessages || hasContacts;
     });
     
-    console.log(`✅ Финальный результат: ${sessionsWithData.length} сессий с данными из ${total} всего (offset: ${offset}, limit: ${limit})`);
+    console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${total} всего (offset: ${offset}, limit: ${limit})`);
     
     const paginatedSessions = sessionsWithData;
     
