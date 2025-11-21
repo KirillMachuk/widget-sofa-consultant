@@ -24,8 +24,7 @@ async function saveContacts(sessionId, contacts) {
       session.lastUpdated = new Date().toISOString();
       
       // Сохраняем обратно в Redis
-      await redis.set(chatKey, session);
-      await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
+      await redis.setex(chatKey, 30 * 24 * 60 * 60, session); // TTL 30 дней
       // Добавляем в соответствующий список сессий
       await redis.sadd(sessionsListKey, sessionId);
       console.log('✅ Контакты сохранены в Redis для сессии:', sessionId, 'источник:', source);
@@ -42,8 +41,7 @@ async function saveContacts(sessionId, contacts) {
         lastUpdated: new Date().toISOString(),
         messages: []
       };
-      await redis.set(chatKey, session);
-      await redis.expire(chatKey, 30 * 24 * 60 * 60);
+      await redis.setex(chatKey, 30 * 24 * 60 * 60, session);
       await redis.sadd(sessionsListKey, sessionId);
       console.log('✅ Новая сессия создана с контактами, источник:', source);
       return true;

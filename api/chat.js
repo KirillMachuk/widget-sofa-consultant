@@ -123,8 +123,7 @@ async function saveChat(sessionId, userMessage, botReply) {
     
     // Сохраняем в Redis
     console.log('🔧 ПЕРЕД redis.set: messages.length =', session.messages.length, 'source =', source);
-    await redis.set(chatKey, session);
-    await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
+    await redis.setex(chatKey, 30 * 24 * 60 * 60, session); // TTL 30 дней
     // Убеждаемся, что сессия добавлена в соответствующий список сессий
     await redis.sadd(sessionsListKey, sessionId);
     console.log('✅ redis.set выполнен, сессия добавлена в', sessionsListKey);
@@ -310,8 +309,7 @@ async function handler(req, res){
           existingSession.locale = locale || 'ru';
           existingSession.source = existingSession.source || source; // Сохраняем источник если его нет
           existingSession.lastUpdated = sessionData.lastUpdated;
-          await redis.set(chatKey, existingSession);
-          await redis.expire(chatKey, 30 * 24 * 60 * 60); // Обновляем TTL
+          await redis.setex(chatKey, 30 * 24 * 60 * 60, existingSession); // Обновляем TTL
           await redis.sadd(sessionsListKey, session_id); // Убеждаемся что сессия в списке
           console.log('Сессия обновлена в Redis:', session_id, 'источник:', existingSession.source);
         } else {
@@ -325,8 +323,7 @@ async function handler(req, res){
             lastUpdated: sessionData.lastUpdated,
             messages: []
           };
-          await redis.set(chatKey, redisSession);
-          await redis.expire(chatKey, 30 * 24 * 60 * 60); // TTL 30 дней
+          await redis.setex(chatKey, 30 * 24 * 60 * 60, redisSession); // TTL 30 дней
           const addedToSet = await redis.sadd(sessionsListKey, session_id); // Добавляем в список сессий
           console.log('Новая сессия создана в Redis:', session_id, 'источник:', source, 'Добавлена в sessions:list:', addedToSet > 0);
         }
