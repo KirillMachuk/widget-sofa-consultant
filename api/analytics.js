@@ -1,11 +1,11 @@
 // API для трекинга аналитических событий
 const redisClient = require('../utils/redis-client');
 
-// Список допустимых типов событий
-const ALLOWED_EVENTS = ['page_view', 'widget_open', 'form_submit', 'form_invocation', 'widget_load_error', 'session_init_error', 'api_error', 'slow_request', 'redis_error'];
+// Список допустимых типов событий (ошибки исключены для экономии Redis команд)
+const ALLOWED_EVENTS = ['page_view', 'widget_open', 'form_submit', 'form_invocation'];
 
-// Типы ошибок для отслеживания
-const ERROR_EVENTS = ['widget_load_error', 'session_init_error', 'api_error', 'slow_request', 'redis_error'];
+// Типы ошибок для отслеживания - отключено для экономии Redis команд
+// const ERROR_EVENTS = ['widget_load_error', 'session_init_error', 'api_error', 'slow_request', 'redis_error'];
 
 // Функция для определения источника из запроса
 function detectSource(req) {
@@ -65,42 +65,13 @@ module.exports = async function handler(req, res) {
         await redisClient.expire(uniqueVisitorsKey, 30 * 24 * 60 * 60).catch(() => {});
       }
       
-      // Если это ошибка, сохраняем детали
-      if (ERROR_EVENTS.includes(event_type) && error_data) {
-        const timestamp = new Date().toISOString();
-        const errorKey = `error:${source}:${event_type}:${Date.now()}`;
-        
-        const errorRecord = {
-          type: event_type,
-          message: error_data.message || 'Unknown error',
-          session_id: session_id || null,
-          source: source,
-          timestamp: timestamp,
-          url: error_data.url || null,
-          userAgent: error_data.userAgent || null,
-          status: error_data.status || null,
-          latency: error_data.latency || null
-        };
-        
-        // Сохраняем детали ошибки
-        await redisClient.setex(errorKey, 30 * 24 * 60 * 60, errorRecord); // TTL 30 дней
-        
-        // Добавляем ключ ошибки в список последних 100 ошибок
-        const errorsListKey = `errors:list:${source}`;
-        await redisClient.lpush(errorsListKey, errorKey);
-        await redisClient.ltrim(errorsListKey, 0, 99); // Храним только последние 100
-        
-        // Также сохраняем счетчик ошибок для аналитики
-        const errorCountKey = `analytics:error:${event_type}:${source}`;
-        await redisClient.incr(errorCountKey);
-      }
+      // Обработка ошибок отключена для экономии Redis команд
       
       console.log(`Аналитика: ${event_type} инкрементирован для источника ${source}`, {
         session_id,
         source,
         newValue: currentValue,
-        timestamp: new Date().toISOString(),
-        isError: ERROR_EVENTS.includes(event_type)
+        timestamp: new Date().toISOString()
       });
       
       return res.status(200).json({ 

@@ -3,8 +3,8 @@ const redisClient = require('./redis-client');
 
 // Настройки rate limiting
 const RATE_LIMIT_CONFIG = {
-  windowMs: 60 * 1000, // 1 минута
-  maxRequests: 50, // максимум 50 запросов в минуту
+  windowMs: 10 * 60 * 1000, // 10 минут
+  maxRequests: 500, // максимум 500 запросов в 10 минут
   keyPrefix: 'rate_limit:'
 };
 

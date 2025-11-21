@@ -54,51 +54,10 @@ function detectSource(req) {
   return 'test';
 }
 
-// Функция для отслеживания ошибок (для серверной части)
-async function trackError(errorType, message, req, additionalData = {}) {
-  try {
-    const source = detectSource(req);
-    const sessionId = req.body?.session_id || null;
-    
-    const errorData = {
-      message: message || 'Unknown error',
-      ...additionalData
-    };
-    
-    const analyticsKey = `analytics:${errorType}:${source}`;
-    await redis.incr(analyticsKey);
-    
-    // Сохраняем детали ошибки
-    const timestamp = new Date().toISOString();
-    const errorKey = `error:${source}:${errorType}:${Date.now()}`;
-    
-    const errorRecord = {
-      type: errorType,
-      message: errorData.message || 'Unknown error',
-      session_id: sessionId,
-      source: source,
-      timestamp: timestamp,
-      status: errorData.status || null,
-      latency: errorData.latency || null
-    };
-    
-    // Сохраняем детали ошибки
-    await redis.setex(errorKey, 30 * 24 * 60 * 60, errorRecord); // TTL 30 дней
-    
-    // Добавляем ключ ошибки в список последних 100 ошибок
-    const errorsListKey = `errors:list:${source}`;
-    await redis.lpush(errorsListKey, errorKey);
-    await redis.ltrim(errorsListKey, 0, 99); // Храним только последние 100
-    
-    // Также сохраняем счетчик ошибок для аналитики
-    const errorCountKey = `analytics:error:${errorType}:${source}`;
-    await redis.incr(errorCountKey);
-    
-  } catch (error) {
-    // Игнорируем ошибки трекинга ошибок, чтобы не блокировать основной процесс
-    console.error('Error tracking failed:', error);
-  }
-}
+// Функция для отслеживания ошибок отключена для экономии Redis команд
+// async function trackError(errorType, message, req, additionalData = {}) {
+//   ... код удален для оптимизации ...
+// }
 
 // Сохранение диалога в Redis
 async function saveChat(sessionId, userMessage, botReply) {
@@ -174,9 +133,10 @@ async function saveChat(sessionId, userMessage, botReply) {
   } catch (error) {
     console.error('Ошибка сохранения диалога в Redis:', error);
     // Отслеживаем ошибки Redis через глобальную переменную req (будет доступна в handler)
-    if (global.currentRequest) {
-      trackError('redis_error', `Redis error in saveChat: ${error.message}`, global.currentRequest).catch(() => {});
-    }
+    // Отключено для экономии Redis команд
+    // if (global.currentRequest) {
+    //   trackError('redis_error', `Redis error in saveChat: ${error.message}`, global.currentRequest).catch(() => {});
+    // }
     return false;
   }
 }
@@ -375,7 +335,8 @@ async function handler(req, res){
           error_stack: error.stack ? error.stack.substring(0, 200) : 'no stack',
           referer: req.headers.referer || req.headers.origin || 'not set'
         });
-        trackError('redis_error', `Redis error in session init: ${error.message}`, req).catch(() => {});
+        // Отключено для экономии Redis команд
+        // trackError('redis_error', `Redis error in session init: ${error.message}`, req).catch(() => {});
         // Продолжаем работу даже если не удалось сохранить в Redis
       }
       
@@ -419,7 +380,8 @@ async function handler(req, res){
           error_stack: error.stack ? error.stack.substring(0, 200) : 'no stack',
           referer: req.headers.referer || req.headers.origin || 'not set'
         });
-        trackError('redis_error', `Redis error loading session: ${error.message}`, req).catch(() => {});
+        // Отключено для экономии Redis команд
+        // trackError('redis_error', `Redis error loading session: ${error.message}`, req).catch(() => {});
         return res.status(400).json({ error: 'Session not initialized. Please reload the page.' });
       }
       
@@ -512,16 +474,18 @@ async function handler(req, res){
       } catch (error) {
         // Обработка ошибок после всех retry попыток
         console.error('❌ Все retry попытки исчерпаны:', error.message);
-        trackError('api_error', `OpenAI API request failed: ${error.message}`, req, { status: 'network_error' }).catch(() => {});
+        // Отключено для экономии Redis команд
+        // trackError('api_error', `OpenAI API request failed: ${error.message}`, req, { status: 'network_error' }).catch(() => {});
         throw error;
       }
       
       const requestLatency = Date.now() - requestStartTime;
       
       // Отслеживаем медленные запросы (>10 секунд)
-      if (requestLatency > 10000) {
-        trackError('slow_request', `OpenAI API request took ${requestLatency}ms`, req, { latency: requestLatency }).catch(() => {});
-      }
+      // Отключено для экономии Redis команд
+      // if (requestLatency > 10000) {
+      //   trackError('slow_request', `OpenAI API request took ${requestLatency}ms`, req, { latency: requestLatency }).catch(() => {});
+      // }
       
       console.log('Ответ от OpenAI, статус:', r.status);
       
@@ -540,7 +504,8 @@ async function handler(req, res){
         console.error('Ошибка OpenAI API:', r.status, reason);
         
         // Отслеживаем ошибки OpenAI API
-        trackError('api_error', `OpenAI API error: ${r.status} - ${reason}`, req, { status: r.status }).catch(() => {});
+        // Отключено для экономии Redis команд
+        // trackError('api_error', `OpenAI API error: ${r.status} - ${reason}`, req, { status: r.status }).catch(() => {});
         
         // Более дружелюбный fallback
         const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
@@ -598,7 +563,8 @@ async function handler(req, res){
       } catch (error) {
         console.error('❌ Ошибка сохранения диалога:', error);
         console.error('Stack trace:', error.stack);
-        trackError('redis_error', `Redis error in saveChat: ${error.message}`, req).catch(() => {});
+        // Отключено для экономии Redis команд
+        // trackError('redis_error', `Redis error in saveChat: ${error.message}`, req).catch(() => {});
       }
       
       return res.status(200).json({ 
@@ -623,7 +589,8 @@ async function handler(req, res){
       userAgent: req.headers['user-agent'] ? req.headers['user-agent'].substring(0, 100) : 'not set',
       body_preview: req.body ? JSON.stringify(req.body).substring(0, 200) : 'no body'
     });
-    trackError('api_error', `Critical error in chat API: ${e.message}`, req, { status: 'internal_error' }).catch(() => {});
+    // Отключено для экономии Redis команд
+    // trackError('api_error', `Critical error in chat API: ${e.message}`, req, { status: 'internal_error' }).catch(() => {});
     const fallbackText = 'Извините, система временно недоступна. Оставьте телефон и наш дизайнер перезвонит вам, а я закреплю за вами подарок 🎁';
     return res.status(200).json({ reply: fallbackText, needsForm: true, formType: 'gift' });
   } finally {
