@@ -276,6 +276,7 @@ module.exports = async function handler(req, res) {
       id: session.sessionId,
       createdAt: session.createdAt,
       lastUpdated: session.lastUpdated,
+      displayDate: session.lastUpdated || session.createdAt, // Дата для отображения - последнее действие (лид/сообщение) или создание
       prompt: session.prompt,
       locale: session.locale,
       contacts: session.contacts || null,
