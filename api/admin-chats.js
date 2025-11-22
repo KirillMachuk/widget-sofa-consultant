@@ -97,12 +97,13 @@ async function readChatsLegacy(source = 'test', limit = 100, offset = 0) {
     const indexKey = source === 'nm-shop' ? 'sessions:index:nm-shop' : 'sessions:index:test';
     const migrateToIndex = async () => {
       try {
-        console.log(`🔄 Начинаем миграцию ${validSessions.length} сессий в индекс...`);
-        for (const session of validSessions.slice(0, 200)) { // Мигрируем первые 200 для начала
+        const toMigrate = Math.min(validSessions.length, 1000); // Мигрируем первую 1000 для быстрого заполнения
+        console.log(`🔄 Начинаем миграцию ${toMigrate} сессий в индекс...`);
+        for (const session of validSessions.slice(0, toMigrate)) {
           const timestamp = session.lastUpdated || session.createdAt || new Date().toISOString();
           await redisClient.updateSessionIndex(session.sessionId, source, timestamp);
         }
-        console.log(`✅ Миграция завершена`);
+        console.log(`✅ Миграция завершена: ${toMigrate} сессий добавлено в индекс`);
       } catch (error) {
         console.error('❌ Ошибка миграции индекса:', error.message);
       }
@@ -135,7 +136,8 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     
     // FALLBACK: если индекс пустой или содержит мало записей, используем старую логику
     // Это случается при первом запуске после миграции, пока индекс не заполнен
-    if (total < 50) {
+    // Порог 500 выбран чтобы гарантировать полноту данных до завершения миграции
+    if (total < 500) {
       console.warn(`⚠️ Индекс содержит мало записей (${total}), используем fallback на SET для полноты данных`);
       return await readChatsLegacy(source, limit, offset);
     }

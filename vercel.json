@@ -96,7 +96,7 @@
     },
     "api/admin-chats.js": {
       "memory": 512,
-      "maxDuration": 30
+      "maxDuration": 45
     },
     "api/admin-session.js": {
       "memory": 512,
