@@ -110,6 +110,10 @@
       "memory": 256,
       "maxDuration": 5
     },
+    "api/admin-clear-index.js": {
+      "memory": 256,
+      "maxDuration": 5
+    },
     "api/admin-errors.js": {
       "memory": 256,
       "maxDuration": 5
