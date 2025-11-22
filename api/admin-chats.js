@@ -350,8 +350,7 @@ module.exports = async function handler(req, res) {
           ? session.messages[session.messages.length - 1] 
           : null,
         hasContacts: hasContacts,
-        chatPhoneCaptured: hasContactsFromChat, // Добавляем для дополнительной информации
-        hasPhoneInMessages: hasPhoneInMessages(session.messages) // Для отладки
+        chatPhoneCaptured: hasContactsFromChat
       };
     });
     

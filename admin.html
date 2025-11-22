@@ -851,20 +851,10 @@
                 return;
             }
             
-            // Временная отладка - выведем первые 3 сессии
-            console.log('🔍 DEBUG: Первые 3 сессии:', sessions.slice(0, 3).map(s => ({
-                id: s.id,
-                hasContacts: s.hasContacts,
-                chatPhoneCaptured: s.chatPhoneCaptured,
-                hasPhoneInMessages: s.hasPhoneInMessages,
-                contacts: s.contacts
-            })));
-            
             container.innerHTML = sessions.map(session => {
                 // Определяем источник контактов
                 const hasFormContacts = session.contacts && (session.contacts.name || session.contacts.phone);
-                // Проверяем и chatPhoneCaptured и hasPhoneInMessages (для старых сессий)
-                const hasChatContacts = session.chatPhoneCaptured || session.hasPhoneInMessages;
+                const hasChatContacts = session.chatPhoneCaptured;
                 let contactsBadgeText = 'Без контактов';
                 
                 if (hasFormContacts && hasChatContacts) {
