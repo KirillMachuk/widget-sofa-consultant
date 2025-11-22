@@ -258,33 +258,14 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         }
       });
       
-      const sessionsWithMessages = validSessions.filter(s => s.messages && Array.isArray(s.messages) && s.messages.length > 0);
-      const sessionsWithContacts = validSessions.filter(s => {
-        const hasFormContacts = s.contacts && (
-          (s.contacts.name && s.contacts.name.trim() !== '') || 
-          (s.contacts.phone && s.contacts.phone.trim() !== '')
-        );
-        const hasChatContacts = !!s.chatPhoneCaptured || hasPhoneInMessages(s.messages);
-        return hasFormContacts || hasChatContacts;
-      });
-      console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
+      console.log(`📊 После нормализации: ${validSessions.length} сессий готово к отправке`);
     }
     
-    // Фильтрация: показываем только сессии с данными
-    const sessionsWithData = validSessions.filter(session => {
-      const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
-      const hasFormContacts = session.contacts && (
-        (session.contacts.name && session.contacts.name.trim() !== '') || 
-        (session.contacts.phone && session.contacts.phone.trim() !== '')
-      );
-      const hasChatContacts = !!session.chatPhoneCaptured || hasPhoneInMessages(session.messages);
-      
-      return hasMessages || hasFormContacts || hasChatContacts;
-    });
+    // Убираем дополнительную фильтрацию - возвращаем все валидные сессии
+    // Фронтенд сам решит, что показывать на основе данных
+    console.log(`✅ Финальный результат для '${source}': ${validSessions.length} сессий из ${total} всего в индексе (offset: ${offset}, limit: ${limit})`);
     
-    console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${total} всего в индексе (offset: ${offset}, limit: ${limit})`);
-    
-    return { sessions: sessionsWithData, total };
+    return { sessions: validSessions, total };
   } catch (error) {
     console.error('❌ Ошибка чтения чатов из Redis:', error);
     console.error('Stack:', error.stack);
