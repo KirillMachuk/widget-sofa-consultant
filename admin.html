@@ -911,23 +911,60 @@
         }
 
         // Функция для извлечения телефона из сообщений (для старых сессий)
+        // Логика аналогична parsePhoneFromMessage в api/chat.js
         function extractPhoneFromMessages(messages) {
             if (!messages || !Array.isArray(messages)) return null;
             
-            // Регулярное выражение для поиска телефонов
-            const phoneRegex = /(?:\+375|80)[\s\-]?\(?\d{2}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}|(?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}|\+?\d{10,15}/g;
+            // Паттерны для поиска телефонов (как в chat.js)
+            const fullPhonePatterns = [
+                /\+375[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/, // +375 29 390 85 96
+                /375[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/,   // 375 29 390-85-96
+                /80[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/,     // 8029-111-20-48
+                /8[\s\-\(\)]*0[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/ // 8 0 29 с пробелами
+            ];
+            
+            const shortPhonePattern = /[\d\s\-\(\)]{7,}/g;
             
             // Ищем телефон в сообщениях пользователя (от новых к старым)
             for (let i = messages.length - 1; i >= 0; i--) {
                 const message = messages[i];
                 if (message.role === 'user' && message.content) {
-                    const matches = message.content.match(phoneRegex);
-                    if (matches && matches.length > 0) {
-                        // Возвращаем первый найденный телефон и время сообщения
-                        return {
-                            phone: matches[0].trim(),
-                            timestamp: message.timestamp
-                        };
+                    const text = message.content;
+                    
+                    // Игнорируем сообщения с маркерами бота (если случайно попали)
+                    const botMarkers = ['закреплю', 'подборка', 'мессенджер', 'дизайнер свяж', 'передам', 'подготовлю'];
+                    const lowerText = text.toLowerCase();
+                    if (botMarkers.some(marker => lowerText.includes(marker))) {
+                        continue;
+                    }
+                    
+                    // Пробуем полные паттерны
+                    for (const pattern of fullPhonePatterns) {
+                        const match = text.match(pattern);
+                        if (match) {
+                            const phoneStr = match[0].trim();
+                            const digitsOnly = phoneStr.replace(/\D/g, '');
+                            if (digitsOnly.length >= 9) {
+                                return {
+                                    phone: phoneStr,
+                                    timestamp: message.timestamp
+                                };
+                            }
+                        }
+                    }
+                    
+                    // Пробуем короткие номера
+                    const matches = text.match(shortPhonePattern);
+                    if (matches) {
+                        for (const match of matches) {
+                            const digitsOnly = match.replace(/\D/g, '');
+                            if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
+                                return {
+                                    phone: match.trim(),
+                                    timestamp: message.timestamp
+                                };
+                            }
+                        }
                     }
                 }
             }

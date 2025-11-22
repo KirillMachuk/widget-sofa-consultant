@@ -1,6 +1,57 @@
 // Используем новый Redis клиент с retry логикой
 const redisClient = require('../utils/redis-client');
 
+// Функция для проверки наличия телефона в сообщениях (fallback для старых сессий)
+function hasPhoneInMessages(messages) {
+  if (!messages || !Array.isArray(messages)) return false;
+  
+  const fullPhonePatterns = [
+    /\+375[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/,
+    /375[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/,
+    /80[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/,
+    /8[\s\-\(\)]*0[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/
+  ];
+  
+  const shortPhonePattern = /[\d\s\-\(\)]{7,}/g;
+  
+  for (const message of messages) {
+    if (message.role === 'user' && message.content) {
+      const text = message.content;
+      const lowerText = text.toLowerCase();
+      
+      // Игнорируем маркеры бота
+      const botMarkers = ['закреплю', 'подборка', 'мессенджер', 'дизайнер свяж', 'передам', 'подготовлю'];
+      if (botMarkers.some(marker => lowerText.includes(marker))) {
+        continue;
+      }
+      
+      // Проверяем полные паттерны
+      for (const pattern of fullPhonePatterns) {
+        const match = text.match(pattern);
+        if (match) {
+          const digitsOnly = match[0].replace(/\D/g, '');
+          if (digitsOnly.length >= 9) {
+            return true;
+          }
+        }
+      }
+      
+      // Проверяем короткие номера
+      const matches = text.match(shortPhonePattern);
+      if (matches) {
+        for (const match of matches) {
+          const digitsOnly = match.replace(/\D/g, '');
+          if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
+            return true;
+          }
+        }
+      }
+    }
+  }
+  
+  return false;
+}
+
 // Функция для вычисления реальной даты последней активности на основе сообщений и контактов
 function calculateDisplayDate(session) {
   let maxTimestamp = null;
@@ -80,7 +131,7 @@ async function readChatsLegacy(source = 'test', limit = 100, offset = 0) {
         (session.contacts.name && session.contacts.name.trim() !== '') || 
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       );
-      const hasChatContacts = !!session.chatPhoneCaptured;
+      const hasChatContacts = !!session.chatPhoneCaptured || hasPhoneInMessages(session.messages);
       
       return hasMessages || hasFormContacts || hasChatContacts;
     });
@@ -213,7 +264,7 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
           (s.contacts.name && s.contacts.name.trim() !== '') || 
           (s.contacts.phone && s.contacts.phone.trim() !== '')
         );
-        const hasChatContacts = !!s.chatPhoneCaptured;
+        const hasChatContacts = !!s.chatPhoneCaptured || hasPhoneInMessages(s.messages);
         return hasFormContacts || hasChatContacts;
       });
       console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
@@ -226,7 +277,7 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         (session.contacts.name && session.contacts.name.trim() !== '') || 
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       );
-      const hasChatContacts = !!session.chatPhoneCaptured;
+      const hasChatContacts = !!session.chatPhoneCaptured || hasPhoneInMessages(session.messages);
       
       return hasMessages || hasFormContacts || hasChatContacts;
     });
@@ -278,11 +329,12 @@ module.exports = async function handler(req, res) {
       // Проверяем наличие контактов:
       // 1. Из формы (session.contacts)
       // 2. Из чата (session.chatPhoneCaptured)
+      // 3. Fallback: ищем телефон в сообщениях (для старых сессий без флага)
       const hasContactsFromForm = !!(session.contacts && (
         (session.contacts.name && session.contacts.name.trim() !== '') || 
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       ));
-      const hasContactsFromChat = !!session.chatPhoneCaptured;
+      const hasContactsFromChat = !!session.chatPhoneCaptured || hasPhoneInMessages(session.messages);
       const hasContacts = hasContactsFromForm || hasContactsFromChat;
       
       return {
@@ -298,7 +350,8 @@ module.exports = async function handler(req, res) {
           ? session.messages[session.messages.length - 1] 
           : null,
         hasContacts: hasContacts,
-        chatPhoneCaptured: hasContactsFromChat // Добавляем для дополнительной информации
+        chatPhoneCaptured: hasContactsFromChat, // Добавляем для дополнительной информации
+        hasPhoneInMessages: hasPhoneInMessages(session.messages) // Для отладки
       };
     });
     
