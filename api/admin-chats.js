@@ -36,7 +36,92 @@ function calculateDisplayDate(session) {
   return session.createdAt || new Date().toISOString();
 }
 
-// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: Читаем чаты используя ZSET индекс
+// LEGACY ФУНКЦИЯ: Читаем все сессии через SET (используется для миграции индекса)
+async function readChatsLegacy(source = 'test', limit = 100, offset = 0) {
+  console.log(`🔄 LEGACY MODE: Загружаем сессии через SET для источника: ${source}`);
+  
+  try {
+    const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
+    
+    // Получаем все ID из SET
+    const sessionIds = await redisClient.smembers(sessionsListKey);
+    console.log(`📊 Найдено сессий в SET '${source}': ${sessionIds.length}`);
+    
+    if (!sessionIds || sessionIds.length === 0) {
+      return { sessions: [], total: 0 };
+    }
+    
+    // Загружаем сессии батчами
+    const keys = sessionIds.map(id => `chat:${id}`);
+    const allSessions = [];
+    const BATCH_SIZE = 100;
+    
+    for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+      const batch = keys.slice(i, i + BATCH_SIZE);
+      try {
+        const batchResults = await redisClient.mget(...batch);
+        if (batchResults && Array.isArray(batchResults)) {
+          allSessions.push(...batchResults.filter(s => s !== null));
+        }
+      } catch (error) {
+        console.error(`❌ Ошибка загрузки батча:`, error.message);
+      }
+    }
+    
+    // Фильтруем и нормализуем
+    const validSessions = allSessions.filter(session => {
+      if (!session || !session.sessionId) return false;
+      
+      const sessionSource = session.source || 'test';
+      if (sessionSource !== source) return false;
+      
+      const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
+      const hasContacts = session.contacts && (
+        (session.contacts.name && session.contacts.name.trim() !== '') || 
+        (session.contacts.phone && session.contacts.phone.trim() !== '')
+      );
+      
+      return hasMessages || hasContacts;
+    });
+    
+    console.log(`📊 После фильтрации: ${validSessions.length} валидных сессий`);
+    
+    // Сортируем по lastUpdated (новые первыми)
+    validSessions.sort((a, b) => {
+      const dateA = new Date(a.lastUpdated || a.createdAt || 0).getTime();
+      const dateB = new Date(b.lastUpdated || b.createdAt || 0).getTime();
+      return dateB - dateA;
+    });
+    
+    // МИГРАЦИЯ: попутно добавляем сессии в индекс (в фоне, без блокировки ответа)
+    const indexKey = source === 'nm-shop' ? 'sessions:index:nm-shop' : 'sessions:index:test';
+    const migrateToIndex = async () => {
+      try {
+        console.log(`🔄 Начинаем миграцию ${validSessions.length} сессий в индекс...`);
+        for (const session of validSessions.slice(0, 200)) { // Мигрируем первые 200 для начала
+          const timestamp = session.lastUpdated || session.createdAt || new Date().toISOString();
+          await redisClient.updateSessionIndex(session.sessionId, source, timestamp);
+        }
+        console.log(`✅ Миграция завершена`);
+      } catch (error) {
+        console.error('❌ Ошибка миграции индекса:', error.message);
+      }
+    };
+    migrateToIndex().catch(err => console.error('Фоновая миграция failed:', err));
+    
+    // Применяем пагинацию
+    const paginatedSessions = validSessions.slice(offset, offset + limit);
+    
+    console.log(`✅ LEGACY MODE: Возвращаем ${paginatedSessions.length} из ${validSessions.length} сессий`);
+    
+    return { sessions: paginatedSessions, total: validSessions.length };
+  } catch (error) {
+    console.error('❌ Ошибка readChatsLegacy:', error);
+    return { sessions: [], total: 0 };
+  }
+}
+
+// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: Читаем чаты используя ZSET индекс (с fallback на старую логику)
 async function readChats(source = 'test', limit = 100, offset = 0) {
   try {
     console.log(`🔍 Загружаем сессии из индекса для источника: ${source}, limit: ${limit}, offset: ${offset}`);
@@ -48,9 +133,11 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     const total = await redisClient.zcard(indexKey);
     console.log(`📊 Всего сессий в индексе '${source}': ${total}`);
     
-    if (total === 0) {
-      console.log('Нет сессий в индексе');
-      return { sessions: [], total: 0 };
+    // FALLBACK: если индекс пустой или содержит мало записей, используем старую логику
+    // Это случается при первом запуске после миграции, пока индекс не заполнен
+    if (total < 50) {
+      console.warn(`⚠️ Индекс содержит мало записей (${total}), используем fallback на SET для полноты данных`);
+      return await readChatsLegacy(source, limit, offset);
     }
     
     // Получаем ID сессий для текущей страницы (отсортированы по времени, новые первыми)
