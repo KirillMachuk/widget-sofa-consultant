@@ -59,6 +59,56 @@ function detectSource(req) {
 //   ... код удален для оптимизации ...
 // }
 
+// Парсер телефонов из текста сообщения
+function parsePhoneFromMessage(text) {
+  if (!text || typeof text !== 'string') {
+    return null;
+  }
+  
+  // Игнорируем сообщения бота (содержат маркеры бота)
+  const botMarkers = ['закреплю', 'подборка', 'мессенджер', 'дизайнер свяж', 'передам', 'подготовлю'];
+  const lowerText = text.toLowerCase();
+  if (botMarkers.some(marker => lowerText.includes(marker))) {
+    return null;
+  }
+  
+  // Ищем последовательности с цифрами, пробелами, дефисами, скобками, плюсом
+  // Сначала ищем полные форматы (+375, 375, 80)
+  const fullPhonePatterns = [
+    /\+375[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/, // +375 29 390 85 96
+    /375[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/,   // 375 29 390-85-96
+    /80[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/,     // 8 0 29 5 555 55
+    /8[\s\-\(\)]*0[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,3}[\s\-\(\)]*\d{1,2}[\s\-\(\)]*\d{1,2}/ // 8 0 29 с пробелами
+  ];
+  
+  for (const pattern of fullPhonePatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      const phoneStr = match[0].trim();
+      // Проверяем что после удаления всех нецифровых символов остается минимум 9 цифр
+      const digitsOnly = phoneStr.replace(/\D/g, '');
+      if (digitsOnly.length >= 9) {
+        return phoneStr;
+      }
+    }
+  }
+  
+  // Ищем короткие номера (7+ цифр подряд или с пробелами)
+  const shortPhonePattern = /[\d\s\-\(\)]{7,}/g;
+  const matches = text.match(shortPhonePattern);
+  if (matches) {
+    for (const match of matches) {
+      const digitsOnly = match.replace(/\D/g, '');
+      // Если это минимум 7 цифр и не выглядит как год/дата (не начинается с 19xx или 20xx)
+      if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
+        return match.trim();
+      }
+    }
+  }
+  
+  return null;
+}
+
 // Сохранение диалога в Redis
 async function saveChat(sessionId, userMessage, botReply) {
   try {
@@ -131,6 +181,12 @@ async function saveChat(sessionId, userMessage, botReply) {
     // Убрана verification проверка для экономии Redis команд (GET после SET не нужен)
     
     console.log('Диалог сохранен в Redis для сессии:', sessionId, 'источник:', source);
+    
+    // Парсинг и отправка телефона из чата (в фоне, не блокируя ответ)
+    processPhoneFromChat(session, sessionId, userMessage).catch(err => {
+      console.error('Ошибка обработки телефона из чата:', err);
+    });
+    
     return true;
   } catch (error) {
     console.error('Ошибка сохранения диалога в Redis:', error);
@@ -140,6 +196,98 @@ async function saveChat(sessionId, userMessage, botReply) {
     //   trackError('redis_error', `Redis error in saveChat: ${error.message}`, global.currentRequest).catch(() => {});
     // }
     return false;
+  }
+}
+
+// Обработка телефона из чата и отправка в GAS
+async function processPhoneFromChat(session, sessionId, userMessage) {
+  try {
+    // Проверка условий: пропускаем если уже есть контакты или телефон уже был захвачен
+    if (session.contacts && session.contacts.phone && session.contacts.phone.trim()) {
+      return; // Телефон уже сохранен через форму
+    }
+    
+    if (session.chatPhoneCaptured) {
+      return; // Телефон из чата уже был отправлен
+    }
+    
+    // Парсим телефон из сообщения пользователя
+    const phone = parsePhoneFromMessage(userMessage);
+    if (!phone) {
+      return; // Телефон не найден
+    }
+    
+    console.log('📱 Найден телефон в чате:', phone, 'для сессии:', sessionId);
+    
+    // Получаем GAS URL из переменных окружения
+    const GAS_URL = process.env.GAS_URL;
+    if (!GAS_URL) {
+      console.warn('⚠️ GAS_URL не задан, не могу отправить телефон из чата');
+      return;
+    }
+    
+    // Получаем page_url из сессии или referer
+    const req = global.currentRequest;
+    const pageUrl = session.pageUrl || (req ? (req.headers.referer || req.headers.origin || '') : '');
+    
+    // Формируем payload для GAS
+    const payload = {
+      timestamp: new Date().toISOString(),
+      phone: phone, // Сохраняем как клиент написал
+      pretext: 'Телефон из чата',
+      page_url: pageUrl,
+      session_id: sessionId,
+      name: '', // Пустое поле
+      category: '', // Пустое поле
+      gift: '', // Пустое поле
+      messenger: '', // Пустое поле
+      wishes: '' // Пустое поле
+    };
+    
+    // Отправляем в GAS (упрощенная версия, без retry - в фоне)
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут для фонового запроса
+      
+      const r = await fetch(GAS_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (r.ok || r.status === 0 || r.status === 200) {
+        console.log('✅ Телефон из чата успешно отправлен в GAS:', phone);
+        
+        // Отмечаем что телефон был захвачен - читаем свежую версию из Redis
+        const chatKey = `chat:${sessionId}`;
+        try {
+          const currentSession = await redis.get(chatKey);
+          if (currentSession) {
+            currentSession.chatPhoneCaptured = true;
+            await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession); // Обновляем сессию
+          }
+        } catch (updateError) {
+          console.warn('⚠️ Не удалось обновить флаг chatPhoneCaptured:', updateError.message);
+        }
+        
+        return true;
+      } else {
+        console.warn('⚠️ GAS вернул статус:', r.status, 'для телефона из чата');
+      }
+    } catch (fetchError) {
+      // Не логируем ошибки сети для фоновых запросов (не критично)
+      if (fetchError.name !== 'AbortError') {
+        console.warn('⚠️ Ошибка отправки телефона из чата в GAS:', fetchError.message);
+      }
+    }
+  } catch (error) {
+    console.error('Ошибка processPhoneFromChat:', error);
   }
 }
 
@@ -303,12 +451,19 @@ async function handler(req, res){
         const existingSession = await redis.get(chatKey);
         const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
         
+        // Получаем page_url из body или referer
+        const pageUrl = req.body.page_url || req.headers.referer || req.headers.origin || '';
+        
         if (existingSession) {
           // Сессия уже существует - только обновляем prompt и locale, НЕ обновляем lastUpdated
           // чтобы не сдвигать дату последней активности при повторных инициализациях без сообщений
           existingSession.prompt = prompt;
           existingSession.locale = locale || 'ru';
           existingSession.source = existingSession.source || source; // Сохраняем источник если его нет
+          // Сохраняем pageUrl если его нет или обновляем если есть новый
+          if (!existingSession.pageUrl || pageUrl) {
+            existingSession.pageUrl = pageUrl;
+          }
           // lastUpdated не обновляем - сохраняем прежнее значение времени последнего действия
           await redis.setex(chatKey, 30 * 24 * 60 * 60, existingSession); // Обновляем TTL
           await redis.sadd(sessionsListKey, session_id); // Убеждаемся что сессия в списке
@@ -320,6 +475,7 @@ async function handler(req, res){
             prompt,
             locale: locale || 'ru',
             source: source,
+            pageUrl: pageUrl, // Сохраняем URL страницы
             createdAt: sessionData.createdAt,
             lastUpdated: sessionData.lastUpdated,
             messages: []
