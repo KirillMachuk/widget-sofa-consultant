@@ -221,7 +221,7 @@ const redisClient = {
   },
 
   async zrevrange(key, start, stop) {
-    return withRetry(() => redis.zrevrange(key, start, stop));
+    return withRetry(() => redis.zrange(key, start, stop, { rev: true }));
   },
 
   async zcard(key) {
