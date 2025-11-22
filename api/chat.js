@@ -271,6 +271,16 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
           if (currentSession) {
             currentSession.chatPhoneCaptured = true;
             await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession); // Обновляем сессию
+            
+            // Инкрементируем счетчик лидов из чата для аналитики
+            const source = currentSession.source || 'test';
+            const analyticsKey = `analytics:chat_phone_lead:${source}`;
+            try {
+              await redis.incr(analyticsKey);
+              console.log('📊 Счетчик лидов из чата инкрементирован для источника:', source);
+            } catch (analyticsError) {
+              console.warn('⚠️ Не удалось инкрементировать счетчик лидов из чата:', analyticsError.message);
+            }
           }
         } catch (updateError) {
           console.warn('⚠️ Не удалось обновить флаг chatPhoneCaptured:', updateError.message);

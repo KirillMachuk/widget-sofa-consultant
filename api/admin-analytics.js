@@ -21,12 +21,13 @@ module.exports = async function handler(req, res) {
     const source = url.searchParams.get('source') || 'test';
     
     // Получаем значения счетчиков из Redis для указанного источника
-    const [pageViews, widgetOpens, formSubmits, uniqueVisitorsCount, formInvocations] = await Promise.all([
+    const [pageViews, widgetOpens, formSubmits, uniqueVisitorsCount, formInvocations, chatPhoneLeads] = await Promise.all([
       redisClient.get(`analytics:page_view:${source}`).catch(() => 0),
       redisClient.get(`analytics:widget_open:${source}`).catch(() => 0),
       redisClient.get(`analytics:form_submit:${source}`).catch(() => 0),
       redisClient.scard(`unique_visitors:${source}`).catch(() => 0), // Количество уникальных посетителей
-      redisClient.get(`analytics:form_invocation:${source}`).catch(() => 0)
+      redisClient.get(`analytics:form_invocation:${source}`).catch(() => 0),
+      redisClient.get(`analytics:chat_phone_lead:${source}`).catch(() => 0) // Лиды из чата
     ]);
     
     // Преобразуем в числа
@@ -35,6 +36,10 @@ module.exports = async function handler(req, res) {
     const formSubmitsCount = parseInt(formSubmits || 0, 10);
     const uniqueVisitors = parseInt(uniqueVisitorsCount || 0, 10);
     const formInvocationsCount = parseInt(formInvocations || 0, 10);
+    const chatPhoneLeadsCount = parseInt(chatPhoneLeads || 0, 10);
+    
+    // Суммируем лиды: заполненные формы + лиды из чата
+    const totalLeads = formSubmitsCount + chatPhoneLeadsCount;
     
     // Вычисляем конверсии
     const conversionWidgetOpen = pageViewsCount > 0 
@@ -42,7 +47,7 @@ module.exports = async function handler(req, res) {
       : 0;
     
     const conversionFormSubmit = widgetOpensCount > 0
-      ? parseFloat(((formSubmitsCount / widgetOpensCount) * 100).toFixed(2))
+      ? parseFloat(((totalLeads / widgetOpensCount) * 100).toFixed(2))
       : 0;
     
     return res.status(200).json({
@@ -52,7 +57,9 @@ module.exports = async function handler(req, res) {
         uniqueVisitors: uniqueVisitors,
         pageViews: pageViewsCount,
         widgetOpens: widgetOpensCount,
-        formSubmits: formSubmitsCount,
+        totalLeads: totalLeads, // Общее количество лидов (формы + чат)
+        formSubmits: formSubmitsCount, // Только заполненные формы (для отладки)
+        chatPhoneLeads: chatPhoneLeadsCount, // Только лиды из чата (для отладки)
         formInvocations: formInvocationsCount,
         conversionWidgetOpen: conversionWidgetOpen,
         conversionFormSubmit: conversionFormSubmit

@@ -669,8 +669,8 @@
                             <div class="analytics-value" id="analytics-formInvocations">—</div>
                         </div>
                         <div class="analytics-card">
-                            <div class="analytics-label">Заполнено форм</div>
-                            <div class="analytics-value" id="analytics-formSubmits">—</div>
+                            <div class="analytics-label">Получено лидов</div>
+                            <div class="analytics-value" id="analytics-totalLeads">—</div>
                             <div class="analytics-conversion" id="analytics-conversionForm">—</div>
                         </div>
                     </div>
@@ -956,13 +956,13 @@
                 const data = await response.json();
                 
                 if (data.success && data.analytics) {
-                    const { uniqueVisitors, pageViews, widgetOpens, formSubmits, formInvocations, conversionWidgetOpen, conversionFormSubmit } = data.analytics;
+                    const { uniqueVisitors, pageViews, widgetOpens, totalLeads, formInvocations, conversionWidgetOpen, conversionFormSubmit } = data.analytics;
                     
                     // Обновляем значения
                     document.getElementById('analytics-uniqueVisitors').textContent = uniqueVisitors.toLocaleString('ru-RU');
                     document.getElementById('analytics-pageViews').textContent = pageViews.toLocaleString('ru-RU');
                     document.getElementById('analytics-widgetOpens').textContent = widgetOpens.toLocaleString('ru-RU');
-                    document.getElementById('analytics-formSubmits').textContent = formSubmits.toLocaleString('ru-RU');
+                    document.getElementById('analytics-totalLeads').textContent = (totalLeads ?? 0).toLocaleString('ru-RU');
                     document.getElementById('analytics-formInvocations').textContent = (formInvocations ?? 0).toLocaleString('ru-RU');
                     
                     // Обновляем конверсии
