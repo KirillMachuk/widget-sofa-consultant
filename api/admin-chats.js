@@ -258,14 +258,29 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         }
       });
       
-      console.log(`📊 После нормализации: ${validSessions.length} сессий готово к отправке`);
+      console.log(`📊 После нормализации: ${validSessions.length} сессий`);
     }
     
-    // Убираем дополнительную фильтрацию - возвращаем все валидные сессии
-    // Фронтенд сам решит, что показывать на основе данных
-    console.log(`✅ Финальный результат для '${source}': ${validSessions.length} сессий из ${total} всего в индексе (offset: ${offset}, limit: ${limit})`);
+    // Фильтрация: показываем только сессии с сообщениями или контактами
+    const sessionsWithData = validSessions.filter(session => {
+      // Проверяем наличие сообщений
+      const hasMessages = session.messages && session.messages.length > 0;
+      
+      // Проверяем наличие контактов из формы
+      const hasFormContacts = session.contacts && (
+        (session.contacts.name && session.contacts.name.trim() !== '') || 
+        (session.contacts.phone && session.contacts.phone.trim() !== '')
+      );
+      
+      // Проверяем флаг захвата телефона в чате
+      const hasChatPhone = !!session.chatPhoneCaptured;
+      
+      return hasMessages || hasFormContacts || hasChatPhone;
+    });
     
-    return { sessions: validSessions, total };
+    console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${validSessions.length} валидных (offset: ${offset}, limit: ${limit})`);
+    
+    return { sessions: sessionsWithData, total };
   } catch (error) {
     console.error('❌ Ошибка чтения чатов из Redis:', error);
     console.error('Stack:', error.stack);
