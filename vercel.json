@@ -46,7 +46,7 @@
         },
         {
           "key": "Cache-Control",
-          "value": "public, max-age=3600"
+          "value": "public, max-age=86400, stale-while-revalidate=86400"
         },
         {
           "key": "Access-Control-Allow-Origin",
@@ -61,6 +61,66 @@
           "value": "Content-Type, Authorization, cache-control, Cache-Control, Pragma, Expires"
         }
       ]
+    },
+    {
+      "source": "/(widget|widget-external)\\.js",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=31536000, immutable"
+        }
+      ]
+    },
+    {
+      "source": "/(index|admin|integration-examples|test-external)\\.html",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=60, stale-while-revalidate=300"
+        }
+      ]
     }
-  ]
+  ],
+  "functions": {
+    "api/chat.js": {
+      "memory": 1024,
+      "maxDuration": 15
+    },
+    "api/analytics.js": {
+      "memory": 512,
+      "maxDuration": 7
+    },
+    "api/admin-analytics.js": {
+      "memory": 512,
+      "maxDuration": 10
+    },
+    "api/admin-chats.js": {
+      "memory": 768,
+      "maxDuration": 15
+    },
+    "api/admin-session.js": {
+      "memory": 512,
+      "maxDuration": 10
+    },
+    "api/admin-auth.js": {
+      "memory": 256,
+      "maxDuration": 5
+    },
+    "api/admin-clear-sessions.js": {
+      "memory": 256,
+      "maxDuration": 5
+    },
+    "api/admin-errors.js": {
+      "memory": 256,
+      "maxDuration": 5
+    },
+    "api/lead.js": {
+      "memory": 256,
+      "maxDuration": 5
+    },
+    "api/health.js": {
+      "memory": 128,
+      "maxDuration": 5
+    }
+  }
 }

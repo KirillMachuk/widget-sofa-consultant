@@ -1,6 +1,8 @@
 (function(){
   // Widget version - increment this when making changes
-  const WIDGET_VERSION = '5.1.0';
+  const WIDGET_VERSION = '5.2.0';
+  const PROMPT_CACHE_KEY = 'vfw_prompt_cache_external_v2';
+  const PROMPT_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
   
   if (window.VFW_LOADED) {
     return;
@@ -20,6 +22,46 @@
     rightOffset: null
   };
   const DEBUG = Boolean(window.VFW_DEBUG);
+  function getCachedPrompt({ allowExpired = false } = {}) {
+    try {
+      const raw = localStorage.getItem(PROMPT_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+      if (!parsed.prompt || !parsed.timestamp) return null;
+      if (parsed.version !== WIDGET_VERSION) return null;
+      if (parsed.url && CONFIG.promptUrl && parsed.url !== CONFIG.promptUrl) return null;
+      const isExpired = Date.now() - parsed.timestamp > PROMPT_CACHE_TTL;
+      if (isExpired && !allowExpired) return null;
+      return parsed.prompt;
+    } catch (error) {
+      if (DEBUG) console.warn('[Widget] Failed to read prompt cache:', error);
+      return null;
+    }
+  }
+  function savePromptToCache(prompt) {
+    try {
+      if (!prompt) {
+        clearPromptCache();
+        return;
+      }
+      localStorage.setItem(PROMPT_CACHE_KEY, JSON.stringify({
+        prompt,
+        url: CONFIG.promptUrl,
+        version: WIDGET_VERSION,
+        timestamp: Date.now()
+      }));
+    } catch (error) {
+      if (DEBUG) console.warn('[Widget] Failed to save prompt cache:', error);
+    }
+  }
+  function clearPromptCache() {
+    try {
+      localStorage.removeItem(PROMPT_CACHE_KEY);
+    } catch (error) {
+      if (DEBUG) console.warn('[Widget] Failed to clear prompt cache:', error);
+    }
+  }
 
   // Get widget base URL from script src for absolute paths
   function getWidgetBaseUrl() {
@@ -1347,6 +1389,8 @@
   }
 
   let PROMPT = null;
+  let sessionInitPromise = null;
+  let sessionInitialized = false;
   const submittedLeads = new Set();
   let fallbackFormShown = false; // Флаг для отслеживания показа fallback формы
   let widgetOpenedInSession = false; // Флаг для отслеживания первого открытия виджета в сессии
@@ -1576,41 +1620,151 @@
     });
   }
 
-  async function fetchPrompt(){
-    // Use inline content if available, otherwise fetch from URLs
-    let promptPromise;
+  const SESSION_INIT_TIMEOUT = 20000;
+  const SESSION_INIT_MAX_RETRIES = 2;
+  async function ensureSessionInitialized(promptData, { force = false } = {}) {
+    if (!promptData || !CONFIG.openaiEndpoint) {
+      return;
+    }
+    
+    if (force) {
+      sessionInitialized = false;
+      sessionInitPromise = null;
+    }
+    
+    if (sessionInitialized && !force) {
+      return;
+    }
+    
+    if (sessionInitPromise) {
+      return sessionInitPromise;
+    }
+    
+    const initPayload = {
+      action: 'init',
+      session_id: SESSION_ID,
+      prompt: promptData,
+      locale: 'ru'
+    };
+    
+    const runInitAttempt = async (attempt) => {
+      const initController = new AbortController();
+      const initTimeoutId = setTimeout(() => initController.abort(), SESSION_INIT_TIMEOUT);
+      const initStartTime = Date.now();
+      
+      try {
+        const res = await fetch(CONFIG.openaiEndpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(initPayload),
+          signal: initController.signal
+        });
+        
+        clearTimeout(initTimeoutId);
+        const initLatency = Date.now() - initStartTime;
+        
+        if (!res.ok) {
+          if (DEBUG) console.warn('[Widget] Session init failed (attempt %d): %o', attempt, { status: res.status, latency: initLatency });
+          return { success: false, latency: initLatency, status: res.status };
+        }
+        
+        if (DEBUG) {
+          console.log('[Widget] Session initialized successfully:', { latency: initLatency, session_id: SESSION_ID });
+        }
+        return { success: true };
+      } catch (e) {
+        clearTimeout(initTimeoutId);
+        const initLatency = Date.now() - initStartTime;
+        
+        if (DEBUG) {
+          console.warn('[Widget] Session init attempt failed:', {
+            attempt,
+            error: e.message,
+            type: e.name,
+            latency: initLatency
+          });
+        }
+        return { success: false, error: e, latency: initLatency };
+      }
+    };
+    
+    const initPromise = (async () => {
+      for (let attempt = 1; attempt <= SESSION_INIT_MAX_RETRIES; attempt++) {
+        const result = await runInitAttempt(attempt);
+        if (result.success) {
+          sessionInitialized = true;
+          return;
+        }
+        sessionInitialized = false;
+        if (attempt < SESSION_INIT_MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        }
+      }
+      if (DEBUG) console.error('[Widget] Session init failed after retries');
+    })();
+    
+    sessionInitPromise = initPromise;
+    try {
+      await initPromise;
+    } finally {
+      sessionInitPromise = null;
+    }
+  }
+  async function fetchPrompt({ forceInit = false, skipCache = false } = {}) {
+    let promptData = null;
+    let fetchError = null;
+    
+    if (forceInit) {
+      sessionInitialized = false;
+      sessionInitPromise = null;
+    }
     
     if (CONFIG.promptContent) {
-      promptPromise = Promise.resolve(JSON.parse(CONFIG.promptContent));
-    } else {
-      promptPromise = CONFIG.promptUrl ? fetch(CONFIG.promptUrl, {
-        cache: 'no-cache',
-        headers: {
-          'Cache-Control': 'no-cache, no-store, must-revalidate',
-          'Pragma': 'no-cache',
-          'Expires': '0'
+      try {
+        promptData = JSON.parse(CONFIG.promptContent);
+        savePromptToCache(promptData);
+      } catch (error) {
+        if (DEBUG) console.warn('[Widget] Failed to parse inline prompt:', error);
+      }
+    }
+    
+    if (!promptData && !CONFIG.promptContent && !skipCache) {
+      promptData = getCachedPrompt();
+    }
+    
+    if (!promptData && CONFIG.promptUrl) {
+      try {
+        const response = await fetch(CONFIG.promptUrl, {
+          cache: 'force-cache',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`Failed to load prompt (${response.status})`);
         }
-      }).then(r=>r.json()) : Promise.resolve(null);
+        
+        promptData = await response.json();
+        savePromptToCache(promptData);
+      } catch (error) {
+        fetchError = error;
+        if (DEBUG) console.warn('[Widget] Prompt request failed:', error);
+        const stalePrompt = getCachedPrompt({ allowExpired: true });
+        if (stalePrompt) {
+          promptData = stalePrompt;
+        }
+      }
     }
     
-    const [p] = await Promise.allSettled([promptPromise]);
-    PROMPT = p.status==='fulfilled' ? p.value : null;
-    
-    // Initialize session on server with prompt only
-    if (PROMPT && CONFIG.openaiEndpoint) {
-      fetch(CONFIG.openaiEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          action: 'init',
-          session_id: SESSION_ID,
-          prompt: PROMPT,
-          locale: 'ru'
-        })
-      }).catch(e => {
-        if (DEBUG) console.warn('Failed to initialize session:', e);
-      });
+    if (promptData) {
+      PROMPT = promptData;
+      await ensureSessionInitialized(PROMPT, { force: forceInit });
+      return PROMPT;
     }
+    
+    clearPromptCache();
+    throw fetchError || new Error('Prompt data is not available');
   }
   
 
@@ -1921,7 +2075,7 @@
           if (errorData.error && errorData.error.includes('Session not initialized')) {
             if (DEBUG) console.log('Session not initialized, trying to reinitialize...');
             // Пробуем инициализировать сессию еще раз
-            await fetchPrompt();
+            await fetchPrompt({ forceInit: true });
             // Повторяем запрос
             const retryRes = await fetchWithRetry(CONFIG.openaiEndpoint, {
               method:'POST',
