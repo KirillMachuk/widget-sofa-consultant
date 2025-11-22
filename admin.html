@@ -851,23 +851,38 @@
                 return;
             }
             
-            container.innerHTML = sessions.map(session => `
-                <div class="session-item ${session.hasContacts ? 'has-contacts' : ''}" onclick="selectSession('${session.id}')">
-                    <div class="session-header">
-                        <span class="session-id">${session.id}</span>
-                        <span class="session-date">${formatDate(session.displayDate || session.lastUpdated || session.createdAt)}</span>
+            container.innerHTML = sessions.map(session => {
+                // Определяем источник контактов
+                const hasFormContacts = session.contacts && (session.contacts.name || session.contacts.phone);
+                const hasChatContacts = session.chatPhoneCaptured;
+                let contactsBadgeText = 'Без контактов';
+                
+                if (hasFormContacts && hasChatContacts) {
+                    contactsBadgeText = 'Контакты (форма + чат)';
+                } else if (hasFormContacts) {
+                    contactsBadgeText = 'Контакты (форма)';
+                } else if (hasChatContacts) {
+                    contactsBadgeText = 'Контакты (чат)';
+                }
+                
+                return `
+                    <div class="session-item ${session.hasContacts ? 'has-contacts' : ''}" onclick="selectSession('${session.id}')">
+                        <div class="session-header">
+                            <span class="session-id">${session.id}</span>
+                            <span class="session-date">${formatDate(session.displayDate || session.lastUpdated || session.createdAt)}</span>
+                        </div>
+                        <div class="session-info">
+                            <span class="session-badge ${session.hasContacts ? 'badge-contacts' : 'badge-no-contacts'}">
+                                ${contactsBadgeText}
+                            </span>
+                            <span class="session-badge">${session.messageCount} сообщений</span>
+                        </div>
+                        <div class="session-preview">
+                            ${session.lastMessage ? session.lastMessage.content.substring(0, 100) + '...' : 'Нет сообщений'}
+                        </div>
                     </div>
-                    <div class="session-info">
-                        <span class="session-badge ${session.hasContacts ? 'badge-contacts' : 'badge-no-contacts'}">
-                            ${session.hasContacts ? 'Есть контакты' : 'Без контактов'}
-                        </span>
-                        <span class="session-badge">${session.messageCount} сообщений</span>
-                    </div>
-                    <div class="session-preview">
-                        ${session.lastMessage ? session.lastMessage.content.substring(0, 100) + '...' : 'Нет сообщений'}
-                    </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         // Выбор сессии
@@ -901,11 +916,11 @@
             
             let html = '';
             
-            // Информация о контактах
+            // Информация о контактах из формы
             if (session.contacts && (session.contacts.name || session.contacts.phone || session.contacts.category || session.contacts.gift || session.contacts.messenger || session.contacts.wishes)) {
                 html += `
                     <div class="contacts-info">
-                        <h4>Контактные данные</h4>
+                        <h4>Контактные данные (из формы)</h4>
                         <div class="contacts-details">
                             ${session.contacts.name ? `<div class="contact-item"><span class="contact-label">Имя:</span><span class="contact-value">${session.contacts.name}</span></div>` : ''}
                             ${session.contacts.phone ? `<div class="contact-item"><span class="contact-label">Телефон:</span><span class="contact-value">${session.contacts.phone}</span></div>` : ''}
@@ -913,6 +928,21 @@
                             ${session.contacts.gift ? `<div class="contact-item"><span class="contact-label">Подарок:</span><span class="contact-value">${session.contacts.gift}</span></div>` : ''}
                             ${session.contacts.messenger ? `<div class="contact-item"><span class="contact-label">Мессенджер:</span><span class="contact-value">${session.contacts.messenger}</span></div>` : ''}
                             ${session.contacts.wishes ? `<div class="contact-item"><span class="contact-label">Пожелания:</span><span class="contact-value">${session.contacts.wishes}</span></div>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Информация о контактах из чата
+            if (session.chatPhoneCaptured) {
+                html += `
+                    <div class="contacts-info">
+                        <h4>Контактные данные (из чата)</h4>
+                        <div class="contacts-details">
+                            <div class="contact-item">
+                                <span class="contact-label">📱 Статус:</span>
+                                <span class="contact-value">Телефон оставлен в переписке и отправлен в Google Sheets</span>
+                            </div>
                         </div>
                     </div>
                 `;
