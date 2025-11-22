@@ -509,8 +509,7 @@ async function handler(req, res){
           };
           await redis.setex(chatKey, 30 * 24 * 60 * 60, redisSession); // TTL 30 дней
           const addedToSet = await redis.sadd(sessionsListKey, session_id); // Добавляем в список сессий
-          // Добавляем в индекс для быстрого поиска
-          await redis.updateSessionIndex(session_id, source, redisSession.createdAt);
+          // НЕ добавляем в индекс при init (пустая сессия) - добавим позже при появлении сообщений/контактов
           console.log('Новая сессия создана в Redis:', session_id, 'источник:', source, 'Добавлена в sessions:list:', addedToSet > 0);
         }
       } catch (error) {
