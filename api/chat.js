@@ -72,6 +72,11 @@ function parsePhoneFromMessage(text) {
     return null;
   }
   
+  // Удаляем артикулы/номера моделей (буква + цифры с дефисами) перед поиском телефона
+  // Паттерн: М00-009915, А123-456, Т-999 и т.д.
+  const articlePattern = /[А-ЯA-Z]+\d+[-\d]*/gi;
+  let cleanedText = text.replace(articlePattern, '');
+  
   // Ищем последовательности с цифрами, пробелами, дефисами, скобками, плюсом
   // Сначала ищем полные форматы (+375, 375, 80)
   const fullPhonePatterns = [
@@ -82,7 +87,7 @@ function parsePhoneFromMessage(text) {
   ];
   
   for (const pattern of fullPhonePatterns) {
-    const match = text.match(pattern);
+    const match = cleanedText.match(pattern);
     if (match) {
       const phoneStr = match[0].trim();
       // Проверяем что после удаления всех нецифровых символов остается минимум 9 цифр
@@ -95,7 +100,7 @@ function parsePhoneFromMessage(text) {
   
   // Ищем короткие номера (7+ цифр подряд или с пробелами)
   const shortPhonePattern = /[\d\s\-\(\)]{7,}/g;
-  const matches = text.match(shortPhonePattern);
+  const matches = cleanedText.match(shortPhonePattern);
   if (matches) {
     for (const match of matches) {
       const digitsOnly = match.replace(/\D/g, '');
