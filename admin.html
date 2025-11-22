@@ -193,6 +193,20 @@
             border-left: 4px solid #3b82f6;
         }
 
+        .session-item.has-contacts {
+            background: #f0fdf4;
+            border-left: 4px solid #22c55e;
+        }
+
+        .session-item.has-contacts:hover {
+            background: #dcfce7;
+        }
+
+        .session-item.has-contacts.active {
+            background: #dcfce7;
+            border-left: 4px solid #16a34a;
+        }
+
         .session-header {
             display: flex;
             justify-content: space-between;
@@ -838,7 +852,7 @@
             }
             
             container.innerHTML = sessions.map(session => `
-                <div class="session-item" onclick="selectSession('${session.id}')">
+                <div class="session-item ${session.hasContacts ? 'has-contacts' : ''}" onclick="selectSession('${session.id}')">
                     <div class="session-header">
                         <span class="session-id">${session.id}</span>
                         <span class="session-date">${formatDate(session.displayDate || session.lastUpdated || session.createdAt)}</span>
