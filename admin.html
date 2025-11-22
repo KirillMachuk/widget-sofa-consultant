@@ -910,6 +910,31 @@
             }
         }
 
+        // Функция для извлечения телефона из сообщений (для старых сессий)
+        function extractPhoneFromMessages(messages) {
+            if (!messages || !Array.isArray(messages)) return null;
+            
+            // Регулярное выражение для поиска телефонов
+            const phoneRegex = /(?:\+375|80)[\s\-]?\(?\d{2}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}|(?:\+7|8)[\s\-]?\(?\d{3}\)?[\s\-]?\d{3}[\s\-]?\d{2}[\s\-]?\d{2}|\+?\d{10,15}/g;
+            
+            // Ищем телефон в сообщениях пользователя (от новых к старым)
+            for (let i = messages.length - 1; i >= 0; i--) {
+                const message = messages[i];
+                if (message.role === 'user' && message.content) {
+                    const matches = message.content.match(phoneRegex);
+                    if (matches && matches.length > 0) {
+                        // Возвращаем первый найденный телефон и время сообщения
+                        return {
+                            phone: matches[0].trim(),
+                            timestamp: message.timestamp
+                        };
+                    }
+                }
+            }
+            
+            return null;
+        }
+
         // Отображение чата
         function displayChat(session) {
             const container = document.getElementById('chat-messages');
@@ -934,20 +959,34 @@
             }
             
             // Информация о контактах из чата
-            if (session.chatPhoneCaptured && session.chatContacts) {
-                html += `
-                    <div class="contacts-info">
-                        <h4>Контактные данные (из чата)</h4>
-                        <div class="contacts-details">
-                            ${session.chatContacts.phone ? `<div class="contact-item"><span class="contact-label">Телефон:</span><span class="contact-value">${session.chatContacts.phone}</span></div>` : ''}
-                            ${session.chatContacts.timestamp ? `<div class="contact-item"><span class="contact-label">Время захвата:</span><span class="contact-value">${formatDateTime(session.chatContacts.timestamp)}</span></div>` : ''}
-                            <div class="contact-item">
-                                <span class="contact-label">📱 Статус:</span>
-                                <span class="contact-value">Отправлено в Google Sheets</span>
+            if (session.chatPhoneCaptured) {
+                // Пытаемся получить контакты из chatContacts (новые сессии)
+                // или извлечь из сообщений (старые сессии)
+                let chatContactInfo = session.chatContacts;
+                
+                if (!chatContactInfo || !chatContactInfo.phone) {
+                    // Fallback для старых сессий - извлекаем телефон из сообщений
+                    chatContactInfo = extractPhoneFromMessages(session.messages);
+                }
+                
+                if (chatContactInfo && chatContactInfo.phone) {
+                    html += `
+                        <div class="contacts-info">
+                            <h4>Контактные данные (из чата)</h4>
+                            <div class="contacts-details">
+                                <div class="contact-item">
+                                    <span class="contact-label">Телефон:</span>
+                                    <span class="contact-value">${chatContactInfo.phone}</span>
+                                </div>
+                                ${chatContactInfo.timestamp ? `<div class="contact-item"><span class="contact-label">Время захвата:</span><span class="contact-value">${formatDateTime(chatContactInfo.timestamp)}</span></div>` : ''}
+                                <div class="contact-item">
+                                    <span class="contact-label">📱 Статус:</span>
+                                    <span class="contact-value">Отправлено в Google Sheets</span>
+                                </div>
                             </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                }
             }
             
             // Сообщения
