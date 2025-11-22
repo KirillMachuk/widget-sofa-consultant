@@ -272,10 +272,7 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       );
       
-      // Проверяем флаг захвата телефона в чате
-      const hasChatPhone = !!session.chatPhoneCaptured;
-      
-      return hasMessages || hasFormContacts || hasChatPhone;
+      return hasMessages || hasFormContacts;
     });
     
     console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${validSessions.length} валидных (offset: ${offset}, limit: ${limit})`);
