@@ -76,12 +76,13 @@ async function readChatsLegacy(source = 'test', limit = 100, offset = 0) {
       if (sessionSource !== source) return false;
       
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
-      const hasContacts = session.contacts && (
+      const hasFormContacts = session.contacts && (
         (session.contacts.name && session.contacts.name.trim() !== '') || 
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       );
+      const hasChatContacts = !!session.chatPhoneCaptured;
       
-      return hasMessages || hasContacts;
+      return hasMessages || hasFormContacts || hasChatContacts;
     });
     
     console.log(`📊 После фильтрации: ${validSessions.length} валидных сессий`);
@@ -207,22 +208,27 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       });
       
       const sessionsWithMessages = validSessions.filter(s => s.messages && Array.isArray(s.messages) && s.messages.length > 0);
-      const sessionsWithContacts = validSessions.filter(s => s.contacts && (
-        (s.contacts.name && s.contacts.name.trim() !== '') || 
-        (s.contacts.phone && s.contacts.phone.trim() !== '')
-      ));
+      const sessionsWithContacts = validSessions.filter(s => {
+        const hasFormContacts = s.contacts && (
+          (s.contacts.name && s.contacts.name.trim() !== '') || 
+          (s.contacts.phone && s.contacts.phone.trim() !== '')
+        );
+        const hasChatContacts = !!s.chatPhoneCaptured;
+        return hasFormContacts || hasChatContacts;
+      });
       console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
     }
     
     // Фильтрация: показываем только сессии с данными
     const sessionsWithData = validSessions.filter(session => {
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
-      const hasContacts = session.contacts && (
+      const hasFormContacts = session.contacts && (
         (session.contacts.name && session.contacts.name.trim() !== '') || 
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       );
+      const hasChatContacts = !!session.chatPhoneCaptured;
       
-      return hasMessages || hasContacts;
+      return hasMessages || hasFormContacts || hasChatContacts;
     });
     
     console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${total} всего в индексе (offset: ${offset}, limit: ${limit})`);
@@ -268,6 +274,17 @@ module.exports = async function handler(req, res) {
     const formattedSessions = chats.map(session => {
       // Вычисляем реальную дату последней активности на основе сообщений и контактов
       const displayDate = calculateDisplayDate(session);
+      
+      // Проверяем наличие контактов:
+      // 1. Из формы (session.contacts)
+      // 2. Из чата (session.chatPhoneCaptured)
+      const hasContactsFromForm = !!(session.contacts && (
+        (session.contacts.name && session.contacts.name.trim() !== '') || 
+        (session.contacts.phone && session.contacts.phone.trim() !== '')
+      ));
+      const hasContactsFromChat = !!session.chatPhoneCaptured;
+      const hasContacts = hasContactsFromForm || hasContactsFromChat;
+      
       return {
         id: session.sessionId,
         createdAt: session.createdAt,
@@ -280,10 +297,8 @@ module.exports = async function handler(req, res) {
         lastMessage: session.messages && session.messages.length > 0 
           ? session.messages[session.messages.length - 1] 
           : null,
-        hasContacts: !!(session.contacts && (
-          (session.contacts.name && session.contacts.name.trim() !== '') || 
-          (session.contacts.phone && session.contacts.phone.trim() !== '')
-        ))
+        hasContacts: hasContacts,
+        chatPhoneCaptured: hasContactsFromChat // Добавляем для дополнительной информации
       };
     });
     
