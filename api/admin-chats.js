@@ -258,7 +258,13 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         }
       });
       
-      console.log(`📊 После нормализации: ${validSessions.length} сессий`);
+      // Диагностика: сколько сессий с сообщениями
+      const withMessages = validSessions.filter(s => s.messages && s.messages.length > 0);
+      const withContacts = validSessions.filter(s => s.contacts && (
+        (s.contacts.name && s.contacts.name.trim() !== '') || 
+        (s.contacts.phone && s.contacts.phone.trim() !== '')
+      ));
+      console.log(`📊 Диагностика ${validSessions.length} сессий: ${withMessages.length} с сообщениями, ${withContacts.length} с контактами`);
     }
     
     // Фильтрация: показываем только сессии с сообщениями или контактами
