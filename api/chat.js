@@ -176,6 +176,8 @@ async function saveChat(sessionId, userMessage, botReply) {
     await redis.setex(chatKey, 30 * 24 * 60 * 60, session); // TTL 30 дней
     // Убеждаемся, что сессия добавлена в соответствующий список сессий
     await redis.sadd(sessionsListKey, sessionId);
+    // Обновляем индекс для быстрого поиска в админке
+    await redis.updateSessionIndex(sessionId, source, session.lastUpdated);
     console.log('✅ redis.set выполнен, сессия добавлена в', sessionsListKey);
     
     // Убрана verification проверка для экономии Redis команд (GET после SET не нужен)
@@ -270,10 +272,14 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
           const currentSession = await redis.get(chatKey);
           if (currentSession) {
             currentSession.chatPhoneCaptured = true;
+            currentSession.lastUpdated = new Date().toISOString();
             await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession); // Обновляем сессию
             
-            // Инкрементируем счетчик лидов из чата для аналитики
+            // Обновляем индекс
             const source = currentSession.source || 'test';
+            await redis.updateSessionIndex(sessionId, source, currentSession.lastUpdated);
+            
+            // Инкрементируем счетчик лидов из чата для аналитики
             const analyticsKey = `analytics:chat_phone_lead:${source}`;
             try {
               await redis.incr(analyticsKey);
@@ -492,6 +498,8 @@ async function handler(req, res){
           };
           await redis.setex(chatKey, 30 * 24 * 60 * 60, redisSession); // TTL 30 дней
           const addedToSet = await redis.sadd(sessionsListKey, session_id); // Добавляем в список сессий
+          // Добавляем в индекс для быстрого поиска
+          await redis.updateSessionIndex(session_id, source, redisSession.createdAt);
           console.log('Новая сессия создана в Redis:', session_id, 'источник:', source, 'Добавлена в sessions:list:', addedToSet > 0);
         }
       } catch (error) {

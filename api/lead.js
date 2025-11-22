@@ -27,6 +27,8 @@ async function saveContacts(sessionId, contacts) {
       await redis.setex(chatKey, 30 * 24 * 60 * 60, session); // TTL 30 дней
       // Добавляем в соответствующий список сессий
       await redis.sadd(sessionsListKey, sessionId);
+      // Обновляем индекс для быстрого поиска
+      await redis.updateSessionIndex(sessionId, source, session.lastUpdated);
       console.log('✅ Контакты сохранены в Redis для сессии:', sessionId, 'источник:', source);
       console.log('✅ Сохраненные контакты:', contacts);
       return true;
@@ -43,6 +45,8 @@ async function saveContacts(sessionId, contacts) {
       };
       await redis.setex(chatKey, 30 * 24 * 60 * 60, session);
       await redis.sadd(sessionsListKey, sessionId);
+      // Добавляем в индекс для быстрого поиска
+      await redis.updateSessionIndex(sessionId, source, session.createdAt);
       console.log('✅ Новая сессия создана с контактами, источник:', source);
       return true;
     }

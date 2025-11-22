@@ -213,6 +213,39 @@ const redisClient = {
 
   async llen(key) {
     return withRetry(() => redis.llen(key));
+  },
+
+  // Redis ZSET операции для индексации сессий
+  async zadd(key, score, member) {
+    return withRetry(() => redis.zadd(key, { score, member }));
+  },
+
+  async zrevrange(key, start, stop) {
+    return withRetry(() => redis.zrevrange(key, start, stop));
+  },
+
+  async zcard(key) {
+    return withRetry(() => redis.zcard(key));
+  },
+
+  async zrem(key, ...members) {
+    return withRetry(() => redis.zrem(key, ...members));
+  },
+
+  // Вспомогательная функция для обновления индекса сессий
+  // Вызывается при каждом сохранении сессии для быстрого поиска в админке
+  async updateSessionIndex(sessionId, source, timestamp) {
+    try {
+      const indexKey = source === 'nm-shop' ? 'sessions:index:nm-shop' : 'sessions:index:test';
+      const score = new Date(timestamp).getTime();
+      await this.zadd(indexKey, score, sessionId);
+      // Устанавливаем TTL на индекс (35 дней, чуть больше чем у сессий)
+      await this.expire(indexKey, 35 * 24 * 60 * 60);
+      return true;
+    } catch (error) {
+      console.error('Failed to update session index:', error.message);
+      return false;
+    }
   }
 };
 

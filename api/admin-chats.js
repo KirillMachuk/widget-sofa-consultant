@@ -36,158 +36,39 @@ function calculateDisplayDate(session) {
   return session.createdAt || new Date().toISOString();
 }
 
-// Читаем все чаты из Redis - ВСЕГДА используем KEYS для загрузки всех сессий (включая старые)
+// ОПТИМИЗИРОВАННАЯ ФУНКЦИЯ: Читаем чаты используя ZSET индекс
 async function readChats(source = 'test', limit = 100, offset = 0) {
   try {
-    console.log('🔍 Загружаем ВСЕ сессии из Redis для источника:', source);
+    console.log(`🔍 Загружаем сессии из индекса для источника: ${source}, limit: ${limit}, offset: ${offset}`);
     
-    // ДИАГНОСТИКА: Проверяем оба источника для понимания распределения сессий
-    try {
-      const testSessionsCount = await redisClient.scard('sessions:list:test');
-      const nmShopSessionsCount = await redisClient.scard('sessions:list:nm-shop');
-      console.log(`📊 Диагностика источников: test=${testSessionsCount || 0}, nm-shop=${nmShopSessionsCount || 0}`);
-    } catch (diagError) {
-      console.warn('⚠️ Не удалось получить диагностику источников:', diagError.message);
-    }
+    // Используем ZSET индекс для быстрого получения отсортированных ID
+    const indexKey = source === 'nm-shop' ? 'sessions:index:nm-shop' : 'sessions:index:test';
     
-    // ОПТИМИЗАЦИЯ: Для nm-shop используем SET напрямую (9021 сессий) - быстрее чем SCAN всех 11k ключей
-    // Для test используем SCAN для поиска всех сессий
-    let allKeys = [];
-    const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
+    // Получаем общее количество сессий в индексе
+    const total = await redisClient.zcard(indexKey);
+    console.log(`📊 Всего сессий в индексе '${source}': ${total}`);
     
-    if (source === 'nm-shop') {
-      // Для nm-shop используем SET напрямую (быстрее и надежнее)
-      console.log('🔍 Для nm-shop используем SET напрямую (быстрее чем SCAN)...');
-      try {
-        const sessionIdsFromSet = await redisClient.smembers(sessionsListKey);
-        if (sessionIdsFromSet && sessionIdsFromSet.length > 0) {
-          allKeys = sessionIdsFromSet.map(id => `chat:${id}`);
-          console.log(`📊 Найдено сессий nm-shop через SET: ${allKeys.length}`);
-        } else {
-          console.warn('⚠️ SET nm-shop пустой, используем SCAN как fallback...');
-          allKeys = await redisClient.getAllKeys('chat:*', 100);
-          console.log(`📊 Fallback SCAN: найдено ${allKeys.length} ключей`);
-        }
-      } catch (error) {
-        console.error('❌ Ошибка получения сессий из SET:', error.message);
-        // Fallback на SCAN
-        console.log('🔄 Fallback на SCAN...');
-        allKeys = await redisClient.getAllKeys('chat:*', 100).catch(() => []);
-        console.log(`📊 Fallback SCAN: найдено ${allKeys.length} ключей`);
-      }
-    } else {
-      // Для test используем SCAN для поиска всех сессий (включая старые без SET)
-      console.log('🔍 Для test используем SCAN для поиска всех сессий...');
-      try {
-        allKeys = await redisClient.getAllKeys('chat:*', 100);
-        console.log(`📊 Найдено ВСЕХ ключей через SCAN: ${allKeys.length}`);
-      } catch (error) {
-        console.error('❌ Ошибка получения ключей через SCAN:', error.message);
-        // Fallback на SET
-        const sessionIdsFromSet = await redisClient.smembers(sessionsListKey).catch(() => []);
-        allKeys = sessionIdsFromSet.map(id => `chat:${id}`);
-        console.log(`📊 Fallback на SET: найдено ${allKeys.length} сессий`);
-      }
-    }
-    
-    if (!allKeys || allKeys.length === 0) {
-      console.log('Нет сессий в Redis');
+    if (total === 0) {
+      console.log('Нет сессий в индексе');
       return { sessions: [], total: 0 };
     }
     
-    // Извлекаем session IDs из ключей
-    const sessionIds = allKeys.map(key => key.replace('chat:', ''));
-    console.log(`📊 Всего найдено сессий (включая старые): ${sessionIds.length}`);
+    // Получаем ID сессий для текущей страницы (отсортированы по времени, новые первыми)
+    // ZREVRANGE возвращает элементы от большего score к меньшему (reverse)
+    const sessionIds = await redisClient.zrevrange(indexKey, offset, offset + limit - 1);
+    console.log(`📄 Получено ${sessionIds.length} ID сессий из индекса (offset: ${offset}, limit: ${limit})`);
     
-    // ДИАГНОСТИКА: Проверяем наличие конкретной сессии (только для отладки)
-    // const targetSessionId = 's_7amn7gqaklmi4g1yhq';
-    // const hasTargetSession = sessionIds.includes(targetSessionId);
-    // console.log(`🔍 ДИАГНОСТИКА: Сессия ${targetSessionId} в списке ключей: ${hasTargetSession ? 'ДА ✅' : 'НЕТ ❌'}`);
-    
-    // ШАГ 1: Загружаем индекс (ID + createdAt + source) для сортировки и фильтрации
-    const indexBatchSize = 50;
-    const keys = sessionIds.map(id => `chat:${id}`);
-    const sessionIndex = [];
-    let total = 0; // Подсчитываем total параллельно с индексом
-    let sourceStats = { 'nm-shop': 0, 'test': 0, 'undefined': 0 }; // Статистика по source
-    
-    // Загружаем индекс и фильтруем по source одновременно
-    for (let i = 0; i < keys.length; i += indexBatchSize) {
-      const batch = keys.slice(i, i + indexBatchSize);
-      try {
-        const batchResults = await redisClient.mget(...batch);
-        if (batchResults && Array.isArray(batchResults)) {
-          batchResults.forEach((session, idx) => {
-            if (session && session.sessionId) {
-              // Собираем статистику по source
-              const sessionSource = session.source || 'test'; // по умолчанию 'test' для старых сессий
-              sourceStats[sessionSource] = (sourceStats[sessionSource] || 0) + 1;
-              
-              // ДИАГНОСТИКА: Логируем конкретную сессию (только для отладки)
-              // if (session.sessionId === targetSessionId) {
-              //   console.log(`🔍 НАЙДЕНА целевая сессия ${targetSessionId}:`, {
-              //     source: session.source,
-              //     hasMessages: session.messages?.length || 0,
-              //     hasContacts: !!session.contacts,
-              //     createdAt: session.createdAt
-              //   });
-              // }
-              
-              // ФИЛЬТРАЦИЯ ПО SOURCE: показываем только сессии нужного источника
-              if (sessionSource !== source) {
-                return; // Пропускаем сессии другого источника
-              }
-              
-              // ИСПРАВЛЕНИЕ: Проверяем наличие данных ПЕРЕД добавлением в индекс
-              // Это критично для правильной пагинации - в индекс попадают только сессии с данными
-              const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
-              const hasContacts = session.contacts && (
-                (session.contacts.name && session.contacts.name.trim() !== '') || 
-                (session.contacts.phone && session.contacts.phone.trim() !== '')
-              );
-              
-              // Добавляем в индекс ТОЛЬКО сессии с данными
-              if (hasMessages || hasContacts) {
-                // Вычисляем реальную дату последней активности на основе сообщений и контактов
-                const realLastActivity = calculateDisplayDate(session);
-                sessionIndex.push({
-                  sessionId: session.sessionId,
-                  createdAt: session.createdAt || session.lastUpdated || new Date(0).toISOString(),
-                  lastUpdated: session.lastUpdated || session.createdAt || new Date(0).toISOString(),
-                  realLastActivity: realLastActivity, // Реальная дата активности для сортировки
-                  index: i + idx
-                });
-                total++;
-              }
-            }
-          });
-        }
-      } catch (error) {
-        console.error(`❌ Ошибка загрузки индекса батча ${Math.floor(i / indexBatchSize) + 1}:`, error.message);
-      }
+    if (sessionIds.length === 0) {
+      return { sessions: [], total };
     }
     
-    // Сортируем индекс по реальной дате последнего действия (realLastActivity) - новые сверху
-    // Это гарантирует, что сессии с последними сообщениями/лидами показываются первыми
-    sessionIndex.sort((a, b) => new Date(b.realLastActivity).getTime() - new Date(a.realLastActivity).getTime());
-    
-    // ДИАГНОСТИКА: Выводим статистику по source
-    console.log(`📊 СТАТИСТИКА по source:`, sourceStats);
-    console.log(`📊 После фильтрации для '${source}': ${sessionIndex.length} сессий`);
-    
-    // Применяем пагинацию на уровне индекса
-    const paginatedIndex = sessionIndex.slice(offset, offset + limit);
-    console.log(`📄 Пагинация на уровне индекса: загружаем ${paginatedIndex.length} из ${sessionIndex.length} сессий для источника '${source}' (offset: ${offset}, limit: ${limit})`);
-    console.log(`📊 Всего сессий с данными для '${source}': ${total}`);
-    
-    // ШАГ 2: Загружаем полные данные только для нужной страницы
-    const paginatedKeys = paginatedIndex.map(item => `chat:${item.sessionId}`);
+    // Загружаем полные данные сессий батчами
+    const keys = sessionIds.map(id => `chat:${id}`);
     const sessions = [];
+    const BATCH_SIZE = 50;
     
-    if (paginatedKeys.length > 0) {
-      const BATCH_SIZE = 50;
-      for (let i = 0; i < paginatedKeys.length; i += BATCH_SIZE) {
-        const batch = paginatedKeys.slice(i, i + BATCH_SIZE);
+    for (let i = 0; i < keys.length; i += BATCH_SIZE) {
+      const batch = keys.slice(i, i + BATCH_SIZE);
       try {
         const batchResults = await redisClient.mget(...batch);
         if (batchResults && Array.isArray(batchResults)) {
@@ -195,21 +76,20 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
         }
       } catch (error) {
         console.error(`❌ Ошибка загрузки батча ${Math.floor(i / BATCH_SIZE) + 1}:`, error.message);
-          sessions.push(...new Array(batch.length).fill(null));
-        }
+        sessions.push(...new Array(batch.length).fill(null));
       }
     }
     
     console.log('Результат mget (кол-во элементов):', sessions ? sessions.length : 0);
     
-    // Фильтруем null (несуществующие ключи) и нормализуем данные
+    // Фильтруем null (несуществующие ключи) и валидируем данные
     const validSessions = [];
     const missingSessionIds = [];
     
     sessions.forEach((session, index) => {
       if (session === null) {
-        if (paginatedIndex[index]) {
-          missingSessionIds.push(paginatedIndex[index].sessionId);
+        if (sessionIds[index]) {
+          missingSessionIds.push(sessionIds[index]);
         }
       } else {
         validSessions.push(session);
@@ -218,13 +98,12 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
     
     console.log(`Прочитано валидных сессий: ${validSessions.length}, несуществующих: ${missingSessionIds.length}`);
     
-    // Очищаем SET от несуществующих ключей (в фоне, не блокируя ответ)
+    // Очищаем индекс от несуществующих ключей (в фоне, не блокируя ответ)
     if (missingSessionIds.length > 0) {
-      const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
-      redisClient.srem(sessionsListKey, ...missingSessionIds).catch(err => {
-        console.warn('Не удалось очистить SET от несуществующих сессий:', err.message);
+      redisClient.zrem(indexKey, ...missingSessionIds).catch(err => {
+        console.warn('Не удалось очистить индекс от несуществующих сессий:', err.message);
       });
-      console.log(`🧹 Запланирована очистка SET от ${missingSessionIds.length} несуществующих сессий`);
+      console.log(`🧹 Запланирована очистка индекса от ${missingSessionIds.length} несуществующих сессий`);
     }
     
     // Нормализуем данные сессий (защита от старых/некорректных данных)
@@ -246,35 +125,20 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       console.log(`📊 После нормализации: ${validSessions.length} сессий, ${sessionsWithMessages.length} с сообщениями, ${sessionsWithContacts.length} с контактами`);
     }
     
-    // ФИЛЬТРАЦИЯ: Все сессии в validSessions уже прошли проверку на наличие данных при добавлении в индекс
-    // Дополнительно проверяем source на всякий случай (защита от багов)
+    // Фильтрация: показываем только сессии с данными
     const sessionsWithData = validSessions.filter(session => {
-      // Фильтр по source
-      const sessionSource = session.source || 'test';
-      if (sessionSource !== source) {
-        console.warn(`⚠️ Сессия ${session.sessionId} имеет неправильный source: ${sessionSource}, ожидается: ${source}`);
-        return false;
-      }
-      
-      // Дополнительная проверка наличия данных (на всякий случай)
       const hasMessages = session.messages && Array.isArray(session.messages) && session.messages.length > 0;
       const hasContacts = session.contacts && (
         (session.contacts.name && session.contacts.name.trim() !== '') || 
         (session.contacts.phone && session.contacts.phone.trim() !== '')
       );
       
-      if (!hasMessages && !hasContacts) {
-        console.warn(`⚠️ Сессия ${session.sessionId} не имеет данных (messages: ${hasMessages}, contacts: ${hasContacts})`);
-      }
-      
       return hasMessages || hasContacts;
     });
     
     console.log(`✅ Финальный результат для '${source}': ${sessionsWithData.length} сессий с данными из ${total} всего в индексе (offset: ${offset}, limit: ${limit})`);
     
-    const paginatedSessions = sessionsWithData;
-    
-    return { sessions: paginatedSessions, total };
+    return { sessions: sessionsWithData, total };
   } catch (error) {
     console.error('❌ Ошибка чтения чатов из Redis:', error);
     console.error('Stack:', error.stack);
@@ -307,7 +171,7 @@ module.exports = async function handler(req, res) {
     
     console.log('Параметры запроса:', { source, limit, offset });
     
-    // Читаем реальные данные из Redis (сортировка и пагинация уже применены в readChats)
+    // Читаем данные из Redis используя оптимизированный индекс
     const { sessions: chats, total } = await readChats(source, limit, offset);
     console.log('📊 Итоговый результат: найдено чатов:', chats.length, 'из', total, 'всего сессий');
     
