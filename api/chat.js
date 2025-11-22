@@ -266,12 +266,18 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
       if (r.ok || r.status === 0 || r.status === 200) {
         console.log('✅ Телефон из чата успешно отправлен в GAS:', phone);
         
-        // Отмечаем что телефон был захвачен - читаем свежую версию из Redis
+        // Отмечаем что телефон был захвачен и сохраняем его - читаем свежую версию из Redis
         const chatKey = `chat:${sessionId}`;
         try {
           const currentSession = await redis.get(chatKey);
           if (currentSession) {
             currentSession.chatPhoneCaptured = true;
+            // Сохраняем телефон в отдельном объекте для отображения в админке
+            if (!currentSession.chatContacts) {
+              currentSession.chatContacts = {};
+            }
+            currentSession.chatContacts.phone = phone;
+            currentSession.chatContacts.timestamp = new Date().toISOString();
             currentSession.lastUpdated = new Date().toISOString();
             await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession); // Обновляем сессию
             

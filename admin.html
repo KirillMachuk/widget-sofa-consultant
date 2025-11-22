@@ -934,14 +934,16 @@
             }
             
             // Информация о контактах из чата
-            if (session.chatPhoneCaptured) {
+            if (session.chatPhoneCaptured && session.chatContacts) {
                 html += `
                     <div class="contacts-info">
                         <h4>Контактные данные (из чата)</h4>
                         <div class="contacts-details">
+                            ${session.chatContacts.phone ? `<div class="contact-item"><span class="contact-label">Телефон:</span><span class="contact-value">${session.chatContacts.phone}</span></div>` : ''}
+                            ${session.chatContacts.timestamp ? `<div class="contact-item"><span class="contact-label">Время захвата:</span><span class="contact-value">${formatDateTime(session.chatContacts.timestamp)}</span></div>` : ''}
                             <div class="contact-item">
                                 <span class="contact-label">📱 Статус:</span>
-                                <span class="contact-value">Телефон оставлен в переписке и отправлен в Google Sheets</span>
+                                <span class="contact-value">Отправлено в Google Sheets</span>
                             </div>
                         </div>
                     </div>

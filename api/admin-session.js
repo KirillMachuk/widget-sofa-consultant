@@ -59,6 +59,8 @@ module.exports = async function handler(req, res) {
         prompt: session.prompt,
         locale: session.locale,
         contacts: session.contacts || null,
+        chatContacts: session.chatContacts || null,
+        chatPhoneCaptured: session.chatPhoneCaptured || false,
         messages: session.messages || []
       }
     });
