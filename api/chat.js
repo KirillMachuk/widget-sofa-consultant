@@ -304,14 +304,15 @@ async function handler(req, res){
         const sessionsListKey = source === 'nm-shop' ? 'sessions:list:nm-shop' : 'sessions:list:test';
         
         if (existingSession) {
-          // Сессия уже существует - только обновляем prompt и lastUpdated
+          // Сессия уже существует - только обновляем prompt и locale, НЕ обновляем lastUpdated
+          // чтобы не сдвигать дату последней активности при повторных инициализациях без сообщений
           existingSession.prompt = prompt;
           existingSession.locale = locale || 'ru';
           existingSession.source = existingSession.source || source; // Сохраняем источник если его нет
-          existingSession.lastUpdated = sessionData.lastUpdated;
+          // lastUpdated не обновляем - сохраняем прежнее значение времени последнего действия
           await redis.setex(chatKey, 30 * 24 * 60 * 60, existingSession); // Обновляем TTL
           await redis.sadd(sessionsListKey, session_id); // Убеждаемся что сессия в списке
-          console.log('Сессия обновлена в Redis:', session_id, 'источник:', existingSession.source);
+          console.log('Сессия обновлена в Redis:', session_id, 'источник:', existingSession.source, 'lastUpdated сохранен:', existingSession.lastUpdated);
         } else {
           // Новая сессия - создаем с пустыми сообщениями
           const redisSession = {

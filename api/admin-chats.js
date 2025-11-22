@@ -1,6 +1,41 @@
 // Используем новый Redis клиент с retry логикой
 const redisClient = require('../utils/redis-client');
 
+// Функция для вычисления реальной даты последней активности на основе сообщений и контактов
+function calculateDisplayDate(session) {
+  let maxTimestamp = null;
+  
+  // Проверяем timestamp последнего сообщения
+  if (session.messages && Array.isArray(session.messages) && session.messages.length > 0) {
+    const lastMessage = session.messages[session.messages.length - 1];
+    if (lastMessage && lastMessage.timestamp) {
+      const msgTime = new Date(lastMessage.timestamp).getTime();
+      if (msgTime > 0 && !isNaN(msgTime)) {
+        maxTimestamp = Math.max(maxTimestamp || 0, msgTime);
+      }
+    }
+  }
+  
+  // Проверяем timestamp контактной формы
+  if (session.contacts && session.contacts.timestamp) {
+    const contactTime = new Date(session.contacts.timestamp).getTime();
+    if (contactTime > 0 && !isNaN(contactTime)) {
+      maxTimestamp = Math.max(maxTimestamp || 0, contactTime);
+    }
+  }
+  
+  // Fallback на lastUpdated или createdAt
+  if (maxTimestamp) {
+    return new Date(maxTimestamp).toISOString();
+  }
+  
+  if (session.lastUpdated) {
+    return session.lastUpdated;
+  }
+  
+  return session.createdAt || new Date().toISOString();
+}
+
 // Читаем все чаты из Redis - ВСЕГДА используем KEYS для загрузки всех сессий (включая старые)
 async function readChats(source = 'test', limit = 100, offset = 0) {
   try {
@@ -113,10 +148,13 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
               
               // Добавляем в индекс ТОЛЬКО сессии с данными
               if (hasMessages || hasContacts) {
+                // Вычисляем реальную дату последней активности на основе сообщений и контактов
+                const realLastActivity = calculateDisplayDate(session);
                 sessionIndex.push({
                   sessionId: session.sessionId,
                   createdAt: session.createdAt || session.lastUpdated || new Date(0).toISOString(),
-                  lastUpdated: session.lastUpdated || session.createdAt || new Date(0).toISOString(), // Для сортировки по последнему действию
+                  lastUpdated: session.lastUpdated || session.createdAt || new Date(0).toISOString(),
+                  realLastActivity: realLastActivity, // Реальная дата активности для сортировки
                   index: i + idx
                 });
                 total++;
@@ -129,9 +167,9 @@ async function readChats(source = 'test', limit = 100, offset = 0) {
       }
     }
     
-    // Сортируем индекс по дате последнего действия (lastUpdated) - новые сверху
+    // Сортируем индекс по реальной дате последнего действия (realLastActivity) - новые сверху
     // Это гарантирует, что сессии с последними сообщениями/лидами показываются первыми
-    sessionIndex.sort((a, b) => new Date(b.lastUpdated).getTime() - new Date(a.lastUpdated).getTime());
+    sessionIndex.sort((a, b) => new Date(b.realLastActivity).getTime() - new Date(a.realLastActivity).getTime());
     
     // ДИАГНОСТИКА: Выводим статистику по source
     console.log(`📊 СТАТИСТИКА по source:`, sourceStats);
@@ -274,23 +312,27 @@ module.exports = async function handler(req, res) {
     console.log('📊 Итоговый результат: найдено чатов:', chats.length, 'из', total, 'всего сессий');
     
     // Форматируем данные для фронтенда
-    const formattedSessions = chats.map(session => ({
-      id: session.sessionId,
-      createdAt: session.createdAt,
-      lastUpdated: session.lastUpdated,
-      displayDate: session.lastUpdated || session.createdAt, // Дата для отображения - последнее действие (лид/сообщение) или создание
-      prompt: session.prompt,
-      locale: session.locale,
-      contacts: session.contacts || null,
-      messageCount: session.messages ? session.messages.length : 0,
-      lastMessage: session.messages && session.messages.length > 0 
-        ? session.messages[session.messages.length - 1] 
-        : null,
-      hasContacts: !!(session.contacts && (
-        (session.contacts.name && session.contacts.name.trim() !== '') || 
-        (session.contacts.phone && session.contacts.phone.trim() !== '')
-      ))
-    }));
+    const formattedSessions = chats.map(session => {
+      // Вычисляем реальную дату последней активности на основе сообщений и контактов
+      const displayDate = calculateDisplayDate(session);
+      return {
+        id: session.sessionId,
+        createdAt: session.createdAt,
+        lastUpdated: session.lastUpdated,
+        displayDate: displayDate, // Дата для отображения - последнее сообщение/контакт или создание
+        prompt: session.prompt,
+        locale: session.locale,
+        contacts: session.contacts || null,
+        messageCount: session.messages ? session.messages.length : 0,
+        lastMessage: session.messages && session.messages.length > 0 
+          ? session.messages[session.messages.length - 1] 
+          : null,
+        hasContacts: !!(session.contacts && (
+          (session.contacts.name && session.contacts.name.trim() !== '') || 
+          (session.contacts.phone && session.contacts.phone.trim() !== '')
+        ))
+      };
+    });
     
     // Логируем финальную статистику
     console.log('✅ Финальная статистика:', {
