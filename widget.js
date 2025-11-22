@@ -1,6 +1,6 @@
 (function(){
   // Widget version - increment this when making changes
-  const WIDGET_VERSION = '5.2.0';
+  const WIDGET_VERSION = '5.2.1';
   const PROMPT_CACHE_KEY = 'vfw_prompt_cache_v2';
   const PROMPT_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
   
@@ -1192,11 +1192,30 @@
     els.hints.style.setProperty('--vfw-hint-bottom', `${bottomOffset}px`);
   }
 
-  // Функция для трекинга аналитических событий
+  // Функция для трекинга аналитических событий (с оптимизацией)
   let pageViewTracked = false;
   const FORM_INVOCATION_STORAGE_KEY = 'vfw_form_invoked';
   let formInvocationTracked = false;
+  
+  // Кэш последних событий для дедупликации (формат: eventType_url -> timestamp)
+  const eventCache = {};
+  const EVENT_DEDUPE_WINDOW = 30000; // 30 секунд
+  
   function trackEvent(eventType) {
+    // Дедупликация page_view: не трекаем тот же URL чаще раза в 30 сек
+    if (eventType === 'page_view') {
+      const cacheKey = `page_view_${window.location.href}`;
+      const lastTracked = eventCache[cacheKey];
+      const now = Date.now();
+      
+      if (lastTracked && (now - lastTracked) < EVENT_DEDUPE_WINDOW) {
+        if (DEBUG) console.log('[Analytics] Skipping duplicate page_view within 30s');
+        return;
+      }
+      
+      eventCache[cacheKey] = now;
+    }
+    
     // Отправляем событие асинхронно, не блокируя UI
     const analyticsUrl = resolveApiUrl('./api/analytics');
     fetch(analyticsUrl, {
@@ -2841,11 +2860,11 @@
     
     // Трекинг загрузки страницы (только один раз)
     if (!pageViewTracked) {
-      // Используем небольшую задержку для debounce
+      // Используем debounce 5 секунд для игнорирования быстрых переходов/перезагрузок
       setTimeout(() => {
         trackEvent('page_view');
         pageViewTracked = true;
-      }, 1000);
+      }, 5000);
     }
     
     // Подключаем триггеры СРАЗУ
