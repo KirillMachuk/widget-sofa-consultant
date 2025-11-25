@@ -2,7 +2,7 @@
   // Widget version - increment this when making changes
   const WIDGET_VERSION = '5.2.1';
   const PROMPT_CACHE_KEY = 'vfw_prompt_cache_v2';
-  const PROMPT_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+  const PROMPT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
   
   if (window.VFW_LOADED) {
     return;
@@ -1196,20 +1196,22 @@
   let pageViewTracked = false;
   const FORM_INVOCATION_STORAGE_KEY = 'vfw_form_invoked';
   let formInvocationTracked = false;
+  const WIDGET_OPEN_STORAGE_KEY = 'vfw_widget_open_last';
+  const WIDGET_OPEN_DEDUPE_WINDOW = 12 * 60 * 60 * 1000;
   
   // Кэш последних событий для дедупликации (формат: eventType_url -> timestamp)
   const eventCache = {};
-  const EVENT_DEDUPE_WINDOW = 30000; // 30 секунд
+  const EVENT_DEDUPE_WINDOW = 24 * 60 * 60 * 1000; // 24 часа
   
   function trackEvent(eventType) {
-    // Дедупликация page_view: не трекаем тот же URL чаще раза в 30 сек
+    // Дедупликация page_view: не трекаем тот же URL чаще раза в 24 часа
     if (eventType === 'page_view') {
       const cacheKey = `page_view_${window.location.href}`;
       const lastTracked = eventCache[cacheKey];
       const now = Date.now();
       
       if (lastTracked && (now - lastTracked) < EVENT_DEDUPE_WINDOW) {
-        if (DEBUG) console.log('[Analytics] Skipping duplicate page_view within 30s');
+        if (DEBUG) console.log('[Analytics] Skipping duplicate page_view within 24h');
         return;
       }
       
@@ -1229,6 +1231,22 @@
       // Игнорируем ошибки аналитики, чтобы не блокировать виджет
       if (DEBUG) console.warn('Analytics tracking failed:', err);
     });
+  }
+
+  function trackWidgetOpenEvent() {
+    const now = Date.now();
+    let shouldTrack = true;
+    try {
+      const lastTracked = localStorage.getItem(WIDGET_OPEN_STORAGE_KEY);
+      if (lastTracked && (now - parseInt(lastTracked, 10)) < WIDGET_OPEN_DEDUPE_WINDOW) {
+        shouldTrack = false;
+      } else {
+        localStorage.setItem(WIDGET_OPEN_STORAGE_KEY, String(now));
+      }
+    } catch (e) {}
+    if (shouldTrack) {
+      trackEvent('widget_open');
+    }
   }
 
   // Функция для трекинга ошибок
@@ -1279,10 +1297,7 @@
     els.panel.setAttribute('data-open','1');
     disableScroll();
     // Трекинг открытия виджета (только один раз за сессию)
-    if (!els.panel.hasAttribute('data-widget-opened')) {
-      trackEvent('widget_open');
-      els.panel.setAttribute('data-widget-opened', '1');
-    }
+    trackWidgetOpenEvent();
   }
 
   function closePanel(){ 
@@ -1446,6 +1461,18 @@
   let sessionInitPromise = null;
   let sessionInitialized = false;
   const submittedLeads = new Set();
+  const HAS_CONTACTS_STORAGE_KEY = 'vfw_has_contacts';
+  let hasContactData = false;
+  try {
+    hasContactData = sessionStorage.getItem(HAS_CONTACTS_STORAGE_KEY) === '1';
+  } catch (e) {}
+
+  function markContactsCaptured() {
+    hasContactData = true;
+    try {
+      sessionStorage.setItem(HAS_CONTACTS_STORAGE_KEY, '1');
+    } catch (e) {}
+  }
   let fallbackFormShown = false; // Флаг для отслеживания показа fallback формы
   let widgetOpenedInSession = false; // Флаг для отслеживания первого открытия виджета в сессии
   let lastFormShownAt = 0; // Время последнего показа формы
@@ -1474,6 +1501,9 @@
 
   // Показать кнопки выбора категории
   function showCategoryButtons() {
+    if (hasContactData) {
+      return;
+    }
     const buttons = [
       { text: '🛋️ Диван', category: 'Диван' },
       { text: '🛏️ Кровать', category: 'Кровать' },
@@ -1551,11 +1581,13 @@
 
   // Показать форму с подарками для выбранной категории
   function showGiftForm(category) {
+    if (hasContactData) {
+      return;
+    }
     const gifts = GIFTS_BY_CATEGORY[category] || [];
     
     const wrap = document.createElement('div'); 
     wrap.className='vfw-msg bot';
-    trackFormInvocationOnce();
     trackFormInvocationOnce();
     
     const giftsHtml = gifts.map(gift => `
@@ -2300,7 +2332,9 @@
       saveHistory(history);
       
       // Показываем кнопки категорий мгновенно
-      setTimeout(() => showCategoryButtons(), 100);
+      if (!hasContactData) {
+        setTimeout(() => showCategoryButtons(), 100);
+      }
       
       // Загружаем данные в фоне, если они еще не загружены
       if (!PROMPT) {
@@ -2322,7 +2356,7 @@
         // Проверяем, что после приветствия нет других сообщений от бота
         const messagesAfterWelcome = history.slice(history.indexOf(welcomeMessage) + 1);
         const hasBotMessagesAfter = messagesAfterWelcome.some(m => m.role === 'assistant');
-        if (!hasBotMessagesAfter) {
+        if (!hasBotMessagesAfter && !hasContactData) {
           // Показываем кнопки-подсказки
           setTimeout(() => showCategoryButtons(), 100);
         }
@@ -2330,7 +2364,7 @@
       
       // Восстанавливаем форму если она была предложена
       const lastBotMessage = loadHistory().filter(m => m.role === 'assistant').slice(-1)[0];
-      if (lastBotMessage && shouldShowForm(lastBotMessage.content)) {
+      if (!hasContactData && lastBotMessage && shouldShowForm(lastBotMessage.content)) {
         // Проверяем паузу между показами форм (минимум 2 реплики клиента)
         const isDirectRequest = isDirectFormRequest(lastBotMessage.content);
         if (!bypassFormPause && !isDirectRequest && lastFormShownAt > 0 && userMessagesAfterLastForm < 2) {
@@ -2427,6 +2461,10 @@
       const response = await sendToModel(v);
       hideTyping(typingRow);
       
+      if (response && typeof response === 'object' && response.hasContacts) {
+        markContactsCaptured();
+      }
+      
       // Обрабатываем ответ в зависимости от формата
       if (typeof response === 'string') {
         // Старый формат - просто текст
@@ -2436,21 +2474,23 @@
         // Новый формат - объект с текстом и формой
         addMsg('bot', response.text);
         
-        // Обрабатываем новую логику на основе анализа сообщения
-        if (response.detectedCategory) {
-          // Категория определена из вопроса - сразу форма с подарками
-          showGiftForm(response.detectedCategory);
-        } else if (response.isProductQuestion) {
-          // Вопрос про товары без категории - выбор категории
-          showCategoryButtons();
+        if (!hasContactData) {
+          // Обрабатываем новую логику на основе анализа сообщения
+          if (response.detectedCategory) {
+            // Категория определена из вопроса - сразу форма с подарками
+            showGiftForm(response.detectedCategory);
+          } else if (response.isProductQuestion) {
+            // Вопрос про товары без категории - выбор категории
+            showCategoryButtons();
           } else {
-          // FAQ вопрос - бот ответил, теперь выбор категории
-          showCategoryButtons();
-        }
-        
-        // Если есть персонализированное сообщение с формой (старая логика для совместимости)
-        if (response.formMessage) {
-          addMsg('bot', response.formMessage);
+            // FAQ вопрос - бот ответил, теперь выбор категории
+            showCategoryButtons();
+          }
+          
+          // Если есть персонализированное сообщение с формой (старая логика для совместимости)
+          if (response.formMessage) {
+            addMsg('bot', response.formMessage);
+          }
         }
       }
     } catch(e) {
@@ -2504,6 +2544,9 @@
 
   
   function maybeOfferPhoneFlow(botReply){
+    if (hasContactData) {
+      return;
+    }
     const history = loadHistory();
     const userMessages = history.filter(m => m.role === 'user').length;
     const botMessages = history.filter(m => m.role === 'assistant').length;
@@ -2574,6 +2617,10 @@
   }
 
   function renderForm(title, fields, submitText, pretext) {
+    if (hasContactData) {
+      if (DEBUG) console.log('renderForm skipped because contacts already captured');
+      return;
+    }
     if (DEBUG) console.log('renderForm called:', { title, lastFormShownAt, userMessagesAfterLastForm, bypassFormPause });
     
     // Обновляем состояние отслеживания показа формы
@@ -2756,6 +2803,7 @@
         })
       }, 2); // 2 попытки для отправки лида
       submittedLeads.add(leadKey);
+      markContactsCaptured();
       
       // Трекинг успешной отправки формы
       trackEvent('form_submit');
@@ -2821,6 +2869,7 @@
         })
       }, 2); // 2 попытки для отправки лида
       submittedLeads.add(leadKey);
+      markContactsCaptured();
       
       // Трекинг успешной отправки формы
       trackEvent('form_submit');

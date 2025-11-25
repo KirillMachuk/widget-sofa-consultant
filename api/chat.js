@@ -534,6 +534,7 @@ async function handler(req, res){
     if (action === 'chat' && session_id && user_message) {
       console.log('Обработка чата для сессии:', session_id);
       console.log('Сообщение пользователя:', user_message);
+      let sessionHasContacts = false;
       
       // Всегда читаем сессию из Redis (не используем in-memory кэш)
       let session;
@@ -548,6 +549,8 @@ async function handler(req, res){
         
         // Используем промпт из Redis, с локальным кэшированием для производительности
         const cachedPrompt = getCachedPrompt(redisSession.prompt);
+        
+        sessionHasContacts = Boolean(redisSession?.contacts?.phone && String(redisSession.contacts.phone).trim()) || Boolean(redisSession?.chatPhoneCaptured);
         
         session = {
           prompt: cachedPrompt,
@@ -616,7 +619,7 @@ async function handler(req, res){
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
-        max_completion_tokens: 600,     // Ограничение длины ответа
+        max_completion_tokens: 400,     // Ограничение длины ответа
         reasoning_effort: 'low',        // Уровень рассуждений для ускорения
         verbosity: 'low'                // Краткие ответы для ускорения
       };
@@ -738,7 +741,10 @@ async function handler(req, res){
         .trim();
       
       // Проверяем, нужно ли показать форму (без дополнительного сообщения)
-      const shouldGenerateFormMessage = checkIfNeedsFormMessage(reply, messages, user_messages_after_last_form);
+      let shouldGenerateFormMessage = checkIfNeedsFormMessage(reply, messages, user_messages_after_last_form);
+      if (sessionHasContacts) {
+        shouldGenerateFormMessage = false;
+      }
       
       // Сохраняем диалог в Redis (с ожиданием завершения)
       console.log('📝 Вызываем saveChat для сессии:', session_id);
@@ -756,7 +762,8 @@ async function handler(req, res){
         reply, 
         needsForm: shouldGenerateFormMessage,
         isProductQuestion: messageAnalysis.isProductQuestion,
-        detectedCategory: messageAnalysis.detectedCategory
+        detectedCategory: messageAnalysis.detectedCategory,
+        hasContacts: sessionHasContacts
       });
     }
     
@@ -820,79 +827,6 @@ function checkIfNeedsFormMessage(reply, messages, userMessagesAfterLastForm = 0)
   ];
   
   return formTriggers.some(regex => regex.test(reply));
-}
-
-// Генерируем персонализированное сообщение с формой
-async function generatePersonalizedFormMessage(messages, session) {
-  try {
-    // Проверяем, есть ли запрос на шоурум
-    const lastUserMessage = messages.filter(m => m.role === 'user').slice(-1)[0]?.content || '';
-    const showroomKeywords = ['шоурум', 'шоу-рум', 'шоуруме', 'записаться в шоурум', 'запись в шоурум', 'посмотреть в шоуруме', 'приехать в шоурум'];
-    const hasShowroomRequest = showroomKeywords.some(keyword => lastUserMessage.toLowerCase().includes(keyword));
-    
-    if (hasShowroomRequest) {
-      // Возвращаем специальное сообщение для шоурума
-      return 'Подскажите пожалуйста в каком городе находитесь и ваш номер телефона, передам дизайнеру в шоу-руме и он с вами свяжется';
-    }
-    
-    const systemPrompt = `Ты консультант по диванам. Сгенерируй персонализированное сообщение для предложения формы с подарком.
-
-КОНТЕКСТ ДИАЛОГА:
-${messages.slice(-3).map(m => `${m.role}: ${m.content}`).join('\n')}
-
-ТРЕБОВАНИЯ:
-- Сообщение должно быть персонализировано под запрос клиента
-- Упомяни конкретные детали из диалога (модель дивана, цвет, размер и т.д.)
-- ОБЯЗАТЕЛЬНО предложи выбор между "10% скидкой" или "2 декоративными подушками"
-- НЕ предлагай только один вариант - всегда оба варианта
-- Сообщение должно быть естественным и логичным продолжением диалога
-- Максимум 2-3 предложения
-- Используй фразы: "закреплю", "подарок", "выберите", "форма"
-
-ПРИМЕРЫ:
-- "Отлично! Диван 'Осло' в сером цвете - отличный выбор. Могу закрепить для вас подарок — выберите 10% скидку или 2 декоративные подушки в цвет дивана. Заполните форму для закрепления выбранной акции."
-- "Понял, вам нужен диван для гостиной. Могу закрепить специальное предложение — выберите 10% скидку или 2 декоративные подушки. Заполните форму для получения подарка."
-- "Диван для спальни - отличная идея. Могу закрепить для вас подарок — выберите 10% скидку или 2 декоративные подушки. Заполните форму для закрепления выбранной акции."
-
-ВАЖНО: Всегда предлагай ВЫБОР между двумя вариантами, никогда не предлагай только один вариант!
-
-Сгенерируй персонализированное сообщение:`;
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-5-mini',
-        messages: [{ role: 'system', content: systemPrompt }],
-        max_completion_tokens: 150,     // Ограничение длины ответа
-        reasoning_effort: 'low',        // Быстрая генерация стандартного сообщения
-        verbosity: 'low'                // Краткое сообщение о подарках
-      })
-    });
-
-    if (response.ok) {
-      const data = await response.json();
-      const generatedMessage = data.choices?.[0]?.message?.content || '';
-      
-      // Проверяем, что сообщение содержит оба варианта подарков
-      const hasDiscount = /10%|скидк/i.test(generatedMessage);
-      const hasPillows = /подушк|2 декоративн/i.test(generatedMessage);
-      const hasChoice = /выберите|или/i.test(generatedMessage);
-      
-      // Если не содержит оба варианта, возвращаем стандартное сообщение
-      if (!hasDiscount || !hasPillows || !hasChoice) {
-        return 'Могу закрепить для вас подарок — выберите 10% скидку или 2 декоративные подушки в цвет дивана. Заполните форму для закрепления выбранной акции.';
-      }
-      
-      return generatedMessage;
-    }
-  } catch (error) {
-  }
-  
-  return null;
 }
 
 function buildSystemPrompt(prompt, locale, aggressiveMode = false){
