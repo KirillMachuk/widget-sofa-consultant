@@ -322,6 +322,7 @@
 
         .message-content {
             flex: 1;
+            min-width: 0; /* Исправляет проблему с обрезанием текста в flexbox */
         }
 
         .message-header {
@@ -1040,8 +1041,8 @@
                                 <span class="message-role">${message.role === 'user' ? 'Пользователь' : 'Бот'}</span>
                                 <span class="message-time">${formatDateTime(message.timestamp)}</span>
                             </div>
-                            <div class="message-text">${message.content}</div>
-                            ${message.formMessage ? `<div class="form-message">Форма: ${message.formMessage}</div>` : ''}
+                            <div class="message-text">${escapeHtml(message.content || '')}</div>
+                            ${message.formMessage ? `<div class="form-message">Форма: ${escapeHtml(message.formMessage)}</div>` : ''}
                         </div>
                     </div>
                 `).join('');
