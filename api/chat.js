@@ -619,7 +619,7 @@ async function handler(req, res){
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
-        max_completion_tokens: 400,     // Ограничение длины ответа
+        max_completion_tokens: 600,     // Ограничение длины ответа (увеличено с 400)
         reasoning_effort: 'low',        // Уровень рассуждений для ускорения
         verbosity: 'low'                // Краткие ответы для ускорения
       };
@@ -740,10 +740,22 @@ async function handler(req, res){
         .replace(/\n\n+/g, '\n\n')  // Убираем лишние переносы
         .trim();
       
+      // Fallback для пустого ответа от OpenAI
+      let emptyReplyFallback = false;
+      if (!reply) {
+        reply = 'Извините, произошла техническая ошибка. Оставьте телефон, и менеджер перезвонит вам в течение 2 часов 📞';
+        emptyReplyFallback = true;
+      }
+      
       // Проверяем, нужно ли показать форму (без дополнительного сообщения)
       let shouldGenerateFormMessage = checkIfNeedsFormMessage(reply, messages, user_messages_after_last_form);
       if (sessionHasContacts) {
         shouldGenerateFormMessage = false;
+      }
+      
+      // При пустом ответе от OpenAI всегда показываем форму
+      if (emptyReplyFallback) {
+        shouldGenerateFormMessage = true;
       }
       
       // Сохраняем диалог в Redis (с ожиданием завершения)
@@ -763,7 +775,8 @@ async function handler(req, res){
         needsForm: shouldGenerateFormMessage,
         isProductQuestion: messageAnalysis.isProductQuestion,
         detectedCategory: messageAnalysis.detectedCategory,
-        hasContacts: sessionHasContacts
+        hasContacts: sessionHasContacts,
+        emptyReplyFallback: emptyReplyFallback
       });
     }
     

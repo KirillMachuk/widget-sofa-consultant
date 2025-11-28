@@ -2476,7 +2476,10 @@
         
         if (!hasContactData) {
           // Обрабатываем новую логику на основе анализа сообщения
-          if (response.detectedCategory) {
+          // Если сервер вернул пустой ответ от OpenAI (fallback при ошибке)
+          if (response.emptyReplyFallback) {
+            renderFallbackForm();
+          } else if (response.detectedCategory) {
             // Категория определена из вопроса - сразу форма с подарками
             showGiftForm(response.detectedCategory);
           } else if (response.isProductQuestion) {
