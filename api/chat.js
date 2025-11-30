@@ -594,7 +594,7 @@ async function handler(req, res){
       console.log('📊 Анализ сообщения:', messageAnalysis);
       
       // Строим системный промпт без каталога
-      const sys = buildSystemPrompt(session.prompt, session.locale, aggressive_mode);
+      const sys = buildSystemPrompt(session.prompt, session.locale, aggressive_mode, sessionHasContacts);
       console.log('Системный промпт готов, длина:', sys.length);
       
       // Dev fallback: if no API key, return a mock reply so the widget works locally
@@ -842,7 +842,7 @@ function checkIfNeedsFormMessage(reply, messages, userMessagesAfterLastForm = 0)
   return formTriggers.some(regex => regex.test(reply));
 }
 
-function buildSystemPrompt(prompt, locale, aggressiveMode = false){
+function buildSystemPrompt(prompt, locale, aggressiveMode = false, hasContacts = false){
   const base = prompt?.main_instructions ? prompt : null;
   let about = base ? [
     `Роль: ${prompt.role_and_task}`,
@@ -857,8 +857,13 @@ function buildSystemPrompt(prompt, locale, aggressiveMode = false){
     `Стиль: ${prompt.templates_and_style||''}`
   ].join('\n') : 'Ты консультант. Отвечай кратко.';
   
+  // Add instructions if client already provided contacts
+  if (hasContacts) {
+    about += '\n\nКРИТИЧЕСКИ ВАЖНО - КЛИЕНТ УЖЕ ОСТАВИЛ КОНТАКТЫ:\n- Клиент уже заполнил форму или оставил телефон в чате\n- НЕ предлагай форму для заполнения\n- НЕ упоминай подарки, акции, закрепление подарка\n- НЕ предлагай "заполнить форму" или "оставить данные"\n- Просто консультируй по вопросам клиента.';
+  }
+  
   // Add aggressive behavior instructions
-  if (aggressiveMode) {
+  if (aggressiveMode && !hasContacts) {
     about += '\n\nВАЖНО: Сейчас агрессивный режим (после 2-3 сообщений). Активно предлагай подарки и персональную подборку дизайнера. Ищи любой повод для сбора контактов. Будь более настойчивым в предложениях.';
   }
   
