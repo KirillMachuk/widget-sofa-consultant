@@ -90,6 +90,10 @@ function parsePhoneFromMessage(text) {
     const match = cleanedText.match(pattern);
     if (match) {
       const phoneStr = match[0].trim();
+      // Пропускаем коды товаров, начинающиеся с M00
+      if (/^[Mm]00/i.test(phoneStr)) {
+        continue;
+      }
       // Проверяем что после удаления всех нецифровых символов остается минимум 9 цифр
       const digitsOnly = phoneStr.replace(/\D/g, '');
       if (digitsOnly.length >= 9) {
@@ -104,9 +108,14 @@ function parsePhoneFromMessage(text) {
   if (matches) {
     for (const match of matches) {
       const digitsOnly = match.replace(/\D/g, '');
+      // Пропускаем коды товаров, начинающиеся с M00
+      const matchTrimmed = match.trim();
+      if (/^[Mm]00/i.test(matchTrimmed)) {
+        continue;
+      }
       // Если это минимум 7 цифр и не выглядит как год/дата (не начинается с 19xx или 20xx)
       if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
-        return match.trim();
+        return matchTrimmed;
       }
     }
   }
