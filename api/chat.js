@@ -550,7 +550,16 @@ async function handler(req, res){
         // Используем промпт из Redis, с локальным кэшированием для производительности
         const cachedPrompt = getCachedPrompt(redisSession.prompt);
         
-        sessionHasContacts = Boolean(redisSession?.contacts?.phone && String(redisSession.contacts.phone).trim()) || Boolean(redisSession?.chatPhoneCaptured);
+        // Проверяем телефон в текущем сообщении пользователя
+        // Если телефон найден в текущем сообщении - сразу считаем что контакты есть
+        const phoneInCurrentMessage = parsePhoneFromMessage(user_message);
+        if (phoneInCurrentMessage) {
+          console.log('📱 Телефон найден в текущем сообщении:', phoneInCurrentMessage);
+          sessionHasContacts = true;
+        } else {
+          // Проверяем телефон в сохраненной сессии
+          sessionHasContacts = Boolean(redisSession?.contacts?.phone && String(redisSession.contacts.phone).trim()) || Boolean(redisSession?.chatPhoneCaptured);
+        }
         
         session = {
           prompt: cachedPrompt,
