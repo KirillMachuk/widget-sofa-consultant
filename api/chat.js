@@ -260,67 +260,154 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
       wishes: '' // Пустое поле
     };
     
-    // Отправляем в GAS (упрощенная версия, без retry - в фоне)
-    try {
+    // Retry логика для отправки телефона из чата в GAS
+    const maxRetries = 3;
+    let lastError = null;
+    let sendSuccess = false;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 секунд таймаут для фонового запроса
+      const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 секунд таймаут для GAS
       
-      const r = await fetch(GAS_URL, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify(payload),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (r.ok || r.status === 0 || r.status === 200) {
-        console.log('✅ Телефон из чата успешно отправлен в GAS:', phone);
+      try {
+        console.log(`📤 Отправляем телефон из чата в GAS (попытка ${attempt}/${maxRetries}):`, phone);
+        console.log('🔗 GAS URL:', GAS_URL ? GAS_URL.substring(0, 50) + '...' : 'НЕ ЗАДАН');
+        console.log('📦 Payload для GAS:', JSON.stringify(payload, null, 2));
         
-        // Отмечаем что телефон был захвачен и сохраняем его - читаем свежую версию из Redis
-        const chatKey = `chat:${sessionId}`;
+        const r = await fetch(GAS_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify(payload),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        console.log('📥 Ответ от GAS получен:', {
+          status: r.status,
+          statusText: r.statusText,
+          ok: r.ok
+        });
+        
+        // GAS может возвращать разные форматы ответов
+        let responseData;
+        let responseText = '';
         try {
-          const currentSession = await redis.get(chatKey);
-          if (currentSession) {
-            currentSession.chatPhoneCaptured = true;
-            // Сохраняем телефон в отдельном объекте для отображения в админке
-            if (!currentSession.chatContacts) {
-              currentSession.chatContacts = {};
-            }
-            currentSession.chatContacts.phone = phone;
-            currentSession.chatContacts.timestamp = new Date().toISOString();
-            currentSession.lastUpdated = new Date().toISOString();
-            await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession); // Обновляем сессию
-            
-            // Обновляем индекс
-            const source = currentSession.source || 'test';
-            await redis.updateSessionIndex(sessionId, source, currentSession.lastUpdated);
-            
-            // Инкрементируем счетчик лидов из чата для аналитики
-            const analyticsKey = `analytics:chat_phone_lead:${source}`;
-            try {
-              await redis.incr(analyticsKey);
-              console.log('📊 Счетчик лидов из чата инкрементирован для источника:', source);
-            } catch (analyticsError) {
-              console.warn('⚠️ Не удалось инкрементировать счетчик лидов из чата:', analyticsError.message);
+          responseText = await r.text();
+          console.log('📄 Текст ответа от GAS:', responseText.substring(0, 500));
+          
+          try {
+            responseData = JSON.parse(responseText);
+            console.log('✅ JSON ответ от GAS распарсен:', responseData);
+          } catch (parseError) {
+            console.warn('⚠️ Ответ не JSON, пытаемся определить успех по тексту');
+            // Если не JSON, проверяем текст
+            if (responseText.includes('ok') || responseText.includes('success') || responseText.includes('true') || r.ok) {
+              responseData = { ok: true, text: responseText };
+              console.log('✅ Определен как успех по тексту');
+            } else {
+              responseData = { ok: false, text: responseText };
+              console.log('❌ Определен как ошибка по тексту');
             }
           }
-        } catch (updateError) {
-          console.warn('⚠️ Не удалось обновить флаг chatPhoneCaptured:', updateError.message);
+        } catch (parseError) {
+          console.error('❌ Ошибка чтения ответа GAS:', parseError);
+          // Если статус 200, считаем успехом
+          if (r.ok || r.status === 0) {
+            responseData = { ok: true };
+            console.log('✅ Статус 200, считаем успехом');
+          } else {
+            console.error('❌ Статус не 200:', r.status);
+            throw new Error(`GAS upstream error: ${r.status}`);
+          }
         }
         
-        return true;
-      } else {
-        console.warn('⚠️ GAS вернул статус:', r.status, 'для телефона из чата');
+        if (responseData.ok || r.ok || r.status === 0) {
+          console.log(`✅✅✅ Телефон из чата успешно отправлен в GAS (попытка ${attempt}):`, phone);
+          console.log('📊 Детали успешной отправки:', {
+            status: r.status,
+            statusText: r.statusText,
+            responseData: responseData,
+            phone: phone
+          });
+          lastError = null; // Сброс ошибки при успехе
+          sendSuccess = true;
+          break; // Выходим из цикла retry
+        } else {
+          console.error('❌❌❌ GAS вернул ошибку:', { 
+            status: r.status, 
+            statusText: r.statusText,
+            responseData: responseData,
+            responseText: responseText.substring(0, 500)
+          });
+          throw new Error(`GAS returned error: ${JSON.stringify(responseData)}`);
+        }
+        
+      } catch (error) {
+        clearTimeout(timeoutId);
+        lastError = error;
+        console.error(`❌ Ошибка отправки телефона из чата (попытка ${attempt}/${maxRetries}):`, error.message);
+        
+        if (attempt === maxRetries) {
+          // Последняя попытка неудачна - логируем, но не прерываем работу
+          if (error.name === 'AbortError') {
+            console.error('❌❌❌ Таймаут при отправке телефона из чата в GAS');
+          } else {
+            console.error('❌❌❌ Все попытки отправки телефона из чата в GAS неудачны:', lastError);
+          }
+        } else {
+          // Экспоненциальная задержка: 1s, 2s
+          const delay = 1000 * Math.pow(2, attempt - 1);
+          console.log(`⏳ Повторная попытка отправки телефона из чата через ${delay}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
       }
-    } catch (fetchError) {
-      // Не логируем ошибки сети для фоновых запросов (не критично)
-      if (fetchError.name !== 'AbortError') {
-        console.warn('⚠️ Ошибка отправки телефона из чата в GAS:', fetchError.message);
+    }
+    
+    // Обновляем сессию только при успешной отправке
+    if (sendSuccess) {
+      console.log('✅✅✅ УСПЕХ: Телефон из чата успешно отправлен в GAS после всех попыток');
+      
+      // Отмечаем что телефон был захвачен и сохраняем его - читаем свежую версию из Redis
+      const chatKey = `chat:${sessionId}`;
+      try {
+        const currentSession = await redis.get(chatKey);
+        if (currentSession) {
+          currentSession.chatPhoneCaptured = true;
+          // Сохраняем телефон в отдельном объекте для отображения в админке
+          if (!currentSession.chatContacts) {
+            currentSession.chatContacts = {};
+          }
+          currentSession.chatContacts.phone = phone;
+          currentSession.chatContacts.timestamp = new Date().toISOString();
+          currentSession.lastUpdated = new Date().toISOString();
+          await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession); // Обновляем сессию
+          
+          // Обновляем индекс
+          const source = currentSession.source || 'test';
+          await redis.updateSessionIndex(sessionId, source, currentSession.lastUpdated);
+          
+          // Инкрементируем счетчик лидов из чата для аналитики
+          const analyticsKey = `analytics:chat_phone_lead:${source}`;
+          try {
+            await redis.incr(analyticsKey);
+            console.log('📊 Счетчик лидов из чата инкрементирован для источника:', source);
+          } catch (analyticsError) {
+            console.warn('⚠️ Не удалось инкрементировать счетчик лидов из чата:', analyticsError.message);
+          }
+        }
+      } catch (updateError) {
+        console.warn('⚠️ Не удалось обновить флаг chatPhoneCaptured:', updateError.message);
       }
+      
+      return true;
+    } else {
+      // Если все попытки неудачны, логируем но не обновляем сессию
+      console.warn('⚠️ Телефон из чата не был отправлен в GAS после всех попыток:', phone);
+      return false;
     }
   } catch (error) {
     console.error('Ошибка processPhoneFromChat:', error);

@@ -84,7 +84,7 @@
   "functions": {
     "api/chat.js": {
       "memory": 1024,
-      "maxDuration": 15
+      "maxDuration": 30
     },
     "api/analytics.js": {
       "memory": 512,
@@ -120,7 +120,7 @@
     },
     "api/lead.js": {
       "memory": 256,
-      "maxDuration": 5
+      "maxDuration": 20
     },
     "api/health.js": {
       "memory": 128,
