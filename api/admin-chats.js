@@ -16,7 +16,7 @@ function hasPhoneInMessages(messages) {
   
   for (const message of messages) {
     if (message.role === 'user' && message.content) {
-      const text = message.content;
+      let text = message.content;
       const lowerText = text.toLowerCase();
       
       // Игнорируем маркеры бота
@@ -25,11 +25,33 @@ function hasPhoneInMessages(messages) {
         continue;
       }
       
+      // Явная проверка на артикулы типа M00-XXXXXX в исходном тексте
+      // Если найден такой артикул, исключаем его из дальнейшего поиска телефонов
+      const m00ArticlePattern = /[Mm]\s*00\s*-\s*\d+/i;
+      if (m00ArticlePattern.test(text)) {
+        // Удаляем артикулы M00-XXXXXX из текста перед поиском телефонов
+        text = text.replace(/[Mm]\s*00\s*-\s*\d+/gi, '');
+      }
+      
+      // Удаляем артикулы/номера моделей (буква + цифры с дефисами) перед поиском телефона
+      // Улучшенный паттерн: М00-009915, А123-456, Т-999, M 00-010151 (с пробелами) и т.д.
+      const articlePattern = /[А-ЯA-Z]\s*\d+[\s\-]*\d*/gi;
+      const cleanedText = text.replace(articlePattern, '');
+      
       // Проверяем полные паттерны
       for (const pattern of fullPhonePatterns) {
-        const match = text.match(pattern);
+        const match = cleanedText.match(pattern);
         if (match) {
-          const digitsOnly = match[0].replace(/\D/g, '');
+          const phoneStr = match[0].trim();
+          // Пропускаем коды товаров, начинающиеся с M00
+          if (/^[Mm]00/i.test(phoneStr)) {
+            continue;
+          }
+          // Пропускаем последовательности, начинающиеся с 00- (это остаток артикула M00-XXXXXX)
+          if (/^00\s*-/i.test(phoneStr)) {
+            continue;
+          }
+          const digitsOnly = phoneStr.replace(/\D/g, '');
           if (digitsOnly.length >= 9) {
             return true;
           }
@@ -37,9 +59,18 @@ function hasPhoneInMessages(messages) {
       }
       
       // Проверяем короткие номера
-      const matches = text.match(shortPhonePattern);
+      const matches = cleanedText.match(shortPhonePattern);
       if (matches) {
         for (const match of matches) {
+          const matchTrimmed = match.trim();
+          // Пропускаем коды товаров, начинающиеся с M00
+          if (/^[Mm]00/i.test(matchTrimmed)) {
+            continue;
+          }
+          // Пропускаем последовательности, начинающиеся с 00- (это остаток артикула M00-XXXXXX)
+          if (/^00\s*-/i.test(matchTrimmed)) {
+            continue;
+          }
           const digitsOnly = match.replace(/\D/g, '');
           if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
             return true;
