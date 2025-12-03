@@ -284,6 +284,40 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
           signal: controller.signal
         });
         
+        // ВАЖНО: Проверяем статус ДО чтения тела ответа
+        // Если статус 200, запрос успешен, даже если тело не прочитано
+        if (r.ok || r.status === 200) {
+          clearTimeout(timeoutId);
+          console.log('✅ Статус 200 получен от GAS, запрос успешен');
+          console.log('📥 Ответ от GAS получен:', {
+            status: r.status,
+            statusText: r.statusText,
+            ok: r.ok
+          });
+          
+          // Пытаемся прочитать тело ответа, но не критично если не получится
+          try {
+            const responseText = await Promise.race([
+              r.text(),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Read timeout')), 5000))
+            ]);
+            console.log('📄 Текст ответа от GAS:', responseText.substring(0, 500));
+          } catch (readError) {
+            console.warn('⚠️ Не удалось прочитать тело ответа, но статус 200 - считаем успехом');
+          }
+          
+          console.log(`✅✅✅ Телефон из чата успешно отправлен в GAS (попытка ${attempt}):`, phone);
+          console.log('📊 Детали успешной отправки:', {
+            status: r.status,
+            statusText: r.statusText,
+            phone: phone
+          });
+          lastError = null; // Сброс ошибки при успехе
+          sendSuccess = true;
+          break; // Выходим из цикла retry
+        }
+        
+        // Если статус не 200, читаем тело для диагностики
         clearTimeout(timeoutId);
         
         console.log('📥 Ответ от GAS получен:', {
@@ -315,14 +349,7 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
           }
         } catch (parseError) {
           console.error('❌ Ошибка чтения ответа GAS:', parseError);
-          // Если статус 200, считаем успехом
-          if (r.ok || r.status === 0) {
-            responseData = { ok: true };
-            console.log('✅ Статус 200, считаем успехом');
-          } else {
-            console.error('❌ Статус не 200:', r.status);
-            throw new Error(`GAS upstream error: ${r.status}`);
-          }
+          throw new Error(`GAS upstream error: ${r.status}`);
         }
         
         if (responseData.ok || r.ok || r.status === 0) {
@@ -349,20 +376,32 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
       } catch (error) {
         clearTimeout(timeoutId);
         lastError = error;
-        console.error(`❌ Ошибка отправки телефона из чата (попытка ${attempt}/${maxRetries}):`, error.message);
         
-        if (attempt === maxRetries) {
-          // Последняя попытка неудачна - логируем, но не прерываем работу
-          if (error.name === 'AbortError') {
-            console.error('❌❌❌ Таймаут при отправке телефона из чата в GAS');
-          } else {
-            console.error('❌❌❌ Все попытки отправки телефона из чата в GAS неудачны:', lastError);
+        // ВАЖНО: Если это AbortError (таймаут), не делаем retry - чтобы избежать дубликатов
+        // Запрос мог быть обработан на стороне GAS, но ответ не успел вернуться
+        if (error.name === 'AbortError') {
+          console.error(`❌ Таймаут при отправке телефона из чата (попытка ${attempt}/${maxRetries})`);
+          console.warn('⚠️ Запрос мог быть обработан на стороне GAS, но ответ не успел вернуться');
+          
+          // При таймауте не делаем retry - чтобы избежать дубликатов
+          // Считаем что запрос мог быть успешным, но не обновляем сессию
+          if (attempt === maxRetries) {
+            console.error('❌❌❌ Таймаут при отправке телефона из чата в GAS после всех попыток');
           }
+          // Прерываем цикл retry при таймауте
+          break;
         } else {
-          // Экспоненциальная задержка: 1s, 2s
-          const delay = 1000 * Math.pow(2, attempt - 1);
-          console.log(`⏳ Повторная попытка отправки телефона из чата через ${delay}ms...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          console.error(`❌ Ошибка отправки телефона из чата (попытка ${attempt}/${maxRetries}):`, error.message);
+          
+          if (attempt === maxRetries) {
+            // Последняя попытка неудачна - логируем, но не прерываем работу
+            console.error('❌❌❌ Все попытки отправки телефона из чата в GAS неудачны:', lastError);
+          } else {
+            // Экспоненциальная задержка: 1s, 2s
+            const delay = 1000 * Math.pow(2, attempt - 1);
+            console.log(`⏳ Повторная попытка отправки телефона из чата через ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          }
         }
       }
     }
