@@ -72,9 +72,17 @@ function parsePhoneFromMessage(text) {
     return null;
   }
   
+  // Явная проверка на артикулы типа M00-XXXXXX в исходном тексте
+  // Если найден такой артикул, исключаем его из дальнейшего поиска телефонов
+  const m00ArticlePattern = /[Mm]\s*00\s*-\s*\d+/i;
+  if (m00ArticlePattern.test(text)) {
+    // Удаляем артикулы M00-XXXXXX из текста перед поиском телефонов
+    text = text.replace(/[Mm]\s*00\s*-\s*\d+/gi, '');
+  }
+  
   // Удаляем артикулы/номера моделей (буква + цифры с дефисами) перед поиском телефона
-  // Паттерн: М00-009915, А123-456, Т-999 и т.д.
-  const articlePattern = /[А-ЯA-Z]+\d+[-\d]*/gi;
+  // Улучшенный паттерн: М00-009915, А123-456, Т-999, M 00-010151 (с пробелами) и т.д.
+  const articlePattern = /[А-ЯA-Z]\s*\d+[\s\-]*\d*/gi;
   let cleanedText = text.replace(articlePattern, '');
   
   // Ищем последовательности с цифрами, пробелами, дефисами, скобками, плюсом
@@ -94,6 +102,10 @@ function parsePhoneFromMessage(text) {
       if (/^[Mm]00/i.test(phoneStr)) {
         continue;
       }
+      // Пропускаем последовательности, начинающиеся с 00- (это остаток артикула M00-XXXXXX)
+      if (/^00\s*-/i.test(phoneStr)) {
+        continue;
+      }
       // Проверяем что после удаления всех нецифровых символов остается минимум 9 цифр
       const digitsOnly = phoneStr.replace(/\D/g, '');
       if (digitsOnly.length >= 9) {
@@ -111,6 +123,10 @@ function parsePhoneFromMessage(text) {
       // Пропускаем коды товаров, начинающиеся с M00
       const matchTrimmed = match.trim();
       if (/^[Mm]00/i.test(matchTrimmed)) {
+        continue;
+      }
+      // Пропускаем последовательности, начинающиеся с 00- (это остаток артикула M00-XXXXXX)
+      if (/^00\s*-/i.test(matchTrimmed)) {
         continue;
       }
       // Если это минимум 7 цифр и не выглядит как год/дата (не начинается с 19xx или 20xx)
