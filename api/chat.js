@@ -59,6 +59,13 @@ function detectSource(req) {
 //   ... код удален для оптимизации ...
 // }
 
+// Вспомогательная функция для проверки повторяющихся цифр
+function isRepeatingDigits(digits) {
+  if (digits.length <= 10) return false;
+  const firstDigit = digits[0];
+  return digits.split('').every(d => d === firstDigit);
+}
+
 // Парсер телефонов из текста сообщения
 function parsePhoneFromMessage(text) {
   if (!text || typeof text !== 'string') {
@@ -108,7 +115,8 @@ function parsePhoneFromMessage(text) {
       }
       // Проверяем что после удаления всех нецифровых символов остается минимум 9 цифр
       const digitsOnly = phoneStr.replace(/\D/g, '');
-      if (digitsOnly.length >= 9) {
+      // Проверяем максимальную длину (15 цифр - стандарт E.164) и повторяющиеся цифры
+      if (digitsOnly.length >= 9 && digitsOnly.length <= 15 && !isRepeatingDigits(digitsOnly)) {
         return phoneStr;
       }
     }
@@ -130,7 +138,8 @@ function parsePhoneFromMessage(text) {
         continue;
       }
       // Если это минимум 7 цифр и не выглядит как год/дата (не начинается с 19xx или 20xx)
-      if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
+      // Проверяем максимальную длину (15 цифр) и повторяющиеся цифры
+      if (digitsOnly.length >= 7 && digitsOnly.length <= 15 && !/^(19|20)\d{2}/.test(digitsOnly) && !isRepeatingDigits(digitsOnly)) {
         return matchTrimmed;
       }
     }

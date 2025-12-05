@@ -1,6 +1,13 @@
 // Используем новый Redis клиент с retry логикой
 const redisClient = require('../utils/redis-client');
 
+// Вспомогательная функция для проверки повторяющихся цифр
+function isRepeatingDigits(digits) {
+  if (digits.length <= 10) return false;
+  const firstDigit = digits[0];
+  return digits.split('').every(d => d === firstDigit);
+}
+
 // Функция для проверки наличия телефона в сообщениях (fallback для старых сессий)
 function hasPhoneInMessages(messages) {
   if (!messages || !Array.isArray(messages)) return false;
@@ -52,7 +59,8 @@ function hasPhoneInMessages(messages) {
             continue;
           }
           const digitsOnly = phoneStr.replace(/\D/g, '');
-          if (digitsOnly.length >= 9) {
+          // Проверяем максимальную длину (15 цифр - стандарт E.164) и повторяющиеся цифры
+          if (digitsOnly.length >= 9 && digitsOnly.length <= 15 && !isRepeatingDigits(digitsOnly)) {
             return true;
           }
         }
@@ -72,7 +80,8 @@ function hasPhoneInMessages(messages) {
             continue;
           }
           const digitsOnly = match.replace(/\D/g, '');
-          if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
+          // Проверяем максимальную длину (15 цифр) и повторяющиеся цифры
+          if (digitsOnly.length >= 7 && digitsOnly.length <= 15 && !/^(19|20)\d{2}/.test(digitsOnly) && !isRepeatingDigits(digitsOnly)) {
             return true;
           }
         }

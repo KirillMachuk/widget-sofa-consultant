@@ -911,6 +911,13 @@
             }
         }
 
+        // Вспомогательная функция для проверки повторяющихся цифр
+        function isRepeatingDigits(digits) {
+            if (digits.length <= 10) return false;
+            const firstDigit = digits[0];
+            return digits.split('').every(d => d === firstDigit);
+        }
+
         // Функция для извлечения телефона из сообщений (для старых сессий)
         // Логика аналогична parsePhoneFromMessage в api/chat.js
         function extractPhoneFromMessages(messages) {
@@ -966,7 +973,8 @@
                                 continue;
                             }
                             const digitsOnly = phoneStr.replace(/\D/g, '');
-                            if (digitsOnly.length >= 9) {
+                            // Проверяем максимальную длину (15 цифр - стандарт E.164) и повторяющиеся цифры
+                            if (digitsOnly.length >= 9 && digitsOnly.length <= 15 && !isRepeatingDigits(digitsOnly)) {
                                 return {
                                     phone: phoneStr,
                                     timestamp: message.timestamp
@@ -989,7 +997,8 @@
                                 continue;
                             }
                             const digitsOnly = match.replace(/\D/g, '');
-                            if (digitsOnly.length >= 7 && !/^(19|20)\d{2}/.test(digitsOnly)) {
+                            // Проверяем максимальную длину (15 цифр) и повторяющиеся цифры
+                            if (digitsOnly.length >= 7 && digitsOnly.length <= 15 && !/^(19|20)\d{2}/.test(digitsOnly) && !isRepeatingDigits(digitsOnly)) {
                                 return {
                                     phone: matchTrimmed,
                                     timestamp: message.timestamp
