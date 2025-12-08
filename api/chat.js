@@ -894,6 +894,13 @@ async function handler(req, res){
       }
       
       const data = await r.json();
+      // Безопасный лог сырого ответа (обрезка до 3000 символов)
+      try {
+        const rawPreview = JSON.stringify(data);
+        console.log('RAW OPENAI (truncated):', rawPreview.length > 3000 ? rawPreview.slice(0, 3000) + '...<trimmed>' : rawPreview);
+      } catch (err) {
+        console.log('RAW OPENAI: <unable to stringify>', err?.message);
+      }
       const choice = data?.choices?.[0] || {};
       const message = choice?.message || {};
       const finishReason = choice?.finish_reason;
@@ -918,6 +925,14 @@ async function handler(req, res){
       const gotRefusal = Boolean(message.refusal);
       if ((!reply || !reply.trim()) && gotRefusal) {
         reply = 'Не могу ответить на это корректно. Могу уточнить вопрос про доставку, оплату или товары и помочь, либо передать контакт менеджеру. Что удобнее?';
+      }
+      
+      // Если ответ пустой или оборван по длине — даем безопасный ответ по доставке
+      const isDeliveryQuestion = /доставк|доставка/i.test(user_message || '');
+      if ((!reply || !reply.trim()) || finishReason === 'length') {
+        reply = isDeliveryQuestion
+          ? 'Доставляем по всей Беларуси. Уточните город и что именно нужно — скажу срок и стоимость. По Минску и области доставляем курьером; в другие города отправляем транспортными службами. Заказ от 2700 BYN — доставка бесплатна. Напишите город и модель, уточню детали.'
+          : reply || '';
       }
       
       console.log('Ответ бота (первые 100 символов):', reply.substring(0, 100));
