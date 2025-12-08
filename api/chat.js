@@ -723,8 +723,20 @@ async function handler(req, res){
           console.log('📱 Телефон найден в текущем сообщении:', phoneInCurrentMessage);
           sessionHasContacts = true;
         } else {
-          // Проверяем телефон в сохраненной сессии
+          // Проверяем телефон в сохраненной сессии (флаги)
           sessionHasContacts = Boolean(redisSession?.contacts?.phone && String(redisSession.contacts.phone).trim()) || Boolean(redisSession?.chatPhoneCaptured);
+          
+          // Дополнительная проверка: ищем телефон в полной истории сообщений из Redis
+          // Это гарантирует обнаружение телефона даже если флаги не успели установиться
+          if (!sessionHasContacts && redisSession?.messages && Array.isArray(redisSession.messages)) {
+            const hasPhoneInFullHistory = redisSession.messages
+              .filter(m => m.role === 'user')
+              .some(m => parsePhoneFromMessage(m.content));
+            if (hasPhoneInFullHistory) {
+              sessionHasContacts = true;
+              console.log('📱 Телефон найден в полной истории сообщений из Redis, устанавливаем sessionHasContacts = true');
+            }
+          }
         }
         
         session = {
