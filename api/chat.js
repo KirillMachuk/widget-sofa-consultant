@@ -805,7 +805,7 @@ async function handler(req, res){
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
-        max_completion_tokens: 600,     // Ограничение длины ответа (увеличено с 400)
+        max_tokens: 600,                // Ограничение длины ответа (стандартный параметр API)
         reasoning_effort: 'low',        // Уровень рассуждений для ускорения
         verbosity: 'low'                // Краткие ответы для ускорения
       };
@@ -894,9 +894,32 @@ async function handler(req, res){
       }
       
       const data = await r.json();
-      console.log('Получен ответ от OpenAI, choices:', data.choices?.length);
+      const choice = data?.choices?.[0] || {};
+      const message = choice?.message || {};
+      const finishReason = choice?.finish_reason;
+      console.log('Получен ответ от OpenAI, choices:', data.choices?.length, 'finish_reason:', finishReason, 'has_refusal:', Boolean(message.refusal), 'content_type:', Array.isArray(message.content) ? 'array' : typeof message.content);
       
-      let reply = data.choices?.[0]?.message?.content || '';
+      // Нормализуем контент: OpenAI может вернуть строку или массив частей
+      let reply = '';
+      if (typeof message.content === 'string') {
+        reply = message.content;
+      } else if (Array.isArray(message.content)) {
+        reply = message.content
+          .map(part => {
+            if (typeof part === 'string') return part;
+            if (part && typeof part === 'object' && typeof part.text === 'string') return part.text;
+            return '';
+          })
+          .join('')
+          .trim();
+      }
+      
+      // Явный отказ/пустой ответ от модели — показываем мягкий fallback, а не «техническую ошибку»
+      const gotRefusal = Boolean(message.refusal);
+      if ((!reply || !reply.trim()) && gotRefusal) {
+        reply = 'Не могу ответить на это корректно. Могу уточнить вопрос про доставку, оплату или товары и помочь, либо передать контакт менеджеру. Что удобнее?';
+      }
+      
       console.log('Ответ бота (первые 100 символов):', reply.substring(0, 100));
       
       // Ограничиваем длину ответа до 800 символов с умной обрезкой
@@ -928,8 +951,8 @@ async function handler(req, res){
       
       // Fallback для пустого ответа от OpenAI
       let emptyReplyFallback = false;
-      if (!reply) {
-        reply = 'Извините, произошла техническая ошибка. Оставьте телефон, и менеджер перезвонит вам в течение 2 часов 📞';
+      if (!reply || !reply.trim()) {
+        reply = 'Похоже, ответ не сформировался. Напишите, что именно хотите уточнить по доставке, оплате или товарам — отвечу сразу. Если удобнее, оставьте телефон, и менеджер свяжется в течение 2 часов.';
         emptyReplyFallback = true;
       }
       
