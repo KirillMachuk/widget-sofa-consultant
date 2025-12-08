@@ -807,7 +807,8 @@ async function handler(req, res){
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
         max_completion_tokens: 800,     // Ограничение длины ответа (для gpt-5-mini)
         reasoning_effort: 'low',        // Уровень рассуждений для ускорения
-        verbosity: 'low'                // Краткие ответы для ускорения
+        verbosity: 'low',               // Краткие ответы для ускорения
+        response_format: { type: 'text' } // Явно запрашиваем текстовый ответ
       };
       // Функция для retry запросов с таймаутом
       async function fetchWithRetry(url, options, maxRetries = 3) {
@@ -901,9 +902,9 @@ async function handler(req, res){
       } catch (err) {
         console.log('RAW OPENAI: <unable to stringify>', err?.message);
       }
-      const choice = data?.choices?.[0] || {};
-      const message = choice?.message || {};
-      const finishReason = choice?.finish_reason;
+      let choice = data?.choices?.[0] || {};
+      let message = choice?.message || {};
+      let finishReason = choice?.finish_reason;
       console.log('Получен ответ от OpenAI, choices:', data.choices?.length, 'finish_reason:', finishReason, 'has_refusal:', Boolean(message.refusal), 'content_type:', Array.isArray(message.content) ? 'array' : typeof message.content);
       
       // Нормализуем контент: OpenAI может вернуть строку или массив частей
@@ -927,8 +928,53 @@ async function handler(req, res){
         reply = 'Не могу ответить на это корректно. Могу уточнить вопрос про доставку, оплату или товары и помочь, либо передать контакт менеджеру. Что удобнее?';
       }
       
-      // Если ответ пустой или оборван по длине — даем безопасный ответ по доставке или общий
+      // Если ответ пустой или оборван по длине — пробуем один повтор с короткой историей
       const isDeliveryQuestion = /доставк|доставка/i.test(user_message || '');
+      const needsRetry = ((!reply || !reply.trim()) || finishReason === 'length');
+      if (needsRetry) {
+        try {
+          const shortBody = {
+            model,
+            messages: [
+              { role: 'system', content: sys },
+              { role: 'user', content: user_message }
+            ],
+            max_completion_tokens: 400,
+            reasoning_effort: 'none',
+            response_format: { type: 'text' }
+          };
+          const r2 = await fetch('https://api.openai.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(shortBody)
+          });
+          const data2 = await r2.json();
+          const choice2 = data2?.choices?.[0] || {};
+          const message2 = choice2?.message || {};
+          const finishReason2 = choice2?.finish_reason;
+          console.log('Повторный запрос (short history): status', r2.status, 'finish_reason:', finishReason2);
+          let retryReply = '';
+          if (typeof message2.content === 'string') retryReply = message2.content;
+          else if (Array.isArray(message2.content)) {
+            retryReply = message2.content.map(part => {
+              if (typeof part === 'string') return part;
+              if (part && typeof part === 'object' && typeof part.text === 'string') return part.text;
+              return '';
+            }).join('').trim();
+          }
+          if (retryReply && retryReply.trim()) {
+            reply = retryReply.trim();
+            finishReason = finishReason2 || finishReason;
+          }
+        } catch (retryErr) {
+          console.log('Retry short history failed:', retryErr?.message);
+        }
+      }
+      
+      // Если после ретрая все еще пусто — даем безопасный ответ по доставке или общий
       if ((!reply || !reply.trim()) || finishReason === 'length') {
         reply = isDeliveryQuestion
           ? 'Доставляем по всей Беларуси. Уточните город и что именно нужно — скажу срок и стоимость. По Минску и области доставляем курьером; в другие города отправляем транспортными службами. Заказ от 2700 BYN — доставка бесплатна. Напишите город и модель, уточню детали.'
