@@ -805,7 +805,7 @@ async function handler(req, res){
       const body = {
         model,
         messages: [{ role:'system', content: sys }, ...(Array.isArray(messages)?messages:[])].slice(-24),
-        max_tokens: 600,                // Ограничение длины ответа (стандартный параметр API)
+        max_completion_tokens: 600,     // Ограничение длины ответа (для gpt-5-mini)
         reasoning_effort: 'low',        // Уровень рассуждений для ускорения
         verbosity: 'low'                // Краткие ответы для ускорения
       };
