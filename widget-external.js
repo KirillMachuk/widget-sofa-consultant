@@ -2448,7 +2448,17 @@
     const forceFormWords = ['закреплю', 'спецпредложение', 'скидка', '10%', 'специальная', 'подарок', 'выберите', 'выбор', 'диван', 'цена', 'стоимость', 'подходит', 'нравится', 'интересно'];
     const hasForceWords = forceFormWords.some(word => botReply.toLowerCase().includes(word));
     
+    // Проверяем специальные триггеры
+    const installmentKeywords = ['рассрочк', 'рассрочку', 'рассрочка', 'рассрочки'];
+    
+    const hasInstallmentRequest = installmentKeywords.some(keyword => botReply.toLowerCase().includes(keyword));
+    
     if (isDirectRequest || matchedTriggers.length > 0 || hasForceWords){
+      
+      if (hasInstallmentRequest) {
+        // Показываем форму для рассрочки
+        renderConsultationForm();
+      } else {
         // Обычная форма с подарками (по умолчанию)
         const pretexts = [
           'Закрепить подарок и оставить данные?',
@@ -2462,6 +2472,8 @@
           { id: 'name', placeholder: 'Имя', required: true },
           { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
         ], 'Получить подарок');
+      }
+      
     }
   }
 
