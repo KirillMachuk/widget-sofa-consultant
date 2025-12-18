@@ -2449,19 +2449,19 @@
     const hasForceWords = forceFormWords.some(word => botReply.toLowerCase().includes(word));
     
     if (isDirectRequest || matchedTriggers.length > 0 || hasForceWords){
-      // Обычная форма с подарками (по умолчанию)
-      const pretexts = [
-        'Закрепить подарок и оставить данные?',
-        'Выберите подарок и оставьте контакты?',
-        'Записать данные для получения подарка?',
-        'Сохранить контакты для акции?'
-      ];
-      const randomPretext = pretexts[Math.floor(Math.random() * pretexts.length)];
-      renderForm(randomPretext, [
-        { type: 'offer' },
-        { id: 'name', placeholder: 'Имя', required: true },
-        { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
-      ], 'Получить подарок');
+        // Обычная форма с подарками (по умолчанию)
+        const pretexts = [
+          'Закрепить подарок и оставить данные?',
+          'Выберите подарок и оставьте контакты?',
+          'Записать данные для получения подарка?',
+          'Сохранить контакты для акции?'
+        ];
+        const randomPretext = pretexts[Math.floor(Math.random() * pretexts.length)];
+        renderForm(randomPretext, [
+          { type: 'offer' },
+          { id: 'name', placeholder: 'Имя', required: true },
+          { id: 'phone', placeholder: 'Телефон (+375...)', required: true }
+        ], 'Получить подарок');
     }
   }
 
