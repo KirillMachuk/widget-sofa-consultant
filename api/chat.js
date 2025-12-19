@@ -243,22 +243,42 @@ async function saveChat(sessionId, userMessage, botReply) {
 // Обработка телефона из чата и отправка в GAS
 async function processPhoneFromChat(session, sessionId, userMessage) {
   try {
-    // Проверка условий: пропускаем если уже есть контакты или телефон уже был захвачен
-    if (session.contacts && session.contacts.phone && session.contacts.phone.trim()) {
-      return; // Телефон уже сохранен через форму
+    const chatKey = `chat:${sessionId}`;
+    const currentSession = await redis.get(chatKey);
+    
+    if (!currentSession) {
+      return;
     }
     
-    if (session.chatPhoneCaptured) {
-      return; // Телефон из чата уже был отправлен
+    // Проверка условий: пропускаем если уже есть контакты или телефон уже был захвачен
+    if (currentSession.contacts && currentSession.contacts.phone && currentSession.contacts.phone.trim()) {
+      return;
+    }
+    
+    if (currentSession.chatPhoneCaptured) {
+      return;
     }
     
     // Парсим телефон из сообщения пользователя
     const phone = parsePhoneFromMessage(userMessage);
     if (!phone) {
-      return; // Телефон не найден
+      return;
     }
     
     console.log('📱 Найден телефон в чате:', phone, 'для сессии:', sessionId);
+    
+    // Обновляем сессию сразу после парсинга (не ждем отправки в GAS)
+    currentSession.chatPhoneCaptured = true;
+    if (!currentSession.chatContacts) {
+      currentSession.chatContacts = {};
+    }
+    currentSession.chatContacts.phone = phone;
+    currentSession.chatContacts.timestamp = new Date().toISOString();
+    currentSession.lastUpdated = new Date().toISOString();
+    await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession);
+    
+    const source = currentSession.source || 'test';
+    await redis.updateSessionIndex(sessionId, source, currentSession.lastUpdated);
     
     // Получаем GAS URL из переменных окружения
     const GAS_URL = process.env.GAS_URL;
@@ -269,7 +289,7 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
     
     // Получаем page_url из сессии или referer
     const req = global.currentRequest;
-    const pageUrl = session.pageUrl || (req ? (req.headers.referer || req.headers.origin || '') : '');
+    const pageUrl = currentSession.pageUrl || (req ? (req.headers.referer || req.headers.origin || '') : '');
     
     // Формируем payload для GAS
     const payload = {
@@ -437,45 +457,17 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
       }
     }
     
-    // Обновляем сессию только при успешной отправке
+    // Инкрементируем счетчик лидов из чата для аналитики при успешной отправке
     if (sendSuccess) {
       console.log('✅✅✅ УСПЕХ: Телефон из чата успешно отправлен в GAS после всех попыток');
-      
-      // Отмечаем что телефон был захвачен и сохраняем его - читаем свежую версию из Redis
-      const chatKey = `chat:${sessionId}`;
+      const analyticsKey = `analytics:chat_phone_lead:${source}`;
       try {
-        const currentSession = await redis.get(chatKey);
-        if (currentSession) {
-          currentSession.chatPhoneCaptured = true;
-          // Сохраняем телефон в отдельном объекте для отображения в админке
-          if (!currentSession.chatContacts) {
-            currentSession.chatContacts = {};
-          }
-          currentSession.chatContacts.phone = phone;
-          currentSession.chatContacts.timestamp = new Date().toISOString();
-          currentSession.lastUpdated = new Date().toISOString();
-          await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession); // Обновляем сессию
-          
-          // Обновляем индекс
-          const source = currentSession.source || 'test';
-          await redis.updateSessionIndex(sessionId, source, currentSession.lastUpdated);
-          
-          // Инкрементируем счетчик лидов из чата для аналитики
-          const analyticsKey = `analytics:chat_phone_lead:${source}`;
-          try {
-            await redis.incr(analyticsKey);
-            console.log('📊 Счетчик лидов из чата инкрементирован для источника:', source);
-          } catch (analyticsError) {
-            console.warn('⚠️ Не удалось инкрементировать счетчик лидов из чата:', analyticsError.message);
-          }
-        }
-      } catch (updateError) {
-        console.warn('⚠️ Не удалось обновить флаг chatPhoneCaptured:', updateError.message);
+        await redis.incr(analyticsKey);
+      } catch (analyticsError) {
+        console.warn('⚠️ Не удалось инкрементировать счетчик лидов из чата:', analyticsError.message);
       }
-      
       return true;
     } else {
-      // Если все попытки неудачны, логируем но не обновляем сессию
       console.warn('⚠️ Телефон из чата не был отправлен в GAS после всех попыток:', phone);
       return false;
     }
