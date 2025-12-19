@@ -410,10 +410,36 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
   try {
     console.log('📱 processPhoneFromChat: Начало обработки для сессии:', sessionId, 'сообщение:', userMessage.substring(0, 100));
     const chatKey = `chat:${sessionId}`;
-    const currentSession = await redis.get(chatKey);
+    
+    // ИСПРАВЛЕНИЕ: Используем переданную сессию вместо повторной загрузки из Redis
+    // Это предотвращает таймауты Redis GET и ускоряет работу
+    let currentSession = session;
+    
+    // Если переданная сессия неполная или отсутствует, пытаемся загрузить из Redis (с коротким таймаутом)
+    if (!currentSession || !currentSession.messages) {
+      console.log('📱 processPhoneFromChat: Переданная сессия неполная, загружаем из Redis...');
+      try {
+        // Используем короткий таймаут для fallback загрузки (5 секунд вместо 10)
+        currentSession = await Promise.race([
+          redis.get(chatKey),
+          new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Redis GET timeout after 5s (fallback)')), 5000)
+          )
+        ]);
+      } catch (error) {
+        console.error('📱 processPhoneFromChat: Не удалось загрузить сессию из Redis (fallback):', error.message);
+        // Пытаемся использовать переданную сессию, даже если она неполная
+        if (!currentSession) {
+          console.log('📱 processPhoneFromChat: Сессия не найдена');
+          return;
+        }
+      }
+    } else {
+      console.log('📱 processPhoneFromChat: Используем переданную сессию (избегаем Redis GET)');
+    }
     
     if (!currentSession) {
-      console.log('📱 processPhoneFromChat: Сессия не найдена в Redis');
+      console.log('📱 processPhoneFromChat: Сессия не найдена');
       return;
     }
     
@@ -689,18 +715,26 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
       console.log('✅✅✅ УСПЕХ: Телефон из чата успешно отправлен в GAS после всех попыток');
       
       // ВАЖНО: Обновляем сессию с флагом успешной отправки, чтобы предотвратить дубликаты
+      // ИСПРАВЛЕНИЕ: Используем уже имеющуюся currentSession вместо повторной загрузки из Redis
+      // Это предотвращает таймауты Redis GET
       try {
-        const updatedSession = await redis.get(chatKey);
-        if (updatedSession && updatedSession.chatContacts) {
-          updatedSession.chatContacts.phoneSentToGAS = true;
-          updatedSession.chatContacts.sentPhoneDigits = phoneDigitsOnly;
-          updatedSession.chatContacts.sentTimestamp = new Date().toISOString();
-          await redis.setex(chatKey, 30 * 24 * 60 * 60, updatedSession);
-          console.log('📱 processPhoneFromChat: Флаг успешной отправки сохранен в сессии:', {
+        // Используем уже имеющуюся currentSession (мы обновили её ранее в строке 496)
+        // Это избегает второго Redis GET и предотвращает таймауты
+        if (currentSession && currentSession.chatContacts) {
+          currentSession.chatContacts.phoneSentToGAS = true;
+          currentSession.chatContacts.sentPhoneDigits = phoneDigitsOnly;
+          currentSession.chatContacts.sentTimestamp = new Date().toISOString();
+          currentSession.lastUpdated = new Date().toISOString();
+          
+          await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession);
+          
+          console.log('📱 processPhoneFromChat: Флаг успешной отправки сохранен в сессии (использована текущая сессия):', {
             phone: phone,
             phoneDigits: phoneDigitsOnly,
-            sentTimestamp: updatedSession.chatContacts.sentTimestamp
+            sentTimestamp: currentSession.chatContacts.sentTimestamp
           });
+        } else {
+          console.warn('⚠️ processPhoneFromChat: Не удалось обновить флаг - currentSession или chatContacts отсутствуют');
         }
       } catch (updateError) {
         console.error('⚠️ Ошибка сохранения флага успешной отправки:', updateError.message);
