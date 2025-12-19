@@ -417,17 +417,6 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
       return;
     }
     
-    // Проверка условий: пропускаем если уже есть контакты или телефон уже был захвачен
-    if (currentSession.contacts && currentSession.contacts.phone && currentSession.contacts.phone.trim()) {
-      console.log('📱 processPhoneFromChat: Контакты уже есть в сессии, пропускаем');
-      return;
-    }
-    
-    if (currentSession.chatPhoneCaptured) {
-      console.log('📱 processPhoneFromChat: Телефон уже был захвачен ранее, пропускаем');
-      return;
-    }
-    
     // Парсим телефон из сообщения пользователя
     console.log('📱 processPhoneFromChat: Парсим телефон из сообщения:', userMessage);
     const phone = parsePhoneFromMessage(userMessage);
@@ -438,7 +427,59 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
     
     console.log('📱 Найден телефон в чате:', phone, 'для сессии:', sessionId);
     
+    // Проверяем, отличается ли новый номер от уже сохраненного
+    // Извлекаем только цифры для сравнения (игнорируем форматирование)
+    const phoneDigitsOnly = phone.replace(/\D/g, '');
+    const existingChatPhone = currentSession.chatContacts?.phone;
+    const existingChatPhoneDigits = existingChatPhone ? existingChatPhone.replace(/\D/g, '') : '';
+    const existingFormPhone = currentSession.contacts?.phone;
+    const existingFormPhoneDigits = existingFormPhone ? existingFormPhone.replace(/\D/g, '') : '';
+    
+    // Проверяем, не является ли это дубликатом уже сохраненного номера
+    if (existingChatPhoneDigits && phoneDigitsOnly === existingChatPhoneDigits) {
+      console.log('📱 processPhoneFromChat: Номер из чата совпадает с уже сохраненным в chatContacts, пропускаем отправку:', {
+        newPhone: phone,
+        existingChatPhone: existingChatPhone,
+        phoneDigits: phoneDigitsOnly
+      });
+      return;
+    }
+    
+    // Если номер уже был отправлен из чата ранее (chatPhoneCaptured = true) и номер тот же - пропускаем
+    if (currentSession.chatPhoneCaptured && existingChatPhoneDigits && phoneDigitsOnly === existingChatPhoneDigits) {
+      console.log('📱 processPhoneFromChat: Этот номер уже был захвачен из чата ранее, пропускаем отправку:', {
+        phone: phone,
+        existingChatPhone: existingChatPhone
+      });
+      return;
+    }
+    
+    // Логируем информацию о существующих контактах для отладки
+    if (existingFormPhone) {
+      console.log('📱 processPhoneFromChat: В сессии уже есть контакты из формы, но номер из чата будет отправлен:', {
+        formPhone: existingFormPhone,
+        chatPhone: phone,
+        phonesMatch: phoneDigitsOnly === existingFormPhoneDigits
+      });
+    }
+    
+    if (existingChatPhone) {
+      console.log('📱 processPhoneFromChat: В сессии уже есть номер из чата, но новый номер отличается, будет отправлен:', {
+        existingChatPhone: existingChatPhone,
+        newChatPhone: phone,
+        phonesMatch: phoneDigitsOnly === existingChatPhoneDigits
+      });
+    }
+    
     // Обновляем сессию сразу после парсинга (не ждем отправки в GAS)
+    // ВАЖНО: Обновляем chatPhoneCaptured и chatContacts даже если уже есть контакты из формы
+    console.log('📱 processPhoneFromChat: Обновляем сессию с новым номером из чата:', {
+      phone: phone,
+      hadFormContacts: !!(currentSession.contacts && currentSession.contacts.phone),
+      hadChatContacts: !!(currentSession.chatContacts && currentSession.chatContacts.phone),
+      wasChatPhoneCaptured: !!currentSession.chatPhoneCaptured
+    });
+    
     currentSession.chatPhoneCaptured = true;
     if (!currentSession.chatContacts) {
       currentSession.chatContacts = {};
@@ -450,6 +491,7 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
     
     const source = currentSession.source || 'test';
     await redis.updateSessionIndex(sessionId, source, currentSession.lastUpdated);
+    console.log('📱 processPhoneFromChat: Сессия обновлена, индекс обновлен для админки');
     
     // Получаем GAS URL из переменных окружения
     const GAS_URL = process.env.GAS_URL;
@@ -457,6 +499,14 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
       console.warn('⚠️ GAS_URL не задан, не могу отправить телефон из чата');
       return;
     }
+    
+    console.log('📱 processPhoneFromChat: Начинаем отправку номера в GAS:', {
+      phone: phone,
+      sessionId: sessionId,
+      source: source,
+      hasFormContacts: !!(currentSession.contacts && currentSession.contacts.phone),
+      pretext: 'Телефон из чата'
+    });
     
     // Получаем page_url из сессии или referer
     const req = global.currentRequest;
