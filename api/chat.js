@@ -435,21 +435,26 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
     const existingFormPhone = currentSession.contacts?.phone;
     const existingFormPhoneDigits = existingFormPhone ? existingFormPhone.replace(/\D/g, '') : '';
     
-    // Проверяем, не является ли это дубликатом уже сохраненного номера
-    if (existingChatPhoneDigits && phoneDigitsOnly === existingChatPhoneDigits) {
-      console.log('📱 processPhoneFromChat: Номер из чата совпадает с уже сохраненным в chatContacts, пропускаем отправку:', {
-        newPhone: phone,
-        existingChatPhone: existingChatPhone,
-        phoneDigits: phoneDigitsOnly
+    // ВАЖНО: Проверяем, был ли этот номер уже успешно отправлен в GAS
+    const wasPhoneSentToGAS = currentSession.chatContacts?.phoneSentToGAS === true;
+    const sentPhoneDigits = currentSession.chatContacts?.sentPhoneDigits;
+    
+    if (wasPhoneSentToGAS && sentPhoneDigits === phoneDigitsOnly) {
+      console.log('📱 processPhoneFromChat: Этот номер уже был успешно отправлен в GAS, пропускаем отправку:', {
+        phone: phone,
+        phoneDigits: phoneDigitsOnly,
+        sentPhoneDigits: sentPhoneDigits,
+        sentTimestamp: currentSession.chatContacts?.sentTimestamp
       });
       return;
     }
     
-    // Если номер уже был отправлен из чата ранее (chatPhoneCaptured = true) и номер тот же - пропускаем
-    if (currentSession.chatPhoneCaptured && existingChatPhoneDigits && phoneDigitsOnly === existingChatPhoneDigits) {
-      console.log('📱 processPhoneFromChat: Этот номер уже был захвачен из чата ранее, пропускаем отправку:', {
-        phone: phone,
-        existingChatPhone: existingChatPhone
+    // Проверяем, не является ли это дубликатом уже сохраненного номера (если он был отправлен)
+    if (existingChatPhoneDigits && phoneDigitsOnly === existingChatPhoneDigits && wasPhoneSentToGAS) {
+      console.log('📱 processPhoneFromChat: Номер из чата совпадает с уже отправленным, пропускаем отправку:', {
+        newPhone: phone,
+        existingChatPhone: existingChatPhone,
+        phoneDigits: phoneDigitsOnly
       });
       return;
     }
@@ -486,6 +491,7 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
     }
     currentSession.chatContacts.phone = phone;
     currentSession.chatContacts.timestamp = new Date().toISOString();
+    // НЕ устанавливаем phoneSentToGAS здесь - только после успешной отправки
     currentSession.lastUpdated = new Date().toISOString();
     await redis.setex(chatKey, 30 * 24 * 60 * 60, currentSession);
     
@@ -681,6 +687,26 @@ async function processPhoneFromChat(session, sessionId, userMessage) {
     // Инкрементируем счетчик лидов из чата для аналитики при успешной отправке
     if (sendSuccess) {
       console.log('✅✅✅ УСПЕХ: Телефон из чата успешно отправлен в GAS после всех попыток');
+      
+      // ВАЖНО: Обновляем сессию с флагом успешной отправки, чтобы предотвратить дубликаты
+      try {
+        const updatedSession = await redis.get(chatKey);
+        if (updatedSession && updatedSession.chatContacts) {
+          updatedSession.chatContacts.phoneSentToGAS = true;
+          updatedSession.chatContacts.sentPhoneDigits = phoneDigitsOnly;
+          updatedSession.chatContacts.sentTimestamp = new Date().toISOString();
+          await redis.setex(chatKey, 30 * 24 * 60 * 60, updatedSession);
+          console.log('📱 processPhoneFromChat: Флаг успешной отправки сохранен в сессии:', {
+            phone: phone,
+            phoneDigits: phoneDigitsOnly,
+            sentTimestamp: updatedSession.chatContacts.sentTimestamp
+          });
+        }
+      } catch (updateError) {
+        console.error('⚠️ Ошибка сохранения флага успешной отправки:', updateError.message);
+        // Не прерываем выполнение - лид уже отправлен
+      }
+      
       const analyticsKey = `analytics:chat_phone_lead:${source}`;
       try {
         await redis.incr(analyticsKey);
